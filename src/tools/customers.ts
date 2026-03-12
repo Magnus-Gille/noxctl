@@ -1,15 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { fortnoxRequest } from '../fortnox-client.js';
-
-interface CustomerResponse {
-  Customer: Record<string, unknown>;
-}
-
-interface CustomersResponse {
-  Customers: Record<string, unknown>[];
-  MetaInformation?: { '@TotalResources': number; '@TotalPages': number; '@CurrentPage': number };
-}
+import { listCustomers, getCustomer, createCustomer, updateCustomer } from '../operations/customers.js';
 
 export function registerCustomerTools(server: McpServer): void {
   server.tool(
@@ -21,14 +12,7 @@ export function registerCustomerTools(server: McpServer): void {
       limit: z.number().optional().describe('Antal per sida (default 100, max 500)'),
     },
     async ({ search, page, limit }) => {
-      const data = await fortnoxRequest<CustomersResponse>('customers', {
-        params: {
-          filter: search ? undefined : undefined,
-          page: page || 1,
-          limit: limit || 100,
-          ...(search ? { name: search } : {}),
-        },
-      });
+      const data = await listCustomers({ search, page, limit });
 
       return {
         content: [
@@ -48,10 +32,10 @@ export function registerCustomerTools(server: McpServer): void {
       customerNumber: z.string().describe('Kundnummer'),
     },
     async ({ customerNumber }) => {
-      const data = await fortnoxRequest<CustomerResponse>(`customers/${customerNumber}`);
+      const data = await getCustomer(customerNumber);
 
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data.Customer, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
       };
     },
   );
@@ -76,13 +60,10 @@ export function registerCustomerTools(server: McpServer): void {
         .describe('Leveranssätt för faktura'),
     },
     async (params) => {
-      const data = await fortnoxRequest<CustomerResponse>('customers', {
-        method: 'POST',
-        body: { Customer: params },
-      });
+      const data = await createCustomer(params);
 
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data.Customer, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
       };
     },
   );
@@ -108,13 +89,10 @@ export function registerCustomerTools(server: McpServer): void {
         .describe('Leveranssätt för faktura'),
     },
     async ({ customerNumber, ...fields }) => {
-      const data = await fortnoxRequest<CustomerResponse>(`customers/${customerNumber}`, {
-        method: 'PUT',
-        body: { Customer: fields },
-      });
+      const data = await updateCustomer(customerNumber, fields);
 
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data.Customer, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
       };
     },
   );

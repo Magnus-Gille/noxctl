@@ -13,6 +13,9 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('invoices');
     expect(output).toContain('tax');
     expect(output).toContain('accounts');
+    expect(output).toContain('customers');
+    expect(output).toContain('company');
+    expect(output).toContain('vouchers');
   });
 
   it('noxctl invoices --help shows invoice subcommands', () => {
@@ -28,6 +31,25 @@ describe('CLI smoke tests', () => {
   it('noxctl tax --help shows tax subcommands', () => {
     const output = execFileSync('node', [CLI_PATH, 'tax', '--help'], execOpts) as string;
     expect(output).toContain('report');
+  });
+
+  it('noxctl customers --help shows customer subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'customers', '--help'], execOpts) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('update');
+  });
+
+  it('noxctl company --help shows company subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'company', '--help'], execOpts) as string;
+    expect(output).toContain('info');
+  });
+
+  it('noxctl vouchers --help shows voucher subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'vouchers', '--help'], execOpts) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('create');
   });
 
   it('unknown command exits non-zero', () => {

@@ -172,6 +172,124 @@ accounts
     console.log(JSON.stringify(data, null, 2));
   });
 
+// --- customers ---
+const customers = program
+  .command('customers')
+  .description('Customer operations');
+
+customers
+  .command('list')
+  .description('List/search customers')
+  .option('--search <term>', 'Search by name')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .action(async (opts) => {
+    const { listCustomers } = await import('./operations/customers.js');
+    const data = await listCustomers({
+      search: opts.search,
+      page: opts.page,
+      limit: opts.limit,
+    });
+    console.log(JSON.stringify(data, null, 2));
+  });
+
+customers
+  .command('get <customerNumber>')
+  .description('Get a single customer')
+  .action(async (customerNumber: string) => {
+    const { getCustomer } = await import('./operations/customers.js');
+    const data = await getCustomer(customerNumber);
+    console.log(JSON.stringify(data, null, 2));
+  });
+
+customers
+  .command('create')
+  .description('Create a customer')
+  .requiredOption('--name <name>', 'Customer name')
+  .option('--input <file>', 'Customer data as JSON file (or - for stdin)')
+  .action(async (opts) => {
+    const { createCustomer } = await import('./operations/customers.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-'
+        ? readFileSync(0, 'utf-8')
+        : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params = { ...input, Name: opts.name };
+    const data = await createCustomer(params);
+    console.log(JSON.stringify(data, null, 2));
+  });
+
+customers
+  .command('update <customerNumber>')
+  .description('Update a customer')
+  .requiredOption('--input <file>', 'Customer data as JSON file (or - for stdin)')
+  .action(async (customerNumber: string, opts: { input: string }) => {
+    const { updateCustomer } = await import('./operations/customers.js');
+    const raw = opts.input === '-'
+      ? readFileSync(0, 'utf-8')
+      : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    const data = await updateCustomer(customerNumber, fields);
+    console.log(JSON.stringify(data, null, 2));
+  });
+
+// --- company ---
+const company = program
+  .command('company')
+  .description('Company operations');
+
+company
+  .command('info')
+  .description('Get company information')
+  .action(async () => {
+    const { getCompanyInfo } = await import('./operations/company.js');
+    const data = await getCompanyInfo();
+    console.log(JSON.stringify(data, null, 2));
+  });
+
+// --- vouchers ---
+const vouchers = program
+  .command('vouchers')
+  .description('Voucher operations');
+
+vouchers
+  .command('list')
+  .description('List vouchers')
+  .option('--series <series>', 'Voucher series (e.g. "A")')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option('--year <number>', 'Financial year', parseInt)
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .action(async (opts) => {
+    const { listVouchers } = await import('./operations/vouchers.js');
+    const data = await listVouchers({
+      series: opts.series,
+      fromDate: opts.from,
+      toDate: opts.to,
+      financialYear: opts.year,
+      page: opts.page,
+      limit: opts.limit,
+    });
+    console.log(JSON.stringify(data, null, 2));
+  });
+
+vouchers
+  .command('create')
+  .description('Create a voucher')
+  .requiredOption('--input <file>', 'Voucher data as JSON file (or - for stdin)')
+  .action(async (opts) => {
+    const { createVoucher } = await import('./operations/vouchers.js');
+    const raw = opts.input === '-'
+      ? readFileSync(0, 'utf-8')
+      : readFileSync(opts.input, 'utf-8');
+    const params = JSON.parse(raw) as Record<string, unknown>;
+    const data = await createVoucher(params);
+    console.log(JSON.stringify(data, null, 2));
+  });
+
 // Error handling
 program.exitOverride();
 
