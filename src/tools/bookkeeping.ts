@@ -2,6 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listAccounts } from '../operations/accounts.js';
 import { listVouchers, createVoucher } from '../operations/vouchers.js';
+import { accountListColumns, voucherDetailColumns, voucherListColumns } from '../views.js';
+import {
+  detailResponse,
+  dryRunResponse,
+  listResponse,
+  requireConfirmation,
+} from '../tool-output.js';
 
 const VoucherRowSchema = z.object({
   Account: z.number().describe('Kontonummer'),
@@ -9,6 +16,11 @@ const VoucherRowSchema = z.object({
   Credit: z.number().optional().describe('Kreditbelopp'),
   Description: z.string().optional().describe('Beskrivning'),
 });
+
+const VoucherSeriesSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,9}$/, 'Voucher series must be alphanumeric')
+  .optional();
 
 export function registerBookkeepingTools(server: McpServer): void {
   server.tool(
@@ -21,13 +33,11 @@ export function registerBookkeepingTools(server: McpServer): void {
       toDate: z.string().optional().describe('Till datum (YYYY-MM-DD)'),
       page: z.number().optional().describe('Sidnummer'),
       limit: z.number().optional().describe('Antal per sida'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ financialYear, series, fromDate, toDate, page, limit }) => {
+    async ({ financialYear, series, fromDate, toDate, page, limit, includeRaw }) => {
       const data = await listVouchers({ financialYear, series, fromDate, toDate, page, limit });
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      return listResponse(data.Vouchers ?? [], voucherListColumns, data, data.MetaInformation, includeRaw);
     },
   );
 
@@ -36,16 +46,21 @@ export function registerBookkeepingTools(server: McpServer): void {
     'Skapa en verifikation i Fortnox',
     {
       Description: z.string().describe('Beskrivning av verifikationen'),
-      VoucherSeries: z.string().optional().describe('Verifikationsserie (default: "A")'),
+      VoucherSeries: VoucherSeriesSchema.describe('Verifikationsserie (default: "A")'),
       TransactionDate: z.string().describe('Transaktionsdatum (YYYY-MM-DD)'),
       VoucherRows: z.array(VoucherRowSchema).describe('Verifikationsrader (debet och kredit)'),
+      confirm: z.boolean().optional().describe('Bekräfta att verifikationen ska skapas'),
+      dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa verifikationen'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async (params) => {
-      const data = await createVoucher(params);
+    async ({ confirm, dryRun, includeRaw, ...params }) => {
+      if (dryRun) {
+        return dryRunResponse(`create voucher "${params.Description}"`, { Voucher: params });
+      }
+      if (!confirm) requireConfirmation(`create voucher "${params.Description}"`);
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      const data = await createVoucher(params);
+      return detailResponse(data, voucherDetailColumns, data, includeRaw);
     },
   );
 
@@ -55,12 +70,11 @@ export function registerBookkeepingTools(server: McpServer): void {
     {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
       search: z.string().optional().describe('Sök på kontonamn'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async (params) => {
+    async ({ includeRaw, ...params }) => {
       const accounts = await listAccounts(params);
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(accounts, null, 2) }],
-      };
+      return listResponse(accounts, accountListColumns, accounts, undefined, includeRaw);
     },
   );
 }

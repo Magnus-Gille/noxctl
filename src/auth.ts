@@ -1,16 +1,11 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-
-const CREDENTIALS_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || '~',
-  '.fortnox-mcp',
-);
-const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
+import { loadCredentialBlob, saveCredentialBlob } from './credentials-store.js';
 
 const FORTNOX_AUTH_URL = 'https://apps.fortnox.se/oauth-v1/auth';
 const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
+const CALLBACK_HOST = '127.0.0.1';
 
 const SCOPES = 'customer invoice bookkeeping companyinformation settings';
 
@@ -31,7 +26,8 @@ export interface FortnoxAppConfig {
 
 export async function loadCredentials(): Promise<FortnoxCredentials | null> {
   try {
-    const data = await fs.readFile(CREDENTIALS_FILE, 'utf-8');
+    const data = await loadCredentialBlob();
+    if (!data) return null;
     return JSON.parse(data) as FortnoxCredentials;
   } catch {
     return null;
@@ -39,10 +35,7 @@ export async function loadCredentials(): Promise<FortnoxCredentials | null> {
 }
 
 export async function saveCredentials(creds: FortnoxCredentials): Promise<void> {
-  await fs.mkdir(CREDENTIALS_DIR, { recursive: true });
-  await fs.writeFile(CREDENTIALS_FILE, JSON.stringify(creds, null, 2), {
-    mode: 0o600,
-  });
+  await saveCredentialBlob(JSON.stringify(creds, null, 2));
 }
 
 export async function exchangeCodeForTokens(
@@ -216,23 +209,75 @@ function openBrowser(url: string): void {
   }
 }
 
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+export function buildAuthorizationUrl(
+  config: FortnoxAppConfig,
+  redirectUri: string,
+  state: string,
+): string {
+  const params = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: redirectUri,
+    scope: SCOPES,
+    state,
+    response_type: 'code',
+    access_type: 'offline',
+  });
+
+  if (config.serviceAccount) {
+    params.set('account_type', 'service');
+  }
+
+  return `${FORTNOX_AUTH_URL}?${params.toString()}`;
+}
+
 export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
   const PORT = 9876;
   const REDIRECT_URI = `http://localhost:${PORT}/callback`;
+  const oauthState = randomBytes(24).toString('hex');
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    };
+
     const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
       const url = new URL(req.url || '/', `http://localhost:${PORT}`);
 
       if (url.pathname === '/callback') {
         const code = url.searchParams.get('code');
         const error = url.searchParams.get('error');
+        const state = url.searchParams.get('state');
 
         if (error) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`<h1>Autentisering misslyckades</h1><p>${error}</p>`);
+          res.end(`<h1>Autentisering misslyckades</h1><p>${escapeHtml(error)}</p>`);
           server.close();
-          reject(new Error(`OAuth error: ${error}`));
+          finish(new Error(`OAuth error: ${error}`));
+          return;
+        }
+
+        if (state !== oauthState) {
+          res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end('<h1>Ogiltig OAuth-state</h1><p>Försök igen från noxctl setup.</p>');
+          server.close();
+          finish(new Error('OAuth state mismatch'));
           return;
         }
 
@@ -240,7 +285,7 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end('<h1>Ingen auktoriseringskod mottagen</h1>');
           server.close();
-          reject(new Error('No authorization code received'));
+          finish(new Error('No authorization code received'));
           return;
         }
 
@@ -274,13 +319,14 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
           console.log(`\nSetup complete! Credentials saved.${tenantMsg}\n`);
           console.log('Register in Claude Code with:');
           console.log('  claude mcp add fortnox -- noxctl serve\n');
+          finish();
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`<h1>Något gick fel</h1><p>${err}</p>`);
-          reject(err);
+          const message = err instanceof Error ? err.message : String(err);
+          res.end(`<h1>Något gick fel</h1><p>${escapeHtml(message)}</p>`);
+          finish(err instanceof Error ? err : new Error(message));
         } finally {
           server.close();
-          resolve();
         }
       } else {
         res.writeHead(404);
@@ -288,27 +334,15 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
       }
     });
 
-    server.listen(PORT, () => {
-      const params = new URLSearchParams({
-        client_id: config.clientId,
-        redirect_uri: REDIRECT_URI,
-        scope: SCOPES,
-        state: 'fortnox-mcp',
-        response_type: 'code',
-        access_type: 'offline',
-      });
-      if (config.serviceAccount) {
-        params.set('account_type', 'service');
-      }
-      const authUrl = `${FORTNOX_AUTH_URL}?${params.toString()}`;
-
+    server.listen(PORT, CALLBACK_HOST, () => {
+      const authUrl = buildAuthorizationUrl(config, REDIRECT_URI, oauthState);
       console.log('Opening Fortnox login in your browser...');
       openBrowser(authUrl);
-      console.log(`\nWaiting for authentication on http://localhost:${PORT}...`);
+      console.log(`\nWaiting for authentication on http://${CALLBACK_HOST}:${PORT}...`);
     });
 
     server.on('error', (err) => {
-      reject(new Error(`Could not start callback server: ${err.message}`));
+      finish(new Error(`Could not start callback server: ${err.message}`));
     });
   });
 }

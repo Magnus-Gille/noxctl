@@ -29,6 +29,14 @@ describe('voucher operations', () => {
       expect(calledUrl).toContain('vouchers/sublist/A');
     });
 
+    it('rejects invalid voucher series path segments', async () => {
+      mockFetch({ Vouchers: [], MetaInformation: {} });
+      const { listVouchers } = await import('../../src/operations/vouchers.js');
+
+      await expect(listVouchers({ series: '../A' })).rejects.toThrow('Invalid voucher series');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
     it('routes to vouchers/ when no series', async () => {
       mockFetch({ Vouchers: [], MetaInformation: {} });
       const { listVouchers } = await import('../../src/operations/vouchers.js');

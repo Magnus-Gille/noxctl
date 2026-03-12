@@ -24,11 +24,17 @@ The server runs locally via stdio — no HTTP server to host or manage. Claude C
 
 ### OAuth2 setup flow
 
-`noxctl setup` starts a temporary local HTTP server on port 9876, opens the browser for Fortnox login, receives the OAuth callback, exchanges the code for tokens, saves them, and exits. After this one-time setup, no environment variables are needed.
+`noxctl setup` starts a temporary local HTTP server on port 9876, binds it to `127.0.0.1`, opens the browser for Fortnox login, validates a per-run OAuth `state`, receives the callback, exchanges the code for tokens, saves them, and exits. After this one-time setup, no environment variables are needed.
 
 ### Token management
 
-Credentials (client ID, client secret, access token, refresh token, expiry) are stored in `~/.fortnox-mcp/credentials.json` with mode 0600. On every API call, `getValidToken()` checks expiry and transparently refreshes if needed.
+Credentials (client ID, client secret, access token, refresh token, expiry) are stored in the OS secure store:
+
+- macOS Keychain
+- Linux Secret Service (`secret-tool`)
+- Windows DPAPI user-protected storage
+
+Legacy plaintext `~/.fortnox-mcp/credentials.json` files are migration-only and removed on the next successful save. On every API call, `getValidToken()` checks expiry and transparently refreshes if needed.
 
 ### Rate limiting
 
@@ -36,7 +42,15 @@ Fortnox allows 25 requests per 5 seconds. The client tracks timestamps and waits
 
 ### Retry with backoff
 
-Transient errors (429, 5xx, network errors) are retried up to 3 times with exponential backoff (1s, 2s, 4s). Non-transient errors (4xx) fail immediately.
+Transient errors (429, 5xx, network errors) are retried up to 3 times with exponential backoff (1s, 2s, 4s), but only for idempotent requests (`GET`/`HEAD`/`OPTIONS`). Non-idempotent mutations fail immediately to avoid duplicate side effects.
+
+### Mutation confirmation
+
+Mutating CLI commands require `--yes` or an interactive TTY confirmation and support `--dry-run`. Mutating MCP tools require `confirm: true` and support `dryRun: true`.
+
+### Privacy minimization
+
+MCP tools return summarized views by default (tables/details over selected fields). Raw Fortnox JSON is opt-in via `includeRaw: true`.
 
 ### Error handling
 

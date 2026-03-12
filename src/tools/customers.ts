@@ -6,6 +6,17 @@ import {
   createCustomer,
   updateCustomer,
 } from '../operations/customers.js';
+import { customerListColumns, customerDetailColumns } from '../views.js';
+import {
+  detailResponse,
+  dryRunResponse,
+  listResponse,
+  requireConfirmation,
+} from '../tool-output.js';
+
+const CustomerNumberSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/, 'Customer number must be alphanumeric');
 
 export function registerCustomerTools(server: McpServer): void {
   server.tool(
@@ -15,18 +26,11 @@ export function registerCustomerTools(server: McpServer): void {
       search: z.string().optional().describe('Sökterm (namn, kundnummer, orgnummer)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
       limit: z.number().optional().describe('Antal per sida (default 100, max 500)'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ search, page, limit }) => {
+    async ({ search, page, limit, includeRaw }) => {
       const data = await listCustomers({ search, page, limit });
-
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(data, null, 2),
-          },
-        ],
-      };
+      return listResponse(data.Customers ?? [], customerListColumns, data, data.MetaInformation, includeRaw);
     },
   );
 
@@ -34,14 +38,12 @@ export function registerCustomerTools(server: McpServer): void {
     'fortnox_get_customer',
     'Hämta en enskild kund från Fortnox',
     {
-      customerNumber: z.string().describe('Kundnummer'),
+      customerNumber: CustomerNumberSchema.describe('Kundnummer'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ customerNumber }) => {
+    async ({ customerNumber, includeRaw }) => {
       const data = await getCustomer(customerNumber);
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      return detailResponse(data, customerDetailColumns, data, includeRaw);
     },
   );
 
@@ -63,13 +65,18 @@ export function registerCustomerTools(server: McpServer): void {
         .enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE'])
         .optional()
         .describe('Leveranssätt för faktura'),
+      confirm: z.boolean().optional().describe('Bekräfta att kunden ska skapas'),
+      dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa kunden'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async (params) => {
-      const data = await createCustomer(params);
+    async ({ confirm, dryRun, includeRaw, ...params }) => {
+      if (dryRun) {
+        return dryRunResponse(`create customer "${params.Name}"`, { Customer: params });
+      }
+      if (!confirm) requireConfirmation(`create customer "${params.Name}"`);
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      const data = await createCustomer(params);
+      return detailResponse(data, customerDetailColumns, data, includeRaw);
     },
   );
 
@@ -77,7 +84,7 @@ export function registerCustomerTools(server: McpServer): void {
     'fortnox_update_customer',
     'Uppdatera en befintlig kund i Fortnox',
     {
-      customerNumber: z.string().describe('Kundnummer att uppdatera'),
+      customerNumber: CustomerNumberSchema.describe('Kundnummer att uppdatera'),
       Name: z.string().optional().describe('Kundnamn'),
       OrganisationNumber: z.string().optional().describe('Organisationsnummer'),
       Email: z.string().optional().describe('E-postadress'),
@@ -92,13 +99,18 @@ export function registerCustomerTools(server: McpServer): void {
         .enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE'])
         .optional()
         .describe('Leveranssätt för faktura'),
+      confirm: z.boolean().optional().describe('Bekräfta att kunden ska uppdateras'),
+      dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att uppdatera kunden'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ customerNumber, ...fields }) => {
-      const data = await updateCustomer(customerNumber, fields);
+    async ({ customerNumber, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) {
+        return dryRunResponse(`update customer ${customerNumber}`, { Customer: fields });
+      }
+      if (!confirm) requireConfirmation(`update customer ${customerNumber}`);
 
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
-      };
+      const data = await updateCustomer(customerNumber, fields);
+      return detailResponse(data, customerDetailColumns, data, includeRaw);
     },
   );
 }

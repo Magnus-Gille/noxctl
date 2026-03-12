@@ -85,15 +85,14 @@ describe('tax tools', () => {
         },
       });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
-      expect(parsed.period.from).toBe('2025-01-01');
-      expect(parsed.period.to).toBe('2025-03-31');
-      expect(parsed.vatAccounts[2610]).toBeDefined();
-      expect(parsed.vatAccounts[2610].credit).toBe(12500);
-      expect(parsed.vatAccounts[2640]).toBeDefined();
-      expect(parsed.vatAccounts[2640].debit).toBe(3200);
-      expect(parsed.accountBalances).toHaveLength(2); // only VAT accounts
-      expect(parsed.summary.note).toContain('Kontrollera');
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('2025-01-01');
+      expect(text).toContain('2025-03-31');
+      expect(text).toContain('2610');
+      expect(text).toContain('12500.00');
+      expect(text).toContain('2640');
+      expect(text).toContain('3200.00');
+      expect(text).toContain('Kontrollera');
     });
 
     it('handles period with no VAT transactions', async () => {
@@ -131,9 +130,9 @@ describe('tax tools', () => {
         arguments: { fromDate: '2025-01-01', toDate: '2025-03-31' },
       });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
-      expect(Object.keys(parsed.vatAccounts)).toHaveLength(0);
-      expect(parsed.accountBalances).toHaveLength(0);
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Period: 2025-01-01');
+      expect(text).not.toContain('2610');
     });
   });
 });

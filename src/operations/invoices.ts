@@ -1,4 +1,5 @@
 import { fortnoxRequest } from '../fortnox-client.js';
+import { documentSegment } from '../identifiers.js';
 
 interface InvoiceResponse {
   Invoice: Record<string, unknown>;
@@ -32,7 +33,7 @@ export async function listInvoices(params: ListInvoicesParams = {}): Promise<Inv
 }
 
 export async function getInvoice(documentNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}`);
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentSegment(documentNumber)}`);
   return data.Invoice;
 }
 
@@ -52,10 +53,18 @@ export async function sendInvoice(
   documentNumber: string,
   method: SendMethod = 'email',
 ): Promise<Record<string, unknown>> {
+  const documentId = documentSegment(documentNumber);
   const endpointSuffix =
     method === 'email' ? 'email' : method === 'einvoice' ? 'einvoice' : 'print';
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}/${endpointSuffix}`, {
+    method: 'PUT',
+  });
+  return data?.Invoice || {};
+}
+
+export async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {
   const data = await fortnoxRequest<InvoiceResponse>(
-    `invoices/${documentNumber}/${endpointSuffix}`,
+    `invoices/${documentSegment(documentNumber)}/bookkeep`,
     {
       method: 'PUT',
     },
@@ -63,16 +72,12 @@ export async function sendInvoice(
   return data?.Invoice || {};
 }
 
-export async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/bookkeep`, {
-    method: 'PUT',
-  });
-  return data?.Invoice || {};
-}
-
 export async function creditInvoice(documentNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/credit`, {
-    method: 'PUT',
-  });
+  const data = await fortnoxRequest<InvoiceResponse>(
+    `invoices/${documentSegment(documentNumber)}/credit`,
+    {
+      method: 'PUT',
+    },
+  );
   return data?.Invoice || {};
 }

@@ -40,12 +40,17 @@ export class FortnoxApiError extends Error {
   }
 }
 
-async function retryWithBackoff<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retryable: boolean,
+  maxRetries = 3,
+): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (err) {
       if (attempt === maxRetries) throw err;
+      if (!retryable) throw err;
 
       // Only retry on transient errors (429, 500, 502, 503, 504)
       if (err instanceof FortnoxApiError) {
@@ -76,6 +81,9 @@ export async function fortnoxRequest<T>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<T> {
+  const method = (options.method || 'GET').toUpperCase();
+  const retryable = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
   return retryWithBackoff(async () => {
     await waitForRateLimit();
 
@@ -97,7 +105,7 @@ export async function fortnoxRequest<T>(
     };
 
     const fetchOptions: RequestInit = {
-      method: options.method || 'GET',
+      method,
       headers,
     };
 
@@ -129,5 +137,5 @@ export async function fortnoxRequest<T>(
     if (!text) return undefined as T;
 
     return JSON.parse(text) as T;
-  });
+  }, retryable);
 }

@@ -63,6 +63,14 @@ describe('customer operations', () => {
       expect(result.CustomerNumber).toBe('1');
       expect(result.Name).toBe('Acme');
     });
+
+    it('rejects path traversal in customer numbers', async () => {
+      mockFetch({ Customer: { CustomerNumber: '1', Name: 'Acme' } });
+      const { getCustomer } = await import('../../src/operations/customers.js');
+
+      await expect(getCustomer('../companyinformation')).rejects.toThrow('Invalid customer number');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
   });
 
   describe('createCustomer', () => {

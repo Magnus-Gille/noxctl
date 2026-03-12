@@ -1,4 +1,5 @@
 import { fortnoxRequest } from '../fortnox-client.js';
+import { voucherSeriesSegment } from '../identifiers.js';
 
 interface VoucherResponse {
   Voucher: Record<string, unknown>;
@@ -19,7 +20,7 @@ export interface ListVouchersParams {
 }
 
 export async function listVouchers(params: ListVouchersParams = {}): Promise<VouchersResponse> {
-  const subpath = params.series ? `sublist/${params.series}` : '';
+  const subpath = params.series ? `sublist/${voucherSeriesSegment(params.series)}` : '';
   return fortnoxRequest<VouchersResponse>(`vouchers/${subpath}`, {
     params: {
       financialyear: params.financialYear,

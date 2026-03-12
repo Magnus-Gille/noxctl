@@ -4,6 +4,7 @@ dist/
 *.d.ts.map
 .env
 credentials.json
+credentials.dpapi
 ~/.fortnox-mcp/
 .claude/
 debate/

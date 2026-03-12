@@ -41,8 +41,9 @@ describe('bookkeeping tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({ name: 'fortnox_list_vouchers', arguments: {} });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
-      expect(parsed.Vouchers).toHaveLength(2);
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Faktura 1001');
+      expect(text).toContain('Inbetalning');
     });
 
     it('filters by series', async () => {
@@ -94,6 +95,7 @@ describe('bookkeeping tools', () => {
             { Account: 2640, Debit: 250, Credit: 0, Description: 'Ingående moms' },
             { Account: 1930, Debit: 0, Credit: 1250, Description: 'Företagskonto' },
           ],
+          confirm: true,
         },
       });
 
@@ -118,6 +120,7 @@ describe('bookkeeping tools', () => {
             { Account: 7210, Debit: 50000, Credit: 0 },
             { Account: 1930, Debit: 0, Credit: 50000 },
           ],
+          confirm: true,
         },
       });
 
@@ -139,8 +142,9 @@ describe('bookkeeping tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({ name: 'fortnox_list_accounts', arguments: {} });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
-      expect(parsed).toHaveLength(3);
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Företagskonto');
+      expect(text).toContain('Kontorsmaterial');
     });
 
     it('filters accounts by search term', async () => {
@@ -156,10 +160,12 @@ describe('bookkeeping tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_list_accounts',
-        arguments: { search: 'moms' },
+        arguments: { search: 'moms', includeRaw: true },
       });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
+      const parsed = JSON.parse(
+        (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
+      );
       expect(parsed).toHaveLength(2);
       expect(parsed[0].Description).toContain('moms');
     });
@@ -176,11 +182,33 @@ describe('bookkeeping tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_list_accounts',
-        arguments: { search: '193' },
+        arguments: { search: '193', includeRaw: true },
       });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
+      const parsed = JSON.parse(
+        (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
+      );
       expect(parsed).toHaveLength(2);
+    });
+
+    it('requires confirmation before creating a voucher', async () => {
+      mockFetch({ Voucher: { VoucherNumber: 1, VoucherSeries: 'A' } });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_voucher',
+        arguments: {
+          Description: 'Kontorsmaterial',
+          TransactionDate: '2025-03-12',
+          VoucherRows: [
+            { Account: 6110, Debit: 1000, Credit: 0, Description: 'Kontorsmaterial' },
+            { Account: 1930, Debit: 0, Credit: 1000, Description: 'Företagskonto' },
+          ],
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
 });
