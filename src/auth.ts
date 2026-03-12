@@ -162,9 +162,7 @@ export async function refreshAccessToken(creds: FortnoxCredentials): Promise<For
 export async function getValidToken(): Promise<string> {
   const creds = await loadCredentials();
   if (!creds) {
-    throw new Error(
-      'Not authenticated. Run `noxctl setup` to connect your Fortnox account.',
-    );
+    throw new Error('Not authenticated. Run `noxctl setup` to connect your Fortnox account.');
   }
 
   // Token still valid — use it

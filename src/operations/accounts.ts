@@ -9,7 +9,9 @@ export interface ListAccountsParams {
   search?: string;
 }
 
-export async function listAccounts(params: ListAccountsParams = {}): Promise<Record<string, unknown>[]> {
+export async function listAccounts(
+  params: ListAccountsParams = {},
+): Promise<Record<string, unknown>[]> {
   const data = await fortnoxRequest<AccountsResponse>('accounts', {
     params: {
       financialyear: params.financialYear,

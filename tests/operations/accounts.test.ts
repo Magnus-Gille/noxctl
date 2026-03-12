@@ -62,9 +62,7 @@ describe('accounts operations', () => {
 
     it('search is case-insensitive', async () => {
       mockFetch({
-        Accounts: [
-          { Number: 1930, Description: 'Företagskonto' },
-        ],
+        Accounts: [{ Number: 1930, Description: 'Företagskonto' }],
       });
       const { listAccounts } = await import('../../src/operations/accounts.js');
 

@@ -30,7 +30,9 @@ export async function getCustomer(customerNumber: string): Promise<Record<string
   return data.Customer;
 }
 
-export async function createCustomer(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function createCustomer(
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const data = await fortnoxRequest<CustomerResponse>('customers', {
     method: 'POST',
     body: { Customer: params },

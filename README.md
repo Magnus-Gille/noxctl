@@ -102,6 +102,17 @@ claude mcp add fortnox -- noxctl serve
 |------|-------------|
 | `fortnox_company_info` | Company information and settings |
 
+## CLI output
+
+By default, `noxctl` uses **table output** on interactive terminals and **JSON** when piped or redirected. Override with `-o`:
+
+```bash
+noxctl invoices list              # table on terminal, JSON when piped
+noxctl -o json invoices list      # force JSON
+noxctl -o table invoices list     # force table
+noxctl invoices list | jq .       # auto-JSON (piped)
+```
+
 ## Examples
 
 Ask Claude naturally:
