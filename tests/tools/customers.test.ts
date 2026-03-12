@@ -150,7 +150,9 @@ describe('customer tools', () => {
 
   describe('fortnox_update_customer', () => {
     it('updates specific fields', async () => {
-      mockFetch({ Customer: { CustomerNumber: '42', Name: 'Updated AB', Email: 'new@example.com' } });
+      mockFetch({
+        Customer: { CustomerNumber: '42', Name: 'Updated AB', Email: 'new@example.com' },
+      });
 
       const { client } = await setupClientServer();
       await client.callTool({

@@ -28,13 +28,7 @@ export function registerInvoiceTools(server: McpServer): void {
     'Lista/filtrera fakturor i Fortnox',
     {
       filter: z
-        .enum([
-          'cancelled',
-          'fullypaid',
-          'unpaid',
-          'unpaidoverdue',
-          'unbooked',
-        ])
+        .enum(['cancelled', 'fullypaid', 'unpaid', 'unpaidoverdue', 'unbooked'])
         .optional()
         .describe('Filtrera fakturor'),
       customerNumber: z.string().optional().describe('Filtrera på kundnummer'),
@@ -142,10 +136,9 @@ export function registerInvoiceTools(server: McpServer): void {
       documentNumber: z.string().describe('Fakturanummer att bokföra'),
     },
     async ({ documentNumber }) => {
-      const data = await fortnoxRequest<InvoiceResponse>(
-        `invoices/${documentNumber}/bookkeep`,
-        { method: 'PUT' },
-      );
+      const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/bookkeep`, {
+        method: 'PUT',
+      });
 
       return {
         content: [
@@ -165,10 +158,9 @@ export function registerInvoiceTools(server: McpServer): void {
       documentNumber: z.string().describe('Fakturanummer att kreditera'),
     },
     async ({ documentNumber }) => {
-      const data = await fortnoxRequest<InvoiceResponse>(
-        `invoices/${documentNumber}/credit`,
-        { method: 'PUT' },
-      );
+      const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/credit`, {
+        method: 'PUT',
+      });
 
       return {
         content: [

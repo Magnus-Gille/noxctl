@@ -43,9 +43,7 @@ describe('auth', () => {
     });
 
     it('returns credentials with tenant_id when present', async () => {
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(
-        JSON.stringify(mockCredentialsWithTenant),
-      );
+      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(mockCredentialsWithTenant));
       const creds = await loadCredentials();
       expect(creds?.tenant_id).toBe('12345');
     });

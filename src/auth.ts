@@ -94,8 +94,7 @@ export async function getTokenViaClientCredentials(
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization:
-        'Basic ' +
-        Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString('base64'),
+        'Basic ' + Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString('base64'),
       TenantId: creds.tenant_id,
     },
     body: body.toString(),
@@ -132,8 +131,7 @@ export async function refreshAccessToken(creds: FortnoxCredentials): Promise<For
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Authorization:
-        'Basic ' +
-        Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString('base64'),
+        'Basic ' + Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString('base64'),
     },
     body: body.toString(),
   });
