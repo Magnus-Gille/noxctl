@@ -1,0 +1,74 @@
+import { fortnoxRequest } from '../fortnox-client.js';
+
+interface InvoiceResponse {
+  Invoice: Record<string, unknown>;
+}
+
+interface InvoicesResponse {
+  Invoices: Record<string, unknown>[];
+  MetaInformation?: { '@TotalResources': number; '@TotalPages': number; '@CurrentPage': number };
+}
+
+export interface ListInvoicesParams {
+  filter?: string;
+  customerNumber?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+export async function listInvoices(params: ListInvoicesParams = {}): Promise<InvoicesResponse> {
+  return fortnoxRequest<InvoicesResponse>('invoices', {
+    params: {
+      filter: params.filter,
+      customernumber: params.customerNumber,
+      fromdate: params.fromDate,
+      todate: params.toDate,
+      page: params.page || 1,
+      limit: params.limit || 100,
+    },
+  });
+}
+
+export async function getInvoice(documentNumber: string): Promise<Record<string, unknown>> {
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}`);
+  return data.Invoice;
+}
+
+export async function createInvoice(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const data = await fortnoxRequest<InvoiceResponse>('invoices', {
+    method: 'POST',
+    body: { Invoice: params },
+  });
+  return data.Invoice;
+}
+
+export type SendMethod = 'email' | 'print' | 'einvoice';
+
+export async function sendInvoice(
+  documentNumber: string,
+  method: SendMethod = 'email',
+): Promise<Record<string, unknown>> {
+  const endpointSuffix = method === 'email' ? 'email' : method === 'einvoice' ? 'einvoice' : 'print';
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/${endpointSuffix}`, {
+    method: 'PUT',
+  });
+  return data?.Invoice || {};
+}
+
+export async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {
+  const data = await fortnoxRequest<InvoiceResponse>(
+    `invoices/${documentNumber}/bookkeep`,
+    { method: 'PUT' },
+  );
+  return data?.Invoice || {};
+}
+
+export async function creditInvoice(documentNumber: string): Promise<Record<string, unknown>> {
+  const data = await fortnoxRequest<InvoiceResponse>(
+    `invoices/${documentNumber}/credit`,
+    { method: 'PUT' },
+  );
+  return data?.Invoice || {};
+}

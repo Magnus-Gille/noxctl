@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { fortnoxRequest } from '../fortnox-client.js';
+import { listAccounts } from '../operations/accounts.js';
 
 interface VoucherResponse {
   Voucher: Record<string, unknown>;
@@ -9,10 +10,6 @@ interface VoucherResponse {
 interface VouchersResponse {
   Vouchers: Record<string, unknown>[];
   MetaInformation?: { '@TotalResources': number; '@TotalPages': number; '@CurrentPage': number };
-}
-
-interface AccountsResponse {
-  Accounts: Record<string, unknown>[];
 }
 
 const VoucherRowSchema = z.object({
@@ -85,26 +82,8 @@ export function registerBookkeepingTools(server: McpServer): void {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
       search: z.string().optional().describe('Sök på kontonamn'),
     },
-    async ({ financialYear, search }) => {
-      const data = await fortnoxRequest<AccountsResponse>('accounts', {
-        params: {
-          financialyear: financialYear,
-          ...(search ? { lastmodified: undefined } : {}),
-        },
-      });
-
-      let accounts = data.Accounts;
-      if (search) {
-        const term = search.toLowerCase();
-        accounts = accounts.filter(
-          (a) =>
-            String(a.Number || '').includes(term) ||
-            String(a.Description || '')
-              .toLowerCase()
-              .includes(term),
-        );
-      }
-
+    async (params) => {
+      const accounts = await listAccounts(params);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(accounts, null, 2) }],
       };

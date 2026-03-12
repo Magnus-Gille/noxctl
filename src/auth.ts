@@ -163,7 +163,7 @@ export async function getValidToken(): Promise<string> {
   const creds = await loadCredentials();
   if (!creds) {
     throw new Error(
-      'Not authenticated. Run `npx fortnox-mcp setup` to connect your Fortnox account.',
+      'Not authenticated. Run `noxctl setup` to connect your Fortnox account.',
     );
   }
 
@@ -275,7 +275,7 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
 
           console.log(`\nSetup complete! Credentials saved.${tenantMsg}\n`);
           console.log('Register in Claude Code with:');
-          console.log('  claude mcp add fortnox -- npx fortnox-mcp\n');
+          console.log('  claude mcp add fortnox -- noxctl serve\n');
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(`<h1>Något gick fel</h1><p>${err}</p>`);
