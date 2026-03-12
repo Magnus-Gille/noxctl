@@ -72,7 +72,10 @@ export interface RequestOptions {
   params?: Record<string, string | number | undefined>;
 }
 
-export async function fortnoxRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+export async function fortnoxRequest<T>(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<T> {
   return retryWithBackoff(async () => {
     await waitForRateLimit();
 
@@ -108,7 +111,9 @@ export async function fortnoxRequest<T>(endpoint: string, options: RequestOption
       let errorMessage = `HTTP ${response.status}`;
       let details: string | undefined;
       try {
-        const errorBody = await response.json() as { ErrorInformation?: { message?: string; code?: number } };
+        const errorBody = (await response.json()) as {
+          ErrorInformation?: { message?: string; code?: number };
+        };
         if (errorBody?.ErrorInformation) {
           errorMessage = errorBody.ErrorInformation.message || errorMessage;
           details = `Error code: ${errorBody.ErrorInformation.code}`;

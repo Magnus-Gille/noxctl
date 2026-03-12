@@ -9,6 +9,8 @@ if (command === 'setup') {
   const clientId = process.env.FORTNOX_CLIENT_ID;
   const clientSecret = process.env.FORTNOX_CLIENT_SECRET;
 
+  const serviceAccount = process.env.FORTNOX_SERVICE_ACCOUNT === '1';
+
   if (!clientId || !clientSecret) {
     console.error('Error: FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET must be set.');
     console.error('');
@@ -18,10 +20,14 @@ if (command === 'setup') {
     console.error(
       '   FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx fortnox-mcp setup',
     );
+    console.error('');
+    console.error(
+      'Optional: Add FORTNOX_SERVICE_ACCOUNT=1 to enable client credentials flow (requires service account enabled in Developer Portal)',
+    );
     process.exit(1);
   }
 
-  runOAuthSetup({ clientId, clientSecret })
+  runOAuthSetup({ clientId, clientSecret, serviceAccount })
     .then(() => process.exit(0))
     .catch((err) => {
       console.error('Setup failed:', err.message);

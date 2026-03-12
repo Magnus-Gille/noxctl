@@ -63,10 +63,13 @@ Klart. Inga manuella tokens, inga env-variabler.
 - **Inga externa beroenden** — ingen Redis, ingen databas, ingen molntjänst
 
 ### Auth
-- OAuth2 mot Fortnox API
-- `npx fortnox-mcp setup` startar lokal HTTP-server, öppnar webbläsaren för Fortnox-inloggning, tar emot callback, sparar refresh token lokalt
+- OAuth2 mot Fortnox API med `account_type=service`
+- `npx fortnox-mcp setup` startar lokal HTTP-server, öppnar webbläsaren för Fortnox-inloggning, tar emot callback, hämtar tenant_id, sparar credentials lokalt
+- **Client credentials flow (primär):** Efter initial auth används `client_credentials` grant med `TenantId` header — inga refresh tokens att hantera
+- **Refresh token flow (fallback):** Om client credentials inte fungerar
 - Token-refresh sker automatiskt och transparent
 - Credentials sparas i `~/.fortnox-mcp/credentials.json` (gitignored, bara lokalt)
+- Scopes: `customer invoice bookkeeping companyinformation settings`
 
 ### Fortnox API
 - REST, JSON

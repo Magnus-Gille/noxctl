@@ -70,7 +70,10 @@ export function registerCustomerTools(server: McpServer): void {
       City: z.string().optional().describe('Ort'),
       Country: z.string().optional().describe('Landskod (t.ex. SE)'),
       VATNumber: z.string().optional().describe('Momsregistreringsnummer'),
-      DeliveryType: z.enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE']).optional().describe('Leveranssätt för faktura'),
+      DeliveryType: z
+        .enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE'])
+        .optional()
+        .describe('Leveranssätt för faktura'),
     },
     async (params) => {
       const data = await fortnoxRequest<CustomerResponse>('customers', {
@@ -99,7 +102,10 @@ export function registerCustomerTools(server: McpServer): void {
       City: z.string().optional().describe('Ort'),
       Country: z.string().optional().describe('Landskod'),
       VATNumber: z.string().optional().describe('Momsregistreringsnummer'),
-      DeliveryType: z.enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE']).optional().describe('Leveranssätt för faktura'),
+      DeliveryType: z
+        .enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE'])
+        .optional()
+        .describe('Leveranssätt för faktura'),
     },
     async ({ customerNumber, ...fields }) => {
       const data = await fortnoxRequest<CustomerResponse>(`customers/${customerNumber}`, {
