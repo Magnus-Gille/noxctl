@@ -2,13 +2,39 @@
 
 import { Command, Option } from 'commander';
 import { readFileSync } from 'node:fs';
+import {
+  isJsonMode,
+  outputList,
+  outputDetail,
+  outputConfirmation,
+  formatTaxReport,
+} from './formatter.js';
+import {
+  invoiceListColumns,
+  invoiceDetailColumns,
+  customerListColumns,
+  customerDetailColumns,
+  voucherListColumns,
+  voucherDetailColumns,
+  accountListColumns,
+  companyDetailColumns,
+} from './views.js';
 
 const program = new Command();
 
 program
   .name('noxctl')
   .description('CLI and MCP server for Fortnox accounting')
-  .version('0.1.0');
+  .version('0.1.0')
+  .addOption(
+    new Option('-o, --output <format>', 'Output format')
+      .choices(['json', 'table'])
+      .default(undefined),
+  );
+
+function json(): boolean {
+  return isJsonMode(program.opts());
+}
 
 // --- setup ---
 program
@@ -72,7 +98,8 @@ invoices
       page: opts.page,
       limit: opts.limit,
     });
-    console.log(JSON.stringify(data, null, 2));
+    const envelope = data as unknown as { Invoices: Record<string, unknown>[]; MetaInformation?: Record<string, unknown> };
+    outputList(envelope.Invoices ?? [], invoiceListColumns, json(), data, envelope.MetaInformation);
   });
 
 invoices
@@ -81,7 +108,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { getInvoice } = await import('./operations/invoices.js');
     const data = await getInvoice(documentNumber);
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
   });
 
 invoices
@@ -97,7 +124,7 @@ invoices
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
     const data = await createInvoice(params);
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
   });
 
 invoices
@@ -111,7 +138,7 @@ invoices
   .action(async (documentNumber: string, opts: { method: string }) => {
     const { sendInvoice } = await import('./operations/invoices.js');
     const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
-    console.log(JSON.stringify(data, null, 2));
+    outputConfirmation(`Invoice ${documentNumber} sent via ${opts.method}.`, json(), data);
   });
 
 invoices
@@ -120,7 +147,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { bookkeepInvoice } = await import('./operations/invoices.js');
     const data = await bookkeepInvoice(documentNumber);
-    console.log(JSON.stringify(data, null, 2));
+    outputConfirmation(`Invoice ${documentNumber} bookkeept.`, json(), data);
   });
 
 invoices
@@ -129,7 +156,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { creditInvoice } = await import('./operations/invoices.js');
     const data = await creditInvoice(documentNumber);
-    console.log(JSON.stringify(data, null, 2));
+    outputConfirmation(`Invoice ${documentNumber} credited.`, json(), data);
   });
 
 // --- tax ---
@@ -150,7 +177,11 @@ tax
       toDate: opts.to,
       financialYear: opts.year,
     });
-    console.log(JSON.stringify(data, null, 2));
+    if (json()) {
+      console.log(JSON.stringify(data, null, 2));
+    } else {
+      console.log(formatTaxReport(data as unknown as Record<string, unknown>));
+    }
   });
 
 // --- accounts ---
@@ -169,7 +200,8 @@ accounts
       search: opts.search,
       financialYear: opts.year,
     });
-    console.log(JSON.stringify(data, null, 2));
+    const items = Array.isArray(data) ? data : [];
+    outputList(items as Record<string, unknown>[], accountListColumns, json(), data);
   });
 
 // --- customers ---
@@ -190,7 +222,8 @@ customers
       page: opts.page,
       limit: opts.limit,
     });
-    console.log(JSON.stringify(data, null, 2));
+    const envelope = data as unknown as { Customers: Record<string, unknown>[]; MetaInformation?: Record<string, unknown> };
+    outputList(envelope.Customers ?? [], customerListColumns, json(), data, envelope.MetaInformation);
   });
 
 customers
@@ -199,7 +232,7 @@ customers
   .action(async (customerNumber: string) => {
     const { getCustomer } = await import('./operations/customers.js');
     const data = await getCustomer(customerNumber);
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
   });
 
 customers
@@ -218,7 +251,7 @@ customers
     }
     const params = { ...input, Name: opts.name };
     const data = await createCustomer(params);
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
   });
 
 customers
@@ -232,7 +265,7 @@ customers
       : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     const data = await updateCustomer(customerNumber, fields);
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
   });
 
 // --- company ---
@@ -246,7 +279,7 @@ company
   .action(async () => {
     const { getCompanyInfo } = await import('./operations/company.js');
     const data = await getCompanyInfo();
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, companyDetailColumns, json());
   });
 
 // --- vouchers ---
@@ -273,7 +306,8 @@ vouchers
       page: opts.page,
       limit: opts.limit,
     });
-    console.log(JSON.stringify(data, null, 2));
+    const envelope = data as unknown as { Vouchers: Record<string, unknown>[]; MetaInformation?: Record<string, unknown> };
+    outputList(envelope.Vouchers ?? [], voucherListColumns, json(), data, envelope.MetaInformation);
   });
 
 vouchers
@@ -287,7 +321,7 @@ vouchers
       : readFileSync(opts.input, 'utf-8');
     const params = JSON.parse(raw) as Record<string, unknown>;
     const data = await createVoucher(params);
-    console.log(JSON.stringify(data, null, 2));
+    outputDetail(data as Record<string, unknown>, voucherDetailColumns, json());
   });
 
 // Error handling
