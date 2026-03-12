@@ -1,16 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { fortnoxRequest } from '../fortnox-client.js';
 import { listAccounts } from '../operations/accounts.js';
-
-interface VoucherResponse {
-  Voucher: Record<string, unknown>;
-}
-
-interface VouchersResponse {
-  Vouchers: Record<string, unknown>[];
-  MetaInformation?: { '@TotalResources': number; '@TotalPages': number; '@CurrentPage': number };
-}
+import { listVouchers, createVoucher } from '../operations/vouchers.js';
 
 const VoucherRowSchema = z.object({
   Account: z.number().describe('Kontonummer'),
@@ -32,16 +23,7 @@ export function registerBookkeepingTools(server: McpServer): void {
       limit: z.number().optional().describe('Antal per sida'),
     },
     async ({ financialYear, series, fromDate, toDate, page, limit }) => {
-      const subpath = series ? `sublist/${series}` : '';
-      const data = await fortnoxRequest<VouchersResponse>(`vouchers/${subpath}`, {
-        params: {
-          financialyear: financialYear,
-          fromdate: fromDate,
-          todate: toDate,
-          page: page || 1,
-          limit: limit || 100,
-        },
-      });
+      const data = await listVouchers({ financialYear, series, fromDate, toDate, page, limit });
 
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
@@ -59,18 +41,10 @@ export function registerBookkeepingTools(server: McpServer): void {
       VoucherRows: z.array(VoucherRowSchema).describe('Verifikationsrader (debet och kredit)'),
     },
     async (params) => {
-      const data = await fortnoxRequest<VoucherResponse>('vouchers', {
-        method: 'POST',
-        body: {
-          Voucher: {
-            ...params,
-            VoucherSeries: params.VoucherSeries || 'A',
-          },
-        },
-      });
+      const data = await createVoucher(params);
 
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data.Voucher, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
       };
     },
   );
