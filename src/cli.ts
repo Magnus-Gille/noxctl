@@ -17,6 +17,7 @@ program
   .action(async () => {
     const clientId = process.env.FORTNOX_CLIENT_ID;
     const clientSecret = process.env.FORTNOX_CLIENT_SECRET;
+    const serviceAccount = process.env.FORTNOX_SERVICE_ACCOUNT === '1';
 
     if (!clientId || !clientSecret) {
       console.error('Error: FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET must be set.');
@@ -27,11 +28,15 @@ program
       console.error(
         '   FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> noxctl setup',
       );
+      console.error('');
+      console.error(
+        'Optional: Add FORTNOX_SERVICE_ACCOUNT=1 to enable client credentials flow (requires service account enabled in Developer Portal)',
+      );
       process.exit(1);
     }
 
     const { runOAuthSetup } = await import('./auth.js');
-    await runOAuthSetup({ clientId, clientSecret });
+    await runOAuthSetup({ clientId, clientSecret, serviceAccount });
   });
 
 // --- serve (default command) ---

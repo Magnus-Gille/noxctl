@@ -27,9 +27,27 @@ describe('tax tools', () => {
     it('generates a VAT report for a quarter', async () => {
       const accountsResponse = {
         Accounts: [
-          { Number: 2610, Description: 'Utgående moms 25%', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: -12500 },
-          { Number: 2640, Description: 'Ingående moms', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: 3200 },
-          { Number: 3001, Description: 'Försäljning', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: 0 },
+          {
+            Number: 2610,
+            Description: 'Utgående moms 25%',
+            SRU: 0,
+            BalanceBroughtForward: 0,
+            BalanceCarriedForward: -12500,
+          },
+          {
+            Number: 2640,
+            Description: 'Ingående moms',
+            SRU: 0,
+            BalanceBroughtForward: 0,
+            BalanceCarriedForward: 3200,
+          },
+          {
+            Number: 3001,
+            Description: 'Försäljning',
+            SRU: 0,
+            BalanceBroughtForward: 0,
+            BalanceCarriedForward: 0,
+          },
         ],
       };
 
@@ -79,11 +97,25 @@ describe('tax tools', () => {
     });
 
     it('handles period with no VAT transactions', async () => {
-      global.fetch = vi.fn()
+      global.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: () => Promise.resolve(JSON.stringify({ Accounts: [{ Number: 1930, Description: 'Bank', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: 100000 }] })),
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                Accounts: [
+                  {
+                    Number: 1930,
+                    Description: 'Bank',
+                    SRU: 0,
+                    BalanceBroughtForward: 0,
+                    BalanceCarriedForward: 100000,
+                  },
+                ],
+              }),
+            ),
           json: () => Promise.resolve({}),
         })
         .mockResolvedValueOnce({

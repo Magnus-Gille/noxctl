@@ -26,13 +26,7 @@ export function registerInvoiceTools(server: McpServer): void {
     'Lista/filtrera fakturor i Fortnox',
     {
       filter: z
-        .enum([
-          'cancelled',
-          'fullypaid',
-          'unpaid',
-          'unpaidoverdue',
-          'unbooked',
-        ])
+        .enum(['cancelled', 'fullypaid', 'unpaid', 'unpaidoverdue', 'unbooked'])
         .optional()
         .describe('Filtrera fakturor'),
       customerNumber: z.string().optional().describe('Filtrera på kundnummer'),
