@@ -64,8 +64,12 @@ export function formatMeta(meta?: Record<string, unknown>): string {
 
 export function formatTaxReport(report: Record<string, unknown>): string {
   const period = report.period as { from: string; to: string } | undefined;
-  const vatAccounts = report.vatAccounts as Record<string, { debit: number; credit: number; description: string }> | undefined;
-  const accountBalances = report.accountBalances as Array<{ account: number; description: string; balance: number }> | undefined;
+  const vatAccounts = report.vatAccounts as
+    | Record<string, { debit: number; credit: number; description: string }>
+    | undefined;
+  const accountBalances = report.accountBalances as
+    | Array<{ account: number; description: string; balance: number }>
+    | undefined;
   const summary = report.summary as { note: string } | undefined;
 
   const lines: string[] = [];
@@ -93,9 +97,7 @@ export function formatTaxReport(report: Record<string, unknown>): string {
   if (accountBalances && accountBalances.length > 0) {
     lines.push('Account Balances');
     lines.push('─'.repeat(50));
-    lines.push(
-      `${'Account'.padEnd(8)}  ${'Description'.padEnd(25)}  ${'Balance'.padStart(10)}`,
-    );
+    lines.push(`${'Account'.padEnd(8)}  ${'Description'.padEnd(25)}  ${'Balance'.padStart(10)}`);
     lines.push('─'.repeat(50));
     for (const row of accountBalances) {
       lines.push(

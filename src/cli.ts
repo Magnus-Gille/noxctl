@@ -75,9 +75,7 @@ program
   });
 
 // --- invoices ---
-const invoices = program
-  .command('invoices')
-  .description('Invoice operations');
+const invoices = program.command('invoices').description('Invoice operations');
 
 invoices
   .command('list')
@@ -98,7 +96,10 @@ invoices
       page: opts.page,
       limit: opts.limit,
     });
-    const envelope = data as unknown as { Invoices: Record<string, unknown>[]; MetaInformation?: Record<string, unknown> };
+    const envelope = data as unknown as {
+      Invoices: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
     outputList(envelope.Invoices ?? [], invoiceListColumns, json(), data, envelope.MetaInformation);
   });
 
@@ -118,9 +119,7 @@ invoices
   .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
   .action(async (opts) => {
     const { createInvoice } = await import('./operations/invoices.js');
-    const raw = opts.input === '-'
-      ? readFileSync(0, 'utf-8')
-      : readFileSync(opts.input, 'utf-8');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
     const data = await createInvoice(params);
@@ -160,9 +159,7 @@ invoices
   });
 
 // --- tax ---
-const tax = program
-  .command('tax')
-  .description('Tax operations');
+const tax = program.command('tax').description('Tax operations');
 
 tax
   .command('report')
@@ -185,9 +182,7 @@ tax
   });
 
 // --- accounts ---
-const accounts = program
-  .command('accounts')
-  .description('Chart of accounts operations');
+const accounts = program.command('accounts').description('Chart of accounts operations');
 
 accounts
   .command('list')
@@ -205,9 +200,7 @@ accounts
   });
 
 // --- customers ---
-const customers = program
-  .command('customers')
-  .description('Customer operations');
+const customers = program.command('customers').description('Customer operations');
 
 customers
   .command('list')
@@ -222,8 +215,17 @@ customers
       page: opts.page,
       limit: opts.limit,
     });
-    const envelope = data as unknown as { Customers: Record<string, unknown>[]; MetaInformation?: Record<string, unknown> };
-    outputList(envelope.Customers ?? [], customerListColumns, json(), data, envelope.MetaInformation);
+    const envelope = data as unknown as {
+      Customers: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.Customers ?? [],
+      customerListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
   });
 
 customers
@@ -244,9 +246,7 @@ customers
     const { createCustomer } = await import('./operations/customers.js');
     let input: Record<string, unknown> = {};
     if (opts.input) {
-      const raw = opts.input === '-'
-        ? readFileSync(0, 'utf-8')
-        : readFileSync(opts.input, 'utf-8');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       input = JSON.parse(raw) as Record<string, unknown>;
     }
     const params = { ...input, Name: opts.name };
@@ -260,18 +260,14 @@ customers
   .requiredOption('--input <file>', 'Customer data as JSON file (or - for stdin)')
   .action(async (customerNumber: string, opts: { input: string }) => {
     const { updateCustomer } = await import('./operations/customers.js');
-    const raw = opts.input === '-'
-      ? readFileSync(0, 'utf-8')
-      : readFileSync(opts.input, 'utf-8');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     const data = await updateCustomer(customerNumber, fields);
     outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
   });
 
 // --- company ---
-const company = program
-  .command('company')
-  .description('Company operations');
+const company = program.command('company').description('Company operations');
 
 company
   .command('info')
@@ -283,9 +279,7 @@ company
   });
 
 // --- vouchers ---
-const vouchers = program
-  .command('vouchers')
-  .description('Voucher operations');
+const vouchers = program.command('vouchers').description('Voucher operations');
 
 vouchers
   .command('list')
@@ -306,7 +300,10 @@ vouchers
       page: opts.page,
       limit: opts.limit,
     });
-    const envelope = data as unknown as { Vouchers: Record<string, unknown>[]; MetaInformation?: Record<string, unknown> };
+    const envelope = data as unknown as {
+      Vouchers: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
     outputList(envelope.Vouchers ?? [], voucherListColumns, json(), data, envelope.MetaInformation);
   });
 
@@ -316,9 +313,7 @@ vouchers
   .requiredOption('--input <file>', 'Voucher data as JSON file (or - for stdin)')
   .action(async (opts) => {
     const { createVoucher } = await import('./operations/vouchers.js');
-    const raw = opts.input === '-'
-      ? readFileSync(0, 'utf-8')
-      : readFileSync(opts.input, 'utf-8');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const params = JSON.parse(raw) as Record<string, unknown>;
     const data = await createVoucher(params);
     outputDetail(data as Record<string, unknown>, voucherDetailColumns, json());

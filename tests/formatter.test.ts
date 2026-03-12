@@ -11,7 +11,13 @@ import {
 const cols: Column[] = [
   { key: 'id', header: 'ID', width: 5, align: 'right' },
   { key: 'name', header: 'Name', width: 15 },
-  { key: 'amount', header: 'Amount', width: 10, align: 'right', format: (v) => (typeof v === 'number' ? v.toFixed(2) : String(v ?? '')) },
+  {
+    key: 'amount',
+    header: 'Amount',
+    width: 10,
+    align: 'right',
+    format: (v) => (typeof v === 'number' ? v.toFixed(2) : String(v ?? '')),
+  },
 ];
 
 describe('formatTable', () => {
