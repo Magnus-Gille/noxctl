@@ -30,7 +30,13 @@ export function registerCustomerTools(server: McpServer): void {
     },
     async ({ search, page, limit, includeRaw }) => {
       const data = await listCustomers({ search, page, limit });
-      return listResponse(data.Customers ?? [], customerListColumns, data, data.MetaInformation, includeRaw);
+      return listResponse(
+        data.Customers ?? [],
+        customerListColumns,
+        data,
+        data.MetaInformation,
+        includeRaw,
+      );
     },
   );
 
@@ -100,7 +106,10 @@ export function registerCustomerTools(server: McpServer): void {
         .optional()
         .describe('Leveranssätt för faktura'),
       confirm: z.boolean().optional().describe('Bekräfta att kunden ska uppdateras'),
-      dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att uppdatera kunden'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle skickas utan att uppdatera kunden'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({ customerNumber, confirm, dryRun, includeRaw, ...fields }) => {

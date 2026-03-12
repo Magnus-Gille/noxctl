@@ -37,7 +37,13 @@ export function registerBookkeepingTools(server: McpServer): void {
     },
     async ({ financialYear, series, fromDate, toDate, page, limit, includeRaw }) => {
       const data = await listVouchers({ financialYear, series, fromDate, toDate, page, limit });
-      return listResponse(data.Vouchers ?? [], voucherListColumns, data, data.MetaInformation, includeRaw);
+      return listResponse(
+        data.Vouchers ?? [],
+        voucherListColumns,
+        data,
+        data.MetaInformation,
+        includeRaw,
+      );
     },
   );
 
@@ -50,7 +56,10 @@ export function registerBookkeepingTools(server: McpServer): void {
       TransactionDate: z.string().describe('Transaktionsdatum (YYYY-MM-DD)'),
       VoucherRows: z.array(VoucherRowSchema).describe('Verifikationsrader (debet och kredit)'),
       confirm: z.boolean().optional().describe('Bekräfta att verifikationen ska skapas'),
-      dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa verifikationen'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle skickas utan att skapa verifikationen'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({ confirm, dryRun, includeRaw, ...params }) => {

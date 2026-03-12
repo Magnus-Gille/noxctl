@@ -8,11 +8,7 @@ import {
   bookkeepInvoice,
   creditInvoice,
 } from '../operations/invoices.js';
-import {
-  invoiceListColumns,
-  invoiceDetailColumns,
-  invoiceConfirmColumns,
-} from '../views.js';
+import { invoiceListColumns, invoiceDetailColumns, invoiceConfirmColumns } from '../views.js';
 import {
   confirmationResponse,
   detailResponse,
@@ -52,7 +48,13 @@ export function registerInvoiceTools(server: McpServer): void {
     },
     async ({ includeRaw, ...params }) => {
       const data = await listInvoices(params);
-      return listResponse(data.Invoices ?? [], invoiceListColumns, data, data.MetaInformation, includeRaw);
+      return listResponse(
+        data.Invoices ?? [],
+        invoiceListColumns,
+        data,
+        data.MetaInformation,
+        includeRaw,
+      );
     },
   );
 
@@ -82,7 +84,10 @@ export function registerInvoiceTools(server: McpServer): void {
       Remarks: z.string().optional().describe('Anmärkning/kommentar'),
       Currency: z.string().optional().describe('Valutakod (default: SEK)'),
       confirm: z.boolean().optional().describe('Bekräfta att fakturan ska skapas'),
-      dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa fakturan'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle skickas utan att skapa fakturan'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({ confirm, dryRun, includeRaw, ...params }) => {

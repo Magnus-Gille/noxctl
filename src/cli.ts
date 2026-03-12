@@ -159,7 +159,11 @@ invoices
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
-    if (!(await confirmMutation(`Create invoice for customer ${opts.customer}`, opts, { Invoice: params }))) {
+    if (
+      !(await confirmMutation(`Create invoice for customer ${opts.customer}`, opts, {
+        Invoice: params,
+      }))
+    ) {
       return;
     }
     const data = await createInvoice(params);
@@ -176,19 +180,21 @@ invoices
   )
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
-  .action(async (documentNumber: string, opts: { method: string; yes?: boolean; dryRun?: boolean }) => {
-    const { sendInvoice } = await import('./operations/invoices.js');
-    if (!(await confirmMutation(`Send invoice ${documentNumber} via ${opts.method}`, opts))) {
-      return;
-    }
-    const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
-    outputConfirmation(
-      `Invoice ${documentNumber} sent via ${opts.method}.`,
-      json(),
-      data,
-      invoiceConfirmColumns,
-    );
-  });
+  .action(
+    async (documentNumber: string, opts: { method: string; yes?: boolean; dryRun?: boolean }) => {
+      const { sendInvoice } = await import('./operations/invoices.js');
+      if (!(await confirmMutation(`Send invoice ${documentNumber} via ${opts.method}`, opts))) {
+        return;
+      }
+      const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
+      outputConfirmation(
+        `Invoice ${documentNumber} sent via ${opts.method}.`,
+        json(),
+        data,
+        invoiceConfirmColumns,
+      );
+    },
+  );
 
 invoices
   .command('bookkeep <documentNumber>')
@@ -325,16 +331,20 @@ customers
   .requiredOption('--input <file>', 'Customer data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
-  .action(async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateCustomer } = await import('./operations/customers.js');
-    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
-    const fields = JSON.parse(raw) as Record<string, unknown>;
-    if (!(await confirmMutation(`Update customer ${customerNumber}`, opts, { Customer: fields }))) {
-      return;
-    }
-    const data = await updateCustomer(customerNumber, fields);
-    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
-  });
+  .action(
+    async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateCustomer } = await import('./operations/customers.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update customer ${customerNumber}`, opts, { Customer: fields }))
+      ) {
+        return;
+      }
+      const data = await updateCustomer(customerNumber, fields);
+      outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+    },
+  );
 
 // --- company ---
 const company = program.command('company').description('Company operations');
@@ -387,7 +397,11 @@ vouchers
     const { createVoucher } = await import('./operations/vouchers.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const params = JSON.parse(raw) as Record<string, unknown>;
-    if (!(await confirmMutation(`Create voucher "${String(params.Description || '')}"`, opts, { Voucher: params }))) {
+    if (
+      !(await confirmMutation(`Create voucher "${String(params.Description || '')}"`, opts, {
+        Voucher: params,
+      }))
+    ) {
       return;
     }
     const data = await createVoucher(params);

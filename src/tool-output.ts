@@ -61,7 +61,10 @@ export function confirmationResponse(
   return textResponse(appendRawJson(text, rawData, includeRaw));
 }
 
-export function taxReportResponse(report: Record<string, unknown>, includeRaw?: boolean): TextContent {
+export function taxReportResponse(
+  report: Record<string, unknown>,
+  includeRaw?: boolean,
+): TextContent {
   return textResponse(appendRawJson(formatTaxReport(report), report, includeRaw));
 }
 
