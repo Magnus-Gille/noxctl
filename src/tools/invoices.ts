@@ -1,15 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { fortnoxRequest } from '../fortnox-client.js';
-
-interface InvoiceResponse {
-  Invoice: Record<string, unknown>;
-}
-
-interface InvoicesResponse {
-  Invoices: Record<string, unknown>[];
-  MetaInformation?: { '@TotalResources': number; '@TotalPages': number; '@CurrentPage': number };
-}
+import {
+  listInvoices,
+  getInvoice,
+  createInvoice,
+  sendInvoice,
+  bookkeepInvoice,
+  creditInvoice,
+} from '../operations/invoices.js';
 
 const InvoiceRowSchema = z.object({
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
@@ -43,18 +41,8 @@ export function registerInvoiceTools(server: McpServer): void {
       page: z.number().optional().describe('Sidnummer'),
       limit: z.number().optional().describe('Antal per sida'),
     },
-    async ({ filter, customerNumber, fromDate, toDate, page, limit }) => {
-      const data = await fortnoxRequest<InvoicesResponse>('invoices', {
-        params: {
-          filter,
-          customernumber: customerNumber,
-          fromdate: fromDate,
-          todate: toDate,
-          page: page || 1,
-          limit: limit || 100,
-        },
-      });
-
+    async (params) => {
+      const data = await listInvoices(params);
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }],
       };
@@ -68,10 +56,9 @@ export function registerInvoiceTools(server: McpServer): void {
       documentNumber: z.string().describe('Fakturanummer'),
     },
     async ({ documentNumber }) => {
-      const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}`);
-
+      const invoice = await getInvoice(documentNumber);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data.Invoice, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(invoice, null, 2) }],
       };
     },
   );
@@ -90,13 +77,9 @@ export function registerInvoiceTools(server: McpServer): void {
       Currency: z.string().optional().describe('Valutakod (default: SEK)'),
     },
     async (params) => {
-      const data = await fortnoxRequest<InvoiceResponse>('invoices', {
-        method: 'POST',
-        body: { Invoice: params },
-      });
-
+      const invoice = await createInvoice(params);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(data.Invoice, null, 2) }],
+        content: [{ type: 'text' as const, text: JSON.stringify(invoice, null, 2) }],
       };
     },
   );
@@ -113,22 +96,12 @@ export function registerInvoiceTools(server: McpServer): void {
     },
     async ({ documentNumber, method }) => {
       const sendMethod = method || 'email';
-      const endpoint =
-        sendMethod === 'email'
-          ? `invoices/${documentNumber}/email`
-          : sendMethod === 'einvoice'
-            ? `invoices/${documentNumber}/einvoice`
-            : `invoices/${documentNumber}/print`;
-
-      const data = await fortnoxRequest<InvoiceResponse>(endpoint, {
-        method: 'PUT',
-      });
-
+      const invoice = await sendInvoice(documentNumber, sendMethod);
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Faktura ${documentNumber} skickad via ${sendMethod}.\n${JSON.stringify(data?.Invoice || {}, null, 2)}`,
+            text: `Faktura ${documentNumber} skickad via ${sendMethod}.\n${JSON.stringify(invoice, null, 2)}`,
           },
         ],
       };
@@ -142,16 +115,12 @@ export function registerInvoiceTools(server: McpServer): void {
       documentNumber: z.string().describe('Fakturanummer att bokföra'),
     },
     async ({ documentNumber }) => {
-      const data = await fortnoxRequest<InvoiceResponse>(
-        `invoices/${documentNumber}/bookkeep`,
-        { method: 'PUT' },
-      );
-
+      const invoice = await bookkeepInvoice(documentNumber);
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Faktura ${documentNumber} bokförd.\n${JSON.stringify(data?.Invoice || {}, null, 2)}`,
+            text: `Faktura ${documentNumber} bokförd.\n${JSON.stringify(invoice, null, 2)}`,
           },
         ],
       };
@@ -165,16 +134,12 @@ export function registerInvoiceTools(server: McpServer): void {
       documentNumber: z.string().describe('Fakturanummer att kreditera'),
     },
     async ({ documentNumber }) => {
-      const data = await fortnoxRequest<InvoiceResponse>(
-        `invoices/${documentNumber}/credit`,
-        { method: 'PUT' },
-      );
-
+      const invoice = await creditInvoice(documentNumber);
       return {
         content: [
           {
             type: 'text' as const,
-            text: `Kreditfaktura skapad för faktura ${documentNumber}.\n${JSON.stringify(data?.Invoice || {}, null, 2)}`,
+            text: `Kreditfaktura skapad för faktura ${documentNumber}.\n${JSON.stringify(invoice, null, 2)}`,
           },
         ],
       };
