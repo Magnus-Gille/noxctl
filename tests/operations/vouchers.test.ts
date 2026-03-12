@@ -69,7 +69,10 @@ describe('voucher operations', () => {
       await createVoucher({
         Description: 'Test',
         TransactionDate: '2025-01-15',
-        VoucherRows: [{ Account: 1930, Debit: 100 }, { Account: 2640, Credit: 100 }],
+        VoucherRows: [
+          { Account: 1930, Debit: 100 },
+          { Account: 2640, Credit: 100 },
+        ],
       });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];

@@ -36,7 +36,9 @@ export async function getInvoice(documentNumber: string): Promise<Record<string,
   return data.Invoice;
 }
 
-export async function createInvoice(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function createInvoice(
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const data = await fortnoxRequest<InvoiceResponse>('invoices', {
     method: 'POST',
     body: { Invoice: params },
@@ -50,25 +52,27 @@ export async function sendInvoice(
   documentNumber: string,
   method: SendMethod = 'email',
 ): Promise<Record<string, unknown>> {
-  const endpointSuffix = method === 'email' ? 'email' : method === 'einvoice' ? 'einvoice' : 'print';
-  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/${endpointSuffix}`, {
+  const endpointSuffix =
+    method === 'email' ? 'email' : method === 'einvoice' ? 'einvoice' : 'print';
+  const data = await fortnoxRequest<InvoiceResponse>(
+    `invoices/${documentNumber}/${endpointSuffix}`,
+    {
+      method: 'PUT',
+    },
+  );
+  return data?.Invoice || {};
+}
+
+export async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/bookkeep`, {
     method: 'PUT',
   });
   return data?.Invoice || {};
 }
 
-export async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoiceResponse>(
-    `invoices/${documentNumber}/bookkeep`,
-    { method: 'PUT' },
-  );
-  return data?.Invoice || {};
-}
-
 export async function creditInvoice(documentNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoiceResponse>(
-    `invoices/${documentNumber}/credit`,
-    { method: 'PUT' },
-  );
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentNumber}/credit`, {
+    method: 'PUT',
+  });
   return data?.Invoice || {};
 }

@@ -29,8 +29,7 @@ export async function startMcpServer(): Promise<void> {
 
 // Auto-start when run directly (backward compat: `node dist/index.js`)
 const isDirectRun =
-  import.meta.url === `file://${process.argv[1]}` ||
-  process.argv[1]?.endsWith('/index.js');
+  import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('/index.js');
 
 if (isDirectRun) {
   startMcpServer().catch((err) => {

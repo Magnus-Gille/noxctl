@@ -14,24 +14,37 @@ describe('tax operations', () => {
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(() => {
         callCount++;
-        const response = callCount === 1
-          ? {
-              Accounts: [
-                { Number: 2610, Description: 'Utgående moms 25%', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: -12500 },
-                { Number: 2640, Description: 'Ingående moms', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: 3200 },
-              ],
-            }
-          : {
-              Vouchers: [
-                {
-                  VoucherRows: [
-                    { Account: 2610, Debit: 0, Credit: 12500 },
-                    { Account: 2640, Debit: 3200, Credit: 0 },
-                    { Account: 3001, Debit: 0, Credit: 50000 },
-                  ],
-                },
-              ],
-            };
+        const response =
+          callCount === 1
+            ? {
+                Accounts: [
+                  {
+                    Number: 2610,
+                    Description: 'Utgående moms 25%',
+                    SRU: 0,
+                    BalanceBroughtForward: 0,
+                    BalanceCarriedForward: -12500,
+                  },
+                  {
+                    Number: 2640,
+                    Description: 'Ingående moms',
+                    SRU: 0,
+                    BalanceBroughtForward: 0,
+                    BalanceCarriedForward: 3200,
+                  },
+                ],
+              }
+            : {
+                Vouchers: [
+                  {
+                    VoucherRows: [
+                      { Account: 2610, Debit: 0, Credit: 12500 },
+                      { Account: 2640, Debit: 3200, Credit: 0 },
+                      { Account: 3001, Debit: 0, Credit: 50000 },
+                    ],
+                  },
+                ],
+              };
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -54,14 +67,27 @@ describe('tax operations', () => {
       let callCount = 0;
       global.fetch = vi.fn().mockImplementation(() => {
         callCount++;
-        const response = callCount === 1
-          ? {
-              Accounts: [
-                { Number: 1930, Description: 'Bank', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: 100000 },
-                { Number: 2610, Description: 'Utgående moms 25%', SRU: 0, BalanceBroughtForward: 0, BalanceCarriedForward: -5000 },
-              ],
-            }
-          : { Vouchers: [] };
+        const response =
+          callCount === 1
+            ? {
+                Accounts: [
+                  {
+                    Number: 1930,
+                    Description: 'Bank',
+                    SRU: 0,
+                    BalanceBroughtForward: 0,
+                    BalanceCarriedForward: 100000,
+                  },
+                  {
+                    Number: 2610,
+                    Description: 'Utgående moms 25%',
+                    SRU: 0,
+                    BalanceBroughtForward: 0,
+                    BalanceCarriedForward: -5000,
+                  },
+                ],
+              }
+            : { Vouchers: [] };
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -78,7 +104,8 @@ describe('tax operations', () => {
     });
 
     it('handles empty period with no transactions', async () => {
-      global.fetch = vi.fn()
+      global.fetch = vi
+        .fn()
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
