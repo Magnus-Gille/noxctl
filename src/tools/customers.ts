@@ -1,6 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { listCustomers, getCustomer, createCustomer, updateCustomer } from '../operations/customers.js';
+import {
+  listCustomers,
+  getCustomer,
+  createCustomer,
+  updateCustomer,
+} from '../operations/customers.js';
 
 export function registerCustomerTools(server: McpServer): void {
   server.tool(

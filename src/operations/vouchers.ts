@@ -31,7 +31,9 @@ export async function listVouchers(params: ListVouchersParams = {}): Promise<Vou
   });
 }
 
-export async function createVoucher(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+export async function createVoucher(
+  params: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
   const data = await fortnoxRequest<VoucherResponse>('vouchers', {
     method: 'POST',
     body: {

@@ -20,7 +20,9 @@ describe('company operations', () => {
 
   describe('getCompanyInfo', () => {
     it('unwraps CompanyInformation envelope', async () => {
-      mockFetch({ CompanyInformation: { CompanyName: 'Test AB', OrganizationNumber: '556677-8899' } });
+      mockFetch({
+        CompanyInformation: { CompanyName: 'Test AB', OrganizationNumber: '556677-8899' },
+      });
       const { getCompanyInfo } = await import('../../src/operations/company.js');
 
       const result = await getCompanyInfo();
