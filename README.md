@@ -11,17 +11,17 @@ cd fortnox-mcp
 npm install && npm run build
 
 # 2. Connect to Fortnox (opens browser for OAuth)
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx fortnox-mcp setup
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> noxctl setup
 
 # 3. Register in Claude Code
-claude mcp add fortnox -- npx fortnox-mcp
+claude mcp add fortnox -- noxctl serve
 ```
 
 Done. No manual tokens, no environment variables after setup.
 
 ## Prerequisites
 
-- **Node.js** 18+
+- **Node.js** 20+
 - **Fortnox account** with API access (Mellan plan or higher)
 - **Fortnox app** registered at [developer.fortnox.se](https://developer.fortnox.se/) with redirect URI `http://localhost:9876/callback`
 
@@ -38,7 +38,7 @@ Done. No manual tokens, no environment variables after setup.
 ### 2. Authenticate
 
 ```bash
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx fortnox-mcp setup
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> noxctl setup
 ```
 
 This opens your browser to log in to Fortnox. After authorization, credentials are saved locally to `~/.fortnox-mcp/credentials.json` (mode 0600). Token refresh is automatic.
@@ -46,7 +46,7 @@ This opens your browser to log in to Fortnox. After authorization, credentials a
 ### 3. Register with Claude Code
 
 ```bash
-claude mcp add fortnox -- npx fortnox-mcp
+claude mcp add fortnox -- noxctl serve
 ```
 
 ## Tools

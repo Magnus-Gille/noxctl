@@ -20,11 +20,11 @@ src/
 
 ### stdio transport
 
-The server runs locally via stdio — no HTTP server to host or manage. Claude Code spawns `npx fortnox-mcp` as a child process and communicates over stdin/stdout.
+The server runs locally via stdio — no HTTP server to host or manage. Claude Code spawns `noxctl serve` as a child process and communicates over stdin/stdout.
 
 ### OAuth2 setup flow
 
-`npx fortnox-mcp setup` starts a temporary local HTTP server on port 9876, opens the browser for Fortnox login, receives the OAuth callback, exchanges the code for tokens, saves them, and exits. After this one-time setup, no environment variables are needed.
+`noxctl setup` starts a temporary local HTTP server on port 9876, opens the browser for Fortnox login, receives the OAuth callback, exchanges the code for tokens, saves them, and exits. After this one-time setup, no environment variables are needed.
 
 ### Token management
 

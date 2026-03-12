@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { readFileSync } from 'node:fs';
 
 const program = new Command();
@@ -34,9 +34,9 @@ program
     await runOAuthSetup({ clientId, clientSecret });
   });
 
-// --- serve ---
+// --- serve (default command) ---
 program
-  .command('serve')
+  .command('serve', { isDefault: true })
   .description('Start the MCP server (stdio transport)')
   .action(async () => {
     const { startMcpServer } = await import('./index.js');
@@ -98,7 +98,11 @@ invoices
 invoices
   .command('send <documentNumber>')
   .description('Send an invoice')
-  .option('--method <method>', 'Send method: email, print, einvoice', 'email')
+  .addOption(
+    new Option('--method <method>', 'Send method: email, print, einvoice')
+      .choices(['email', 'print', 'einvoice'])
+      .default('email'),
+  )
   .action(async (documentNumber: string, opts: { method: string }) => {
     const { sendInvoice } = await import('./operations/invoices.js');
     const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
