@@ -12,6 +12,7 @@ import {
 import {
   invoiceListColumns,
   invoiceDetailColumns,
+  invoiceConfirmColumns,
   customerListColumns,
   customerDetailColumns,
   voucherListColumns,
@@ -137,7 +138,12 @@ invoices
   .action(async (documentNumber: string, opts: { method: string }) => {
     const { sendInvoice } = await import('./operations/invoices.js');
     const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
-    outputConfirmation(`Invoice ${documentNumber} sent via ${opts.method}.`, json(), data);
+    outputConfirmation(
+      `Invoice ${documentNumber} sent via ${opts.method}.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+    );
   });
 
 invoices
@@ -146,7 +152,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { bookkeepInvoice } = await import('./operations/invoices.js');
     const data = await bookkeepInvoice(documentNumber);
-    outputConfirmation(`Invoice ${documentNumber} bookkeept.`, json(), data);
+    outputConfirmation(`Invoice ${documentNumber} bookkeept.`, json(), data, invoiceConfirmColumns);
   });
 
 invoices
@@ -155,7 +161,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { creditInvoice } = await import('./operations/invoices.js');
     const data = await creditInvoice(documentNumber);
-    outputConfirmation(`Invoice ${documentNumber} credited.`, json(), data);
+    outputConfirmation(`Invoice ${documentNumber} credited.`, json(), data, invoiceConfirmColumns);
   });
 
 // --- tax ---

@@ -6,10 +6,26 @@ export interface Column {
   format?: (value: unknown) => string;
 }
 
+function stripControl(str: string): string {
+  return (
+    str
+      // Strip ANSI CSI sequences (e.g. \x1b[31m)
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+      // Strip OSC sequences (e.g. \x1b]52;c;...\x07)
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x1b\][^\x07]*\x07/g, '')
+      // Strip remaining individual control characters
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, '')
+      .replace(/[\n\r]+/g, ' ')
+  );
+}
+
 function toString(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  return String(value).replace(/[\n\r]+/g, ' ');
+  return stripControl(String(value));
 }
 
 function truncate(str: string, width: number): string {
@@ -88,7 +104,7 @@ export function formatTaxReport(report: Record<string, unknown>): string {
     lines.push('─'.repeat(60));
     for (const [acct, data] of Object.entries(vatAccounts)) {
       lines.push(
-        `${acct.padEnd(8)}  ${truncate(data.description, 25).padEnd(25)}  ${data.debit.toFixed(2).padStart(10)}  ${data.credit.toFixed(2).padStart(10)}`,
+        `${acct.padEnd(8)}  ${truncate(stripControl(data.description), 25).padEnd(25)}  ${data.debit.toFixed(2).padStart(10)}  ${data.credit.toFixed(2).padStart(10)}`,
       );
     }
     lines.push('');
@@ -101,14 +117,14 @@ export function formatTaxReport(report: Record<string, unknown>): string {
     lines.push('─'.repeat(50));
     for (const row of accountBalances) {
       lines.push(
-        `${String(row.account).padEnd(8)}  ${truncate(row.description, 25).padEnd(25)}  ${row.balance.toFixed(2).padStart(10)}`,
+        `${String(row.account).padEnd(8)}  ${truncate(stripControl(row.description), 25).padEnd(25)}  ${row.balance.toFixed(2).padStart(10)}`,
       );
     }
     lines.push('');
   }
 
   if (summary?.note) {
-    lines.push(`Note: ${summary.note}`);
+    lines.push(`Note: ${stripControl(summary.note)}`);
   }
 
   return lines.join('\n');
@@ -153,10 +169,18 @@ export function outputDetail(
   console.log(formatDetail(record, columns));
 }
 
-export function outputConfirmation(message: string, json: boolean, rawData: unknown): void {
+export function outputConfirmation(
+  message: string,
+  json: boolean,
+  rawData: unknown,
+  columns?: Column[],
+): void {
   if (json) {
     console.log(JSON.stringify(rawData, null, 2));
     return;
   }
   console.log(message);
+  if (columns && rawData && typeof rawData === 'object') {
+    console.log(formatDetail(rawData as Record<string, unknown>, columns));
+  }
 }

@@ -69,6 +69,15 @@ describe('formatTable', () => {
     expect(output).toContain('No');
   });
 
+  it('strips ANSI/OSC escape sequences from values', () => {
+    const malicious = '\x1b]52;c;SGVsbG8=\x07Innocent Name';
+    const rows = [{ id: 1, name: malicious, amount: 0 }];
+    const output = formatTable(rows, cols);
+    expect(output).not.toContain('\x1b');
+    expect(output).not.toContain('\x07');
+    expect(output).toContain('Innocent Name');
+  });
+
   it('sanitizes newlines in values', () => {
     const rows = [{ id: 1, name: 'Line1\nLine2', amount: 0 }];
     const output = formatTable(rows, cols);
@@ -162,6 +171,22 @@ describe('formatTaxReport', () => {
   it('renders summary note', () => {
     const output = formatTaxReport(report);
     expect(output).toContain('Kontrollera beloppen');
+  });
+
+  it('strips escape sequences from descriptions', () => {
+    const evil = {
+      period: { from: '2025-01-01', to: '2025-03-31' },
+      vatAccounts: {
+        '2610': { debit: 0, credit: 100, description: '\x1b[31mEvil\x1b[0m' },
+      },
+      accountBalances: [{ account: 2610, description: '\x1b]52;c;test\x07', balance: 100 }],
+      summary: { note: '\x1b[1mBold note\x1b[0m' },
+    };
+    const output = formatTaxReport(evil);
+    expect(output).not.toContain('\x1b');
+    expect(output).not.toContain('\x07');
+    expect(output).toContain('Evil');
+    expect(output).toContain('Bold note');
   });
 
   it('handles empty report gracefully', () => {

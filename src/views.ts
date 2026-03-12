@@ -29,6 +29,15 @@ export const invoiceDetailColumns: Column[] = [
   { key: 'CreditInvoiceReference', header: 'Credit Ref', width: 20 },
 ];
 
+export const invoiceConfirmColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 20 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 20 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Booked', header: 'Booked', width: 5 },
+  { key: 'Sent', header: 'Sent', width: 5 },
+  { key: 'CreditInvoiceReference', header: 'Credit Ref', width: 20 },
+];
+
 // --- Customer views (target ≤80 cols) ---
 
 // 7 + 2 + 25 + 2 + 12 + 2 + 12 + 2 + 14 = 78
