@@ -6,7 +6,9 @@ import {
   saveCredentials,
   exchangeCodeForTokens,
   refreshAccessToken,
+  getTokenViaClientCredentials,
   getValidToken,
+  fetchTenantId,
   type FortnoxCredentials,
 } from '../src/auth.js';
 
@@ -21,6 +23,11 @@ const mockCredentials: FortnoxCredentials = {
   expires_at: Date.now() + 3600 * 1000,
 };
 
+const mockCredentialsWithTenant: FortnoxCredentials = {
+  ...mockCredentials,
+  tenant_id: '12345',
+};
+
 describe('auth', () => {
   describe('loadCredentials', () => {
     it('returns null when no credentials file exists', async () => {
@@ -33,6 +40,14 @@ describe('auth', () => {
       vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(mockCredentials));
       const creds = await loadCredentials();
       expect(creds).toEqual(mockCredentials);
+    });
+
+    it('returns credentials with tenant_id when present', async () => {
+      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(
+        JSON.stringify(mockCredentialsWithTenant),
+      );
+      const creds = await loadCredentials();
+      expect(creds?.tenant_id).toBe('12345');
     });
   });
 
@@ -93,6 +108,57 @@ describe('auth', () => {
     });
   });
 
+  describe('getTokenViaClientCredentials', () => {
+    beforeEach(() => {
+      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+    });
+
+    it('gets token using client credentials and tenant_id', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            access_token: 'cc-access-token',
+            expires_in: 3600,
+          }),
+      });
+
+      const result = await getTokenViaClientCredentials(mockCredentialsWithTenant);
+      expect(result.access_token).toBe('cc-access-token');
+      expect(result.tenant_id).toBe('12345');
+
+      // Verify TenantId header was sent
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://apps.fortnox.se/oauth-v1/token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            TenantId: '12345',
+          }),
+        }),
+      );
+    });
+
+    it('throws when no tenant_id is available', async () => {
+      await expect(getTokenViaClientCredentials(mockCredentials)).rejects.toThrow(
+        'No tenant_id available',
+      );
+    });
+
+    it('throws on failed client credentials request', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: () => Promise.resolve('Forbidden'),
+      });
+
+      await expect(getTokenViaClientCredentials(mockCredentialsWithTenant)).rejects.toThrow(
+        'Client credentials token request failed (403)',
+      );
+    });
+  });
+
   describe('refreshAccessToken', () => {
     beforeEach(() => {
       vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
@@ -128,6 +194,41 @@ describe('auth', () => {
     });
   });
 
+  describe('fetchTenantId', () => {
+    it('returns DatabaseNumber from company info', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            CompanyInformation: { DatabaseNumber: '98765' },
+          }),
+      });
+
+      const tenantId = await fetchTenantId('some-token');
+      expect(tenantId).toBe('98765');
+    });
+
+    it('returns undefined on API error', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+      });
+
+      const tenantId = await fetchTenantId('bad-token');
+      expect(tenantId).toBeUndefined();
+    });
+
+    it('returns undefined when DatabaseNumber is missing', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ CompanyInformation: {} }),
+      });
+
+      const tenantId = await fetchTenantId('some-token');
+      expect(tenantId).toBeUndefined();
+    });
+  });
+
   describe('getValidToken', () => {
     it('throws when not authenticated', async () => {
       vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('ENOENT'));
@@ -140,7 +241,55 @@ describe('auth', () => {
       expect(token).toBe('test-access-token');
     });
 
-    it('refreshes token when about to expire', async () => {
+    it('uses client credentials when tenant_id is available and token expired', async () => {
+      const expiring = { ...mockCredentialsWithTenant, expires_at: Date.now() + 60 * 1000 };
+      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(expiring));
+      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            access_token: 'cc-fresh-token',
+            expires_in: 3600,
+          }),
+      });
+
+      const token = await getValidToken();
+      expect(token).toBe('cc-fresh-token');
+    });
+
+    it('falls back to refresh token when client credentials fails', async () => {
+      const expiring = { ...mockCredentialsWithTenant, expires_at: Date.now() + 60 * 1000 };
+      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(expiring));
+      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+
+      global.fetch = vi
+        .fn()
+        // First call: client credentials fails
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 403,
+          text: () => Promise.resolve('Forbidden'),
+        })
+        // Second call: refresh token succeeds
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              access_token: 'refresh-fallback-token',
+              refresh_token: 'new-refresh',
+              expires_in: 3600,
+            }),
+        });
+
+      const token = await getValidToken();
+      expect(token).toBe('refresh-fallback-token');
+    });
+
+    it('refreshes token when about to expire (no tenant_id)', async () => {
       const expiringSoon = { ...mockCredentials, expires_at: Date.now() + 60 * 1000 };
       vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(expiringSoon));
       vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);

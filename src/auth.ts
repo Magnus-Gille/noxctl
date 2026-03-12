@@ -12,12 +12,15 @@ const CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 const FORTNOX_AUTH_URL = 'https://apps.fortnox.se/oauth-v1/auth';
 const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
 
+const SCOPES = 'customer invoice bookkeeping companyinformation settings';
+
 export interface FortnoxCredentials {
   client_id: string;
   client_secret: string;
   access_token: string;
   refresh_token: string;
   expires_at: number;
+  tenant_id?: string;
 }
 
 export interface FortnoxAppConfig {
@@ -74,6 +77,50 @@ export async function exchangeCodeForTokens(
   };
 }
 
+export async function getTokenViaClientCredentials(
+  creds: FortnoxCredentials,
+): Promise<FortnoxCredentials> {
+  if (!creds.tenant_id) {
+    throw new Error('No tenant_id available — cannot use client credentials flow');
+  }
+
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    scope: SCOPES,
+  });
+
+  const response = await fetch(FORTNOX_TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization:
+        'Basic ' +
+        Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString('base64'),
+      TenantId: creds.tenant_id,
+    },
+    body: body.toString(),
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Client credentials token request failed (${response.status}): ${text}`);
+  }
+
+  const data = (await response.json()) as {
+    access_token: string;
+    expires_in: number;
+  };
+
+  const updated: FortnoxCredentials = {
+    ...creds,
+    access_token: data.access_token,
+    expires_at: Date.now() + data.expires_in * 1000,
+  };
+
+  await saveCredentials(updated);
+  return updated;
+}
+
 export async function refreshAccessToken(creds: FortnoxCredentials): Promise<FortnoxCredentials> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
@@ -121,13 +168,41 @@ export async function getValidToken(): Promise<string> {
     );
   }
 
-  // Refresh if token expires within 5 minutes
-  if (Date.now() > creds.expires_at - 5 * 60 * 1000) {
-    const refreshed = await refreshAccessToken(creds);
-    return refreshed.access_token;
+  // Token still valid — use it
+  if (Date.now() <= creds.expires_at - 5 * 60 * 1000) {
+    return creds.access_token;
   }
 
-  return creds.access_token;
+  // Prefer client credentials when tenant_id is available (no refresh token management needed)
+  if (creds.tenant_id) {
+    try {
+      const refreshed = await getTokenViaClientCredentials(creds);
+      return refreshed.access_token;
+    } catch {
+      // Fall through to refresh_token flow
+    }
+  }
+
+  // Fallback: standard refresh token flow
+  const refreshed = await refreshAccessToken(creds);
+  return refreshed.access_token;
+}
+
+export async function fetchTenantId(accessToken: string): Promise<string | undefined> {
+  const response = await fetch('https://api.fortnox.se/3/companyinformation', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+    },
+  });
+
+  if (!response.ok) return undefined;
+
+  const data = (await response.json()) as {
+    CompanyInformation?: { DatabaseNumber?: string };
+  };
+
+  return data.CompanyInformation?.DatabaseNumber;
 }
 
 function openBrowser(url: string): void {
@@ -175,22 +250,31 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
         try {
           const tokens = await exchangeCodeForTokens(code, REDIRECT_URI, config);
 
+          // Fetch tenant_id for client credentials flow
+          console.log('Fetching tenant ID...');
+          const tenantId = await fetchTenantId(tokens.access_token);
+
           const creds: FortnoxCredentials = {
             client_id: config.clientId,
             client_secret: config.clientSecret,
             access_token: tokens.access_token,
             refresh_token: tokens.refresh_token,
             expires_at: Date.now() + tokens.expires_in * 1000,
+            tenant_id: tenantId,
           };
 
           await saveCredentials(creds);
+
+          const tenantMsg = tenantId
+            ? ' Client credentials flow enabled.'
+            : ' (Tenant ID not found — using refresh token flow.)';
 
           res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(
             '<h1>Klart!</h1><p>Fortnox MCP är nu kopplat till ditt konto. Du kan stänga den här fliken.</p>',
           );
 
-          console.log('\nSetup complete! Credentials saved.\n');
+          console.log(`\nSetup complete! Credentials saved.${tenantMsg}\n`);
           console.log('Register in Claude Code with:');
           console.log('  claude mcp add fortnox -- npx fortnox-mcp\n');
         } catch (err) {
@@ -208,8 +292,7 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
     });
 
     server.listen(PORT, () => {
-      const scopes = 'customer invoice bookkeeping companyinformation';
-      const authUrl = `${FORTNOX_AUTH_URL}?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}&state=fortnox-mcp&response_type=code&access_type=offline`;
+      const authUrl = `${FORTNOX_AUTH_URL}?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&state=fortnox-mcp&response_type=code&access_type=offline&account_type=service`;
 
       console.log('Opening Fortnox login in your browser...');
       openBrowser(authUrl);
