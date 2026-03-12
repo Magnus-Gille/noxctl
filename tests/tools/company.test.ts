@@ -47,10 +47,10 @@ describe('company tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({ name: 'fortnox_company_info', arguments: {} });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
-      expect(parsed.CompanyName).toBe('Northwind Services AB');
-      expect(parsed.OrganisationNumber).toBe('556123-4567');
-      expect(parsed.City).toBe('Stockholm');
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Northwind Services AB');
+      expect(text).toContain('556123-4567');
+      expect(text).toContain('Stockholm');
     });
   });
 });

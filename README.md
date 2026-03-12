@@ -48,7 +48,13 @@ To enable the client credentials flow (recommended if you have service accounts 
 FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> FORTNOX_SERVICE_ACCOUNT=1 noxctl setup
 ```
 
-This opens your browser to log in to Fortnox. After authorization, credentials are saved locally to `~/.fortnox-mcp/credentials.json` (mode 0600).
+This opens your browser to log in to Fortnox. After authorization, credentials are stored in the OS secure store:
+
+- **macOS:** Keychain (`security`)
+- **Linux:** Secret Service via `secret-tool`
+- **Windows:** DPAPI-protected user store
+
+Legacy plaintext `~/.fortnox-mcp/credentials.json` files are read for migration only and removed on the next successful save.
 
 Token management is automatic:
 - **With service account (`FORTNOX_SERVICE_ACCOUNT=1`):** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
@@ -113,6 +119,23 @@ noxctl -o table invoices list     # force table
 noxctl invoices list | jq .       # auto-JSON (piped)
 ```
 
+## Mutation safety
+
+Mutating commands now require explicit confirmation.
+
+CLI:
+
+```bash
+noxctl invoices send 1001 --dry-run
+noxctl invoices send 1001 --yes
+```
+
+MCP tools:
+
+- Mutating tools require `confirm: true`
+- Use `dryRun: true` to preview a request without sending it
+- Raw Fortnox JSON is opt-in via `includeRaw: true`
+
 ## Examples
 
 Ask Claude naturally:
@@ -140,11 +163,13 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## Security
 
-- Credentials stored locally with restricted file permissions (0600)
+- Credentials stored in the OS secure store, not plaintext repo or home-directory JSON
 - No secrets in environment variables after initial setup
-- OAuth2 with client credentials flow (preferred) or automatic token refresh (fallback)
-- No external dependencies beyond the Fortnox API
-- Rate limiting and retry built in
+- OAuth callback is bound to loopback and validated with a per-run OAuth `state`
+- OAuth/client-credentials secrets are never emitted in tool responses
+- Mutating actions require explicit confirmation or `dryRun`
+- MCP responses are summarized by default; raw Fortnox JSON is opt-in
+- Retries are limited to idempotent requests
 
 ## License
 

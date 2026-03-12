@@ -41,8 +41,9 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({ name: 'fortnox_list_invoices', arguments: {} });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
-      expect(parsed.Invoices).toHaveLength(2);
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Acme');
+      expect(text).toContain('Globex');
     });
 
     it('filters by status', async () => {
@@ -100,10 +101,12 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_get_invoice',
-        arguments: { documentNumber: '1001' },
+        arguments: { documentNumber: '1001', includeRaw: true },
       });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
+      const parsed = JSON.parse(
+        (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
+      );
       expect(parsed.DocumentNumber).toBe('1001');
       expect(parsed.InvoiceRows).toHaveLength(1);
     });
@@ -123,6 +126,7 @@ describe('invoice tools', () => {
           InvoiceRows: [{ Description: 'Konsulttimmar', DeliveredQuantity: 10, Price: 1000 }],
           OurReference: 'Casey Example',
           DueDate: '2025-04-30',
+          confirm: true,
         },
       });
 
@@ -147,6 +151,7 @@ describe('invoice tools', () => {
             { Description: 'Resekostnader', DeliveredQuantity: 1, Price: 500, VAT: 25 },
           ],
           Currency: 'SEK',
+          confirm: true,
         },
       });
 
@@ -164,7 +169,7 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_send_invoice',
-        arguments: { documentNumber: '1001' },
+        arguments: { documentNumber: '1001', confirm: true },
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
@@ -178,7 +183,7 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       await client.callTool({
         name: 'fortnox_send_invoice',
-        arguments: { documentNumber: '1001', method: 'print' },
+        arguments: { documentNumber: '1001', method: 'print', confirm: true },
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
@@ -191,7 +196,7 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       await client.callTool({
         name: 'fortnox_send_invoice',
-        arguments: { documentNumber: '1001', method: 'einvoice' },
+        arguments: { documentNumber: '1001', method: 'einvoice', confirm: true },
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
@@ -206,7 +211,7 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_bookkeep_invoice',
-        arguments: { documentNumber: '1001' },
+        arguments: { documentNumber: '1001', confirm: true },
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
@@ -223,7 +228,7 @@ describe('invoice tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_credit_invoice',
-        arguments: { documentNumber: '1001' },
+        arguments: { documentNumber: '1001', confirm: true },
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
@@ -231,6 +236,20 @@ describe('invoice tools', () => {
       expect((result.content as { type: string; text: string }[])[0].text).toContain(
         'Kreditfaktura',
       );
+    });
+
+    it('supports dry-run for invoice send without side effects', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1001' } });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_send_invoice',
+        arguments: { documentNumber: '1001', dryRun: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect((result.content as { type: string; text: string }[])[0].text).toContain('Dry run');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
 });

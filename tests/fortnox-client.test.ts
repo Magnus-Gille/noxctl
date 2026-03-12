@@ -119,4 +119,20 @@ describe('fortnox-client', () => {
     expect(result).toEqual({ ok: true });
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
+
+  it('does not retry non-idempotent POST requests', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      json: () => Promise.resolve({ ErrorInformation: { message: 'Rate limited', code: 0 } }),
+    });
+
+    await expect(
+      fortnoxRequest('customers', {
+        method: 'POST',
+        body: { Customer: { Name: 'New' } },
+      }),
+    ).rejects.toThrow(FortnoxApiError);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
 });

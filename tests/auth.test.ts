@@ -1,6 +1,12 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+
+const credentialStore = vi.hoisted(() => ({
+  loadCredentialBlob: vi.fn(),
+  saveCredentialBlob: vi.fn(),
+}));
+
+vi.mock('../src/credentials-store.js', () => credentialStore);
+
 import {
   loadCredentials,
   saveCredentials,
@@ -9,11 +15,10 @@ import {
   getTokenViaClientCredentials,
   getValidToken,
   fetchTenantId,
+  buildAuthorizationUrl,
+  escapeHtml,
   type FortnoxCredentials,
 } from '../src/auth.js';
-
-const TEST_CREDS_DIR = path.join(process.env.HOME || '~', '.fortnox-mcp');
-const TEST_CREDS_FILE = path.join(TEST_CREDS_DIR, 'credentials.json');
 
 const mockCredentials: FortnoxCredentials = {
   client_id: 'test-client-id',
@@ -29,38 +34,40 @@ const mockCredentialsWithTenant: FortnoxCredentials = {
 };
 
 describe('auth', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    credentialStore.loadCredentialBlob.mockReset();
+    credentialStore.saveCredentialBlob.mockReset();
+  });
+
   describe('loadCredentials', () => {
-    it('returns null when no credentials file exists', async () => {
-      vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('ENOENT'));
+    it('returns null when no credentials are stored', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(null);
       const creds = await loadCredentials();
       expect(creds).toBeNull();
     });
 
-    it('returns parsed credentials when file exists', async () => {
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(mockCredentials));
+    it('returns parsed credentials from secure storage', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
       const creds = await loadCredentials();
       expect(creds).toEqual(mockCredentials);
     });
 
     it('returns credentials with tenant_id when present', async () => {
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(mockCredentialsWithTenant));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        JSON.stringify(mockCredentialsWithTenant),
+      );
       const creds = await loadCredentials();
       expect(creds?.tenant_id).toBe('12345');
     });
   });
 
   describe('saveCredentials', () => {
-    it('creates directory and writes file with restricted permissions', async () => {
-      const mkdirSpy = vi.spyOn(fs, 'mkdir').mockResolvedValueOnce(undefined);
-      const writeSpy = vi.spyOn(fs, 'writeFile').mockResolvedValueOnce(undefined);
-
+    it('writes credentials to secure storage', async () => {
       await saveCredentials(mockCredentials);
 
-      expect(mkdirSpy).toHaveBeenCalledWith(TEST_CREDS_DIR, { recursive: true });
-      expect(writeSpy).toHaveBeenCalledWith(
-        TEST_CREDS_FILE,
+      expect(credentialStore.saveCredentialBlob).toHaveBeenCalledWith(
         JSON.stringify(mockCredentials, null, 2),
-        { mode: 0o600 },
       );
     });
   });
@@ -107,11 +114,6 @@ describe('auth', () => {
   });
 
   describe('getTokenViaClientCredentials', () => {
-    beforeEach(() => {
-      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
-    });
-
     it('gets token using client credentials and tenant_id', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -125,8 +127,6 @@ describe('auth', () => {
       const result = await getTokenViaClientCredentials(mockCredentialsWithTenant);
       expect(result.access_token).toBe('cc-access-token');
       expect(result.tenant_id).toBe('12345');
-
-      // Verify TenantId header was sent
       expect(global.fetch).toHaveBeenCalledWith(
         'https://apps.fortnox.se/oauth-v1/token',
         expect.objectContaining({
@@ -158,11 +158,6 @@ describe('auth', () => {
   });
 
   describe('refreshAccessToken', () => {
-    beforeEach(() => {
-      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
-    });
-
     it('refreshes and saves new credentials', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -177,6 +172,7 @@ describe('auth', () => {
       const result = await refreshAccessToken(mockCredentials);
       expect(result.access_token).toBe('refreshed-access');
       expect(result.refresh_token).toBe('refreshed-refresh');
+      expect(credentialStore.saveCredentialBlob).toHaveBeenCalled();
     });
 
     it('throws on failed refresh', async () => {
@@ -229,21 +225,19 @@ describe('auth', () => {
 
   describe('getValidToken', () => {
     it('throws when not authenticated', async () => {
-      vi.spyOn(fs, 'readFile').mockRejectedValueOnce(new Error('ENOENT'));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(null);
       await expect(getValidToken()).rejects.toThrow('Not authenticated');
     });
 
     it('returns existing token when not expired', async () => {
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
       const token = await getValidToken();
       expect(token).toBe('test-access-token');
     });
 
     it('uses client credentials when tenant_id is available and token expired', async () => {
       const expiring = { ...mockCredentialsWithTenant, expires_at: Date.now() + 60 * 1000 };
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(expiring));
-      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(expiring));
 
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -260,19 +254,15 @@ describe('auth', () => {
 
     it('falls back to refresh token when client credentials fails', async () => {
       const expiring = { ...mockCredentialsWithTenant, expires_at: Date.now() + 60 * 1000 };
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(expiring));
-      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(expiring));
 
       global.fetch = vi
         .fn()
-        // First call: client credentials fails
         .mockResolvedValueOnce({
           ok: false,
           status: 403,
           text: () => Promise.resolve('Forbidden'),
         })
-        // Second call: refresh token succeeds
         .mockResolvedValueOnce({
           ok: true,
           json: () =>
@@ -289,9 +279,7 @@ describe('auth', () => {
 
     it('refreshes token when about to expire (no tenant_id)', async () => {
       const expiringSoon = { ...mockCredentials, expires_at: Date.now() + 60 * 1000 };
-      vi.spyOn(fs, 'readFile').mockResolvedValueOnce(JSON.stringify(expiringSoon));
-      vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
-      vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(expiringSoon));
 
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -308,7 +296,37 @@ describe('auth', () => {
     });
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  describe('buildAuthorizationUrl', () => {
+    it('includes a caller-supplied state token', () => {
+      const url = new URL(
+        buildAuthorizationUrl(
+          { clientId: 'cid', clientSecret: 'secret' },
+          'http://localhost:9876/callback',
+          'csrf-token',
+        ),
+      );
+
+      expect(url.searchParams.get('state')).toBe('csrf-token');
+    });
+
+    it('adds service account mode when requested', () => {
+      const url = new URL(
+        buildAuthorizationUrl(
+          { clientId: 'cid', clientSecret: 'secret', serviceAccount: true },
+          'http://localhost:9876/callback',
+          'csrf-token',
+        ),
+      );
+
+      expect(url.searchParams.get('account_type')).toBe('service');
+    });
+  });
+
+  describe('escapeHtml', () => {
+    it('escapes attacker-controlled HTML in callback responses', () => {
+      expect(escapeHtml('<script>alert("x")</script>')).toBe(
+        '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;',
+      );
+    });
   });
 });

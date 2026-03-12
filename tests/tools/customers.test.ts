@@ -44,9 +44,8 @@ describe('customer tools', () => {
       const result = await client.callTool({ name: 'fortnox_list_customers', arguments: {} });
 
       const text = (result.content as { type: string; text: string }[])[0].text;
-      const parsed = JSON.parse(text);
-      expect(parsed.Customers).toHaveLength(2);
-      expect(parsed.Customers[0].Name).toBe('Acme AB');
+      expect(text).toContain('Acme AB');
+      expect(text).toContain('Globex Corp');
     });
 
     it('searches customers by name', async () => {
@@ -84,10 +83,12 @@ describe('customer tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_get_customer',
-        arguments: { customerNumber: '42' },
+        arguments: { customerNumber: '42', includeRaw: true },
       });
 
-      const parsed = JSON.parse((result.content as { type: string; text: string }[])[0].text);
+      const parsed = JSON.parse(
+        (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
+      );
       expect(parsed.CustomerNumber).toBe('42');
       expect(parsed.Name).toBe('Test AB');
     });
@@ -112,7 +113,7 @@ describe('customer tools', () => {
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_create_customer',
-        arguments: { Name: 'Ny Kund AB' },
+        arguments: { Name: 'Ny Kund AB', confirm: true },
       });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -138,6 +139,7 @@ describe('customer tools', () => {
           Country: 'SE',
           VATNumber: 'SE556677889901',
           DeliveryType: 'EMAIL',
+          confirm: true,
         },
       });
 
@@ -157,7 +159,7 @@ describe('customer tools', () => {
       const { client } = await setupClientServer();
       await client.callTool({
         name: 'fortnox_update_customer',
-        arguments: { customerNumber: '42', Email: 'new@example.com' },
+        arguments: { customerNumber: '42', Email: 'new@example.com', confirm: true },
       });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -166,6 +168,21 @@ describe('customer tools', () => {
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Customer.Email).toBe('new@example.com');
       expect(body.Customer.customerNumber).toBeUndefined(); // should not be in body
+    });
+
+    it('requires confirmation before updating a customer', async () => {
+      mockFetch({
+        Customer: { CustomerNumber: '42', Name: 'Updated AB', Email: 'new@example.com' },
+      });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_update_customer',
+        arguments: { customerNumber: '42', Email: 'new@example.com' },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
 });

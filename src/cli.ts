@@ -2,6 +2,7 @@
 
 import { Command, Option } from 'commander';
 import { readFileSync } from 'node:fs';
+import { createInterface } from 'node:readline/promises';
 import {
   isJsonMode,
   outputList,
@@ -35,6 +36,39 @@ program
 
 function json(): boolean {
   return isJsonMode(program.opts());
+}
+
+async function confirmMutation(
+  action: string,
+  opts: { yes?: boolean; dryRun?: boolean },
+  payload?: unknown,
+): Promise<boolean> {
+  if (opts.dryRun) {
+    console.log(`Dry run: ${action}. No request was sent to Fortnox.`);
+    if (payload !== undefined) {
+      console.log('\nRequest payload:');
+      console.log(JSON.stringify(payload, null, 2));
+    }
+    return false;
+  }
+
+  if (opts.yes) return true;
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error(`Confirmation required to ${action}. Re-run with --yes, or --dry-run first.`);
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    const answer = await rl.question(`${action}. Continue? [y/N] `);
+    return ['y', 'yes'].includes(answer.trim().toLowerCase());
+  } finally {
+    rl.close();
+  }
 }
 
 // --- setup ---
@@ -118,11 +152,16 @@ invoices
   .description('Create an invoice')
   .requiredOption('--customer <number>', 'Customer number')
   .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
     const { createInvoice } = await import('./operations/invoices.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
+    if (!(await confirmMutation(`Create invoice for customer ${opts.customer}`, opts, { Invoice: params }))) {
+      return;
+    }
     const data = await createInvoice(params);
     outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
   });
@@ -135,8 +174,13 @@ invoices
       .choices(['email', 'print', 'einvoice'])
       .default('email'),
   )
-  .action(async (documentNumber: string, opts: { method: string }) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { method: string; yes?: boolean; dryRun?: boolean }) => {
     const { sendInvoice } = await import('./operations/invoices.js');
+    if (!(await confirmMutation(`Send invoice ${documentNumber} via ${opts.method}`, opts))) {
+      return;
+    }
     const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
     outputConfirmation(
       `Invoice ${documentNumber} sent via ${opts.method}.`,
@@ -149,8 +193,13 @@ invoices
 invoices
   .command('bookkeep <documentNumber>')
   .description('Bookkeep an invoice')
-  .action(async (documentNumber: string) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
     const { bookkeepInvoice } = await import('./operations/invoices.js');
+    if (!(await confirmMutation(`Bookkeep invoice ${documentNumber}`, opts))) {
+      return;
+    }
     const data = await bookkeepInvoice(documentNumber);
     outputConfirmation(`Invoice ${documentNumber} bookkeept.`, json(), data, invoiceConfirmColumns);
   });
@@ -158,8 +207,13 @@ invoices
 invoices
   .command('credit <documentNumber>')
   .description('Credit an invoice')
-  .action(async (documentNumber: string) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
     const { creditInvoice } = await import('./operations/invoices.js');
+    if (!(await confirmMutation(`Credit invoice ${documentNumber}`, opts))) {
+      return;
+    }
     const data = await creditInvoice(documentNumber);
     outputConfirmation(`Invoice ${documentNumber} credited.`, json(), data, invoiceConfirmColumns);
   });
@@ -248,6 +302,8 @@ customers
   .description('Create a customer')
   .requiredOption('--name <name>', 'Customer name')
   .option('--input <file>', 'Customer data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
     const { createCustomer } = await import('./operations/customers.js');
     let input: Record<string, unknown> = {};
@@ -256,6 +312,9 @@ customers
       input = JSON.parse(raw) as Record<string, unknown>;
     }
     const params = { ...input, Name: opts.name };
+    if (!(await confirmMutation(`Create customer "${opts.name}"`, opts, { Customer: params }))) {
+      return;
+    }
     const data = await createCustomer(params);
     outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
   });
@@ -264,10 +323,15 @@ customers
   .command('update <customerNumber>')
   .description('Update a customer')
   .requiredOption('--input <file>', 'Customer data as JSON file (or - for stdin)')
-  .action(async (customerNumber: string, opts: { input: string }) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
     const { updateCustomer } = await import('./operations/customers.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update customer ${customerNumber}`, opts, { Customer: fields }))) {
+      return;
+    }
     const data = await updateCustomer(customerNumber, fields);
     outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
   });
@@ -317,10 +381,15 @@ vouchers
   .command('create')
   .description('Create a voucher')
   .requiredOption('--input <file>', 'Voucher data as JSON file (or - for stdin)')
-  .action(async (opts) => {
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
     const { createVoucher } = await import('./operations/vouchers.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const params = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Create voucher "${String(params.Description || '')}"`, opts, { Voucher: params }))) {
+      return;
+    }
     const data = await createVoucher(params);
     outputDetail(data as Record<string, unknown>, voucherDetailColumns, json());
   });

@@ -62,6 +62,14 @@ describe('invoice operations', () => {
       expect(result.DocumentNumber).toBe('1001');
       expect(result.Total).toBe(15000);
     });
+
+    it('rejects path traversal in document numbers', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1001', Total: 15000 } });
+      const { getInvoice } = await import('../../src/operations/invoices.js');
+
+      await expect(getInvoice('../companyinformation')).rejects.toThrow('Invalid document number');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
   });
 
   describe('createInvoice', () => {
