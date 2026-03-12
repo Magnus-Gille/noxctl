@@ -1,20 +1,28 @@
-# fortnox-mcp
+# noxctl
 
 MCP server for Fortnox — manage invoices, customers, bookkeeping, and VAT directly from Claude Code.
 
 ## Quick start
 
+### From npm
+
 ```bash
-# 1. Clone and install
-git clone https://github.com/Magnus-Gille/fortnox-mcp.git
-cd fortnox-mcp
-npm install && npm run build
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx noxctl setup
 
-# 2. Connect to Fortnox (opens browser for OAuth)
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> noxctl setup
+claude mcp add fortnox -- npx noxctl serve
+```
 
-# 3. Register in Claude Code
-claude mcp add fortnox -- noxctl serve
+### From source
+
+```bash
+git clone https://github.com/Magnus-Gille/noxctl.git
+cd noxctl
+npm install
+npm run build
+
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> node dist/cli.js setup
+
+claude mcp add fortnox -- node /absolute/path/to/noxctl/dist/cli.js serve
 ```
 
 Done. No manual tokens, no environment variables after setup.
@@ -24,6 +32,7 @@ Done. No manual tokens, no environment variables after setup.
 - **Node.js** 20+
 - **Fortnox account** with API access (Mellan plan or higher)
 - **Fortnox app** registered at [developer.fortnox.se](https://developer.fortnox.se/) with redirect URI `http://localhost:9876/callback`
+- **Linux only:** `secret-tool` available for secure credential storage
 
 ## Setup
 
@@ -39,13 +48,13 @@ Done. No manual tokens, no environment variables after setup.
 ### 2. Authenticate
 
 ```bash
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> noxctl setup
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx noxctl setup
 ```
 
 To enable the client credentials flow (recommended if you have service accounts enabled in the Developer Portal):
 
 ```bash
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> FORTNOX_SERVICE_ACCOUNT=1 noxctl setup
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> FORTNOX_SERVICE_ACCOUNT=1 npx noxctl setup
 ```
 
 This opens your browser to log in to Fortnox. After authorization, credentials are stored in the OS secure store:
@@ -63,7 +72,13 @@ Token management is automatic:
 ### 3. Register with Claude Code
 
 ```bash
-claude mcp add fortnox -- noxctl serve
+claude mcp add fortnox -- npx noxctl serve
+```
+
+If you are running from a local clone instead of npm:
+
+```bash
+claude mcp add fortnox -- node /absolute/path/to/noxctl/dist/cli.js serve
 ```
 
 ## Tools
@@ -119,6 +134,8 @@ noxctl -o table invoices list     # force table
 noxctl invoices list | jq .       # auto-JSON (piped)
 ```
 
+When running from a local clone instead of an installed binary, replace `noxctl` with `node dist/cli.js`.
+
 ## Mutation safety
 
 Mutating commands now require explicit confirmation.
@@ -128,6 +145,8 @@ CLI:
 ```bash
 noxctl invoices send 1001 --dry-run
 noxctl invoices send 1001 --yes
+noxctl customers update 42 --input customer.json --yes
+noxctl vouchers create --input voucher.json --dry-run
 ```
 
 MCP tools:
@@ -153,7 +172,7 @@ npm install
 npm run build        # compile TypeScript
 npm test             # run tests
 npm run test:watch   # watch mode
-npm run lint         # lint
+npm run lint         # currently requires adding eslint.config.js for ESLint 10
 npm run format       # format
 ```
 
