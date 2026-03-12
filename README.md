@@ -21,7 +21,7 @@ Done. No manual tokens, no environment variables after setup.
 
 ## Prerequisites
 
-- **Node.js** 18+
+- **Node.js** 20+
 - **Fortnox account** with API access (Mellan plan or higher)
 - **Fortnox app** registered at [developer.fortnox.se](https://developer.fortnox.se/) with redirect URI `http://localhost:9876/callback`
 
@@ -42,11 +42,17 @@ Done. No manual tokens, no environment variables after setup.
 FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx fortnox-mcp setup
 ```
 
+To enable the client credentials flow (recommended if you have service accounts enabled in the Developer Portal):
+
+```bash
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> FORTNOX_SERVICE_ACCOUNT=1 npx fortnox-mcp setup
+```
+
 This opens your browser to log in to Fortnox. After authorization, credentials are saved locally to `~/.fortnox-mcp/credentials.json` (mode 0600).
 
 Token management is automatic:
-- **With service account (recommended):** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
-- **Without service account:** Falls back to standard OAuth2 refresh token flow.
+- **With service account (`FORTNOX_SERVICE_ACCOUNT=1`):** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
+- **Without service account (default):** Uses standard OAuth2 refresh token flow.
 
 ### 3. Register with Claude Code
 

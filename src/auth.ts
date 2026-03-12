@@ -26,6 +26,7 @@ export interface FortnoxCredentials {
 export interface FortnoxAppConfig {
   clientId: string;
   clientSecret: string;
+  serviceAccount?: boolean;
 }
 
 export async function loadCredentials(): Promise<FortnoxCredentials | null> {
@@ -290,7 +291,18 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
     });
 
     server.listen(PORT, () => {
-      const authUrl = `${FORTNOX_AUTH_URL}?client_id=${config.clientId}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(SCOPES)}&state=fortnox-mcp&response_type=code&access_type=offline&account_type=service`;
+      const params = new URLSearchParams({
+        client_id: config.clientId,
+        redirect_uri: REDIRECT_URI,
+        scope: SCOPES,
+        state: 'fortnox-mcp',
+        response_type: 'code',
+        access_type: 'offline',
+      });
+      if (config.serviceAccount) {
+        params.set('account_type', 'service');
+      }
+      const authUrl = `${FORTNOX_AUTH_URL}?${params.toString()}`;
 
       console.log('Opening Fortnox login in your browser...');
       openBrowser(authUrl);
