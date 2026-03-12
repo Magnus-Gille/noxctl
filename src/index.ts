@@ -21,13 +21,20 @@ export function createServer(): McpServer {
   return server;
 }
 
-async function main(): Promise<void> {
+export async function startMcpServer(): Promise<void> {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+// Auto-start when run directly (backward compat: `node dist/index.js`)
+const isDirectRun =
+  import.meta.url === `file://${process.argv[1]}` ||
+  process.argv[1]?.endsWith('/index.js');
+
+if (isDirectRun) {
+  startMcpServer().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}

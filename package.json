@@ -1,10 +1,10 @@
 {
-  "name": "fortnox-mcp",
+  "name": "noxctl",
   "version": "0.1.0",
-  "description": "MCP server for Fortnox accounting — invoices, customers, bookkeeping, and VAT from Claude Code",
+  "description": "CLI and MCP server for Fortnox accounting — invoices, customers, bookkeeping, and VAT",
   "type": "module",
   "bin": {
-    "fortnox-mcp": "./dist/cli.js"
+    "noxctl": "./dist/cli.js"
   },
   "main": "./dist/index.js",
   "scripts": {
@@ -38,7 +38,8 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1"
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "commander": "^14.0.3"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",
