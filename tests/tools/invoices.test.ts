@@ -92,9 +92,7 @@ describe('invoice tools', () => {
         Invoice: {
           DocumentNumber: '1001',
           CustomerNumber: '42',
-          InvoiceRows: [
-            { Description: 'Konsulttjänst', DeliveredQuantity: 10, Price: 1200 },
-          ],
+          InvoiceRows: [{ Description: 'Konsulttjänst', DeliveredQuantity: 10, Price: 1200 }],
           Total: 15000,
         },
       });
@@ -122,9 +120,7 @@ describe('invoice tools', () => {
         name: 'fortnox_create_invoice',
         arguments: {
           CustomerNumber: '42',
-          InvoiceRows: [
-            { Description: 'Konsulttimmar', DeliveredQuantity: 10, Price: 1000 },
-          ],
+          InvoiceRows: [{ Description: 'Konsulttimmar', DeliveredQuantity: 10, Price: 1000 }],
           OurReference: 'Casey Example',
           DueDate: '2025-04-30',
         },
@@ -232,7 +228,9 @@ describe('invoice tools', () => {
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/credit');
-      expect((result.content as { type: string; text: string }[])[0].text).toContain('Kreditfaktura');
+      expect((result.content as { type: string; text: string }[])[0].text).toContain(
+        'Kreditfaktura',
+      );
     });
   });
 });

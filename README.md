@@ -21,7 +21,7 @@ Done. No manual tokens, no environment variables after setup.
 
 ## Prerequisites
 
-- **Node.js** 18+
+- **Node.js** 20+
 - **Fortnox account** with API access (Mellan plan or higher)
 - **Fortnox app** registered at [developer.fortnox.se](https://developer.fortnox.se/) with redirect URI `http://localhost:9876/callback`
 
@@ -33,7 +33,8 @@ Done. No manual tokens, no environment variables after setup.
 2. Create a new app
 3. Set redirect URI to `http://localhost:9876/callback`
 4. Note your Client ID and Client Secret
-5. Request scopes: `customer`, `invoice`, `bookkeeping`, `companyinformation`
+5. Request scopes: `customer`, `invoice`, `bookkeeping`, `companyinformation`, `settings`
+6. Enable "Service account" if you want to use the client credentials flow (recommended)
 
 ### 2. Authenticate
 
@@ -41,7 +42,17 @@ Done. No manual tokens, no environment variables after setup.
 FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx fortnox-mcp setup
 ```
 
-This opens your browser to log in to Fortnox. After authorization, credentials are saved locally to `~/.fortnox-mcp/credentials.json` (mode 0600). Token refresh is automatic.
+To enable the client credentials flow (recommended if you have service accounts enabled in the Developer Portal):
+
+```bash
+FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> FORTNOX_SERVICE_ACCOUNT=1 npx fortnox-mcp setup
+```
+
+This opens your browser to log in to Fortnox. After authorization, credentials are saved locally to `~/.fortnox-mcp/credentials.json` (mode 0600).
+
+Token management is automatic:
+- **With service account (`FORTNOX_SERVICE_ACCOUNT=1`):** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
+- **Without service account (default):** Uses standard OAuth2 refresh token flow.
 
 ### 3. Register with Claude Code
 
@@ -120,7 +131,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 - Credentials stored locally with restricted file permissions (0600)
 - No secrets in environment variables after initial setup
-- OAuth2 with automatic token refresh
+- OAuth2 with client credentials flow (preferred) or automatic token refresh (fallback)
 - No external dependencies beyond the Fortnox API
 - Rate limiting and retry built in
 
