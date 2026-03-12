@@ -5,50 +5,38 @@ Last updated: 2026-03-12
 ## Branch
 
 - `main`
-- HEAD: `d0bd9e0` feat: add table formatter with TTY-sensitive output (#3)
+- HEAD: `b74ed58` style: format TypeScript files for CI
 
 ## Completed This Session
 
-- Performed deep security/privacy review across auth, Fortnox client, MCP tools, CLI, packaging, and docs
-- Hardened OAuth setup:
-  - callback server now binds to `127.0.0.1`
-  - per-run OAuth `state` is generated and verified
-  - callback HTML now escapes attacker-controlled values
-- Replaced plaintext credential persistence with secure OS-backed storage:
-  - macOS Keychain
-  - Linux Secret Service via `secret-tool`
-  - Windows DPAPI-protected user store
-  - legacy `~/.fortnox-mcp/credentials.json` is migration-only and removed after secure save
-- Stopped retrying non-idempotent Fortnox mutations; retries now apply only to idempotent requests
-- Added dynamic path validation/encoding for customer numbers, invoice document numbers, and voucher series
-- Added explicit confirmation barriers for all mutating MCP tools:
-  - `confirm: true` required for execution
-  - `dryRun: true` previews without side effects
-- Reduced privacy exposure in MCP responses:
-  - summary/table/detail output by default
-  - raw Fortnox JSON is now opt-in via `includeRaw: true`
-- Added matching CLI confirmation and `--dry-run` support for mutating commands
-- Updated README/ARCHITECTURE docs to reflect the new security model
-- Expanded test suite to cover new controls and regressions
+- Deep security/privacy hardening committed and pushed:
+  - `860257d` `fix: harden security and privacy defaults`
+  - `b74ed58` `style: format TypeScript files for CI`
+- Fixed CI failure caused by Prettier drift after the hardening commit
+- Refreshed `README.md` to match the current repo/package reality:
+  - project/package name is `noxctl`
+  - clone URL is `https://github.com/Magnus-Gille/noxctl.git`
+  - quick start now distinguishes npm vs source installs
+  - setup/Claude registration examples now use commands that actually work
+  - Linux `secret-tool` requirement is documented
+  - mutation-safety examples reflect current CLI flags
+  - development section notes the current ESLint 10 config gap
 
 ## Verification
 
 - `npm run build`
 - `npm test` -> 131 tests passing
-- `npm audit --omit=dev` -> 0 production vulnerabilities reported on 2026-03-12
-- `npm run lint` is still broken in the repo because ESLint 10 expects `eslint.config.js` and the project does not have one yet
+- `npm run format:check`
+- CI rerun triggered after pushing `b74ed58`
 
 ## Current Repo State
 
-- Uncommitted security hardening across auth, CLI, tool responses, operations, docs, and tests
-- New files:
-  - `src/credentials-store.ts`
-  - `src/identifiers.ts`
-  - `src/tool-output.ts`
+- README is aligned with current code and packaging
+- Security/privacy hardening is on `main`
+- Remaining repo issue: `npm run lint` still fails until `eslint.config.js` is added
 
 ## Next Steps
 
-- Review and commit the security/privacy hardening changes
-- Decide whether to require `secret-tool` explicitly in Linux setup docs/install flow
-- Consider adding idempotency keys or Fortnox-side reconciliation for mutations if the API supports it
-- Fix the broken `npm run lint` configuration (`eslint.config.js` migration)
+- Confirm GitHub Actions succeeds for `b74ed58`
+- Fix ESLint 10 config (`eslint.config.js`)
+- Decide how strictly Linux setup should require `secret-tool`
