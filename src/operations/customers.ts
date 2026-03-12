@@ -27,7 +27,9 @@ export async function listCustomers(params: ListCustomersParams = {}): Promise<C
 }
 
 export async function getCustomer(customerNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<CustomerResponse>(`customers/${customerSegment(customerNumber)}`);
+  const data = await fortnoxRequest<CustomerResponse>(
+    `customers/${customerSegment(customerNumber)}`,
+  );
   return data.Customer;
 }
 
@@ -46,9 +48,12 @@ export async function updateCustomer(
   fields: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const { customerNumber: _cn, ...body } = fields;
-  const data = await fortnoxRequest<CustomerResponse>(`customers/${customerSegment(customerNumber)}`, {
-    method: 'PUT',
-    body: { Customer: body },
-  });
+  const data = await fortnoxRequest<CustomerResponse>(
+    `customers/${customerSegment(customerNumber)}`,
+    {
+      method: 'PUT',
+      body: { Customer: body },
+    },
+  );
   return data.Customer;
 }
