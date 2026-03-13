@@ -10,13 +10,10 @@ function stripControl(str: string): string {
   return (
     str
       // Strip ANSI CSI sequences (e.g. \x1b[31m)
-      // eslint-disable-next-line no-control-regex
       .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
       // Strip OSC sequences (e.g. \x1b]52;c;...\x07)
-      // eslint-disable-next-line no-control-regex
       .replace(/\x1b\][^\x07]*\x07/g, '')
       // Strip remaining individual control characters
-      // eslint-disable-next-line no-control-regex
       .replace(/[\x00-\x09\x0b-\x1f\x7f-\x9f]/g, '')
       .replace(/[\n\r]+/g, ' ')
   );

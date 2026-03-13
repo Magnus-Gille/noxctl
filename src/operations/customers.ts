@@ -47,7 +47,7 @@ export async function updateCustomer(
   customerNumber: string,
   fields: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const { customerNumber: _cn, ...body } = fields;
+  const { customerNumber: _, ...body } = fields;
   const data = await fortnoxRequest<CustomerResponse>(
     `customers/${customerSegment(customerNumber)}`,
     {

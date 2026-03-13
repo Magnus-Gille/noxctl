@@ -85,7 +85,7 @@ describe('bookkeeping tools', () => {
       });
 
       const { client } = await setupClientServer();
-      const result = await client.callTool({
+      await client.callTool({
         name: 'fortnox_create_voucher',
         arguments: {
           Description: 'Kontorsmaterial',

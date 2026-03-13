@@ -52,7 +52,7 @@ describe('customer tools', () => {
       mockFetch({ Customers: [{ CustomerNumber: '1', Name: 'Acme AB' }] });
 
       const { client } = await setupClientServer();
-      const result = await client.callTool({
+      await client.callTool({
         name: 'fortnox_list_customers',
         arguments: { search: 'Acme' },
       });
@@ -111,7 +111,7 @@ describe('customer tools', () => {
       mockFetch({ Customer: { CustomerNumber: '100', Name: 'Ny Kund AB' } });
 
       const { client } = await setupClientServer();
-      const result = await client.callTool({
+      await client.callTool({
         name: 'fortnox_create_customer',
         arguments: { Name: 'Ny Kund AB', confirm: true },
       });
