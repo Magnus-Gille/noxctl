@@ -142,6 +142,14 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 |-----|----------|-------------|
 | `noxctl company info` | `fortnox_company_info` | Company name, org number, address, and settings |
 
+### Utility
+
+| CLI | Description |
+|-----|-------------|
+| `noxctl init` | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
+| `noxctl doctor` | Validate setup: Node version, credentials, token status, API connectivity |
+| `noxctl logout` | Remove stored credentials from the OS keychain |
+
 ## CLI output
 
 By default, `noxctl` uses **table output** on interactive terminals and **JSON** when piped or redirected. Override with `-o`:
