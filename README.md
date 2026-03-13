@@ -74,7 +74,9 @@ Token management is automatic after setup — no environment variables needed go
 - **With service account:** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
 - **Without service account (default):** Uses standard OAuth2 refresh token flow.
 
-### 3. Register with Claude Code
+### 3. Register as MCP server (optional — for Claude Desktop/Web)
+
+If you use Claude Desktop or claude.ai, register the MCP server so those environments can access Fortnox. Claude Code can use the CLI directly, so this step is optional there.
 
 ```bash
 claude mcp add fortnox -- npx noxctl serve
@@ -120,6 +122,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl invoices list [--filter <status>] [--customer <number>]` | `fortnox_list_invoices` | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked` |
 | `noxctl invoices get <docNumber>` | `fortnox_get_invoice` | Get a single invoice by document number |
 | `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice with line items (mutation) |
+| `noxctl invoices update <docNumber> --input <file>` | `fortnox_update_invoice` | Update an invoice that has not been bookkeept (mutation) |
 | `noxctl invoices send <docNumber> [--method email\|print\|einvoice]` | `fortnox_send_invoice` | Send invoice via email (default), print, or e-invoice (mutation) |
 | `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Book an invoice (mutation) |
 | `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
@@ -231,7 +234,7 @@ npm install
 npm run build        # compile TypeScript
 npm test             # run tests
 npm run test:watch   # watch mode
-npm run lint         # currently requires adding eslint.config.js for ESLint 10
+npm run lint         # ESLint with typescript-eslint
 npm run format       # format
 ```
 

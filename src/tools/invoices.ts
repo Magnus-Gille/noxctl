@@ -4,6 +4,7 @@ import {
   listInvoices,
   getInvoice,
   createInvoice,
+  updateInvoice,
   sendInvoice,
   bookkeepInvoice,
   creditInvoice,
@@ -99,6 +100,51 @@ export function registerInvoiceTools(server: McpServer): void {
       if (!confirm) requireConfirmation(`create invoice for customer ${params.CustomerNumber}`);
 
       const invoice = await createInvoice(params);
+      return detailResponse(invoice, invoiceDetailColumns, invoice, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_invoice',
+    'Uppdatera en befintlig faktura i Fortnox (ej bokförda)',
+    {
+      documentNumber: DocumentNumberSchema.describe('Fakturanummer att uppdatera'),
+      CustomerNumber: z.string().optional().describe('Kundnummer'),
+      InvoiceRows: z
+        .array(
+          z.object({
+            ArticleNumber: z.string().optional().describe('Artikelnummer'),
+            Description: z.string().optional().describe('Beskrivning'),
+            DeliveredQuantity: z.number().optional().describe('Antal'),
+            Price: z.number().optional().describe('Pris per enhet (exkl. moms)'),
+            AccountNumber: z.number().optional().describe('Kontonummer'),
+            VAT: z.number().optional().describe('Momssats i procent'),
+            Unit: z.string().optional().describe('Enhet (t.ex. "st", "tim")'),
+            Discount: z.number().optional().describe('Rabatt i procent'),
+          }),
+        )
+        .optional()
+        .describe('Fakturarader (ersätter alla befintliga rader)'),
+      DueDate: z.string().optional().describe('Förfallodatum (YYYY-MM-DD)'),
+      InvoiceDate: z.string().optional().describe('Fakturadatum (YYYY-MM-DD)'),
+      OurReference: z.string().optional().describe('Vår referens'),
+      YourReference: z.string().optional().describe('Er referens'),
+      Remarks: z.string().optional().describe('Anmärkning/kommentar'),
+      Currency: z.string().optional().describe('Valutakod'),
+      confirm: z.boolean().optional().describe('Bekräfta att fakturan ska uppdateras'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle skickas utan att uppdatera fakturan'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ documentNumber, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) {
+        return dryRunResponse(`update invoice ${documentNumber}`, { Invoice: fields });
+      }
+      if (!confirm) requireConfirmation(`update invoice ${documentNumber}`);
+
+      const invoice = await updateInvoice(documentNumber, fields);
       return detailResponse(invoice, invoiceDetailColumns, invoice, includeRaw);
     },
   );

@@ -377,6 +377,27 @@ invoices
   });
 
 invoices
+  .command('update <documentNumber>')
+  .description('Update an invoice (not yet bookkeept)')
+  .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateInvoice } = await import('./operations/invoices.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update invoice ${documentNumber}`, opts, { Invoice: fields }))
+      ) {
+        return;
+      }
+      const data = await updateInvoice(documentNumber, fields);
+      outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+    },
+  );
+
+invoices
   .command('send <documentNumber>')
   .description('Send an invoice')
   .addOption(

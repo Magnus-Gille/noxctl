@@ -47,6 +47,21 @@ export async function createInvoice(
   return data.Invoice;
 }
 
+export async function updateInvoice(
+  documentNumber: string,
+  fields: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { documentNumber: _, ...body } = fields;
+  const data = await fortnoxRequest<InvoiceResponse>(
+    `invoices/${documentSegment(documentNumber)}`,
+    {
+      method: 'PUT',
+      body: { Invoice: body },
+    },
+  );
+  return data.Invoice;
+}
+
 export type SendMethod = 'email' | 'print' | 'einvoice';
 
 export async function sendInvoice(
