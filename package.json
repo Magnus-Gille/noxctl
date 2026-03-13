@@ -18,7 +18,8 @@
     "lint": "eslint src/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
   },
   "keywords": [
     "mcp",
@@ -42,9 +43,14 @@
     "@modelcontextprotocol/sdk": "^1.27.1",
     "commander": "^14.0.3"
   },
+  "lint-staged": {
+    "*.ts": "prettier --write"
+  },
   "devDependencies": {
     "@types/node": "^25.4.0",
     "eslint": "^10.0.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.3",
     "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0",
