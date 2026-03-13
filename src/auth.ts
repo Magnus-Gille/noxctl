@@ -35,7 +35,7 @@ export async function loadCredentials(): Promise<FortnoxCredentials | null> {
 }
 
 export async function saveCredentials(creds: FortnoxCredentials): Promise<void> {
-  await saveCredentialBlob(JSON.stringify(creds, null, 2));
+  await saveCredentialBlob(JSON.stringify(creds));
 }
 
 export async function exchangeCodeForTokens(

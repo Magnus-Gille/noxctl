@@ -11,13 +11,29 @@ const WINDOWS_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.dpapi')
 const SERVICE_NAME = 'fortnox-mcp';
 const ACCOUNT_NAME = 'default';
 
+function decodeHexIfNeeded(value: string): string {
+  // macOS `security -w` returns hex-encoded output when the password
+  // contains control characters (e.g. newlines from pretty-printed JSON).
+  // Detect this and decode back to the original string.
+  if (/^[0-9a-fA-F]+$/.test(value) && value.length % 2 === 0) {
+    try {
+      const decoded = Buffer.from(value, 'hex').toString('utf-8');
+      if (decoded.startsWith('{')) return decoded;
+    } catch {
+      // not valid hex — return as-is
+    }
+  }
+  return value;
+}
+
 function loadMacSecret(): string | null {
   try {
-    return execFileSync(
+    const raw = execFileSync(
       'security',
       ['find-generic-password', '-a', ACCOUNT_NAME, '-s', SERVICE_NAME, '-w'],
       { encoding: 'utf-8' },
     ).trim();
+    return decodeHexIfNeeded(raw);
   } catch {
     return null;
   }

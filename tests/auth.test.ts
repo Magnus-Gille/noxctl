@@ -67,7 +67,7 @@ describe('auth', () => {
       await saveCredentials(mockCredentials);
 
       expect(credentialStore.saveCredentialBlob).toHaveBeenCalledWith(
-        JSON.stringify(mockCredentials, null, 2),
+        JSON.stringify(mockCredentials),
       );
     });
   });
