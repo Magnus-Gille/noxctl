@@ -90,7 +90,9 @@ program
         });
         try {
           const answer = (
-            await rlExisting.question('Re-run setup? This will replace your current credentials. [y/N] ')
+            await rlExisting.question(
+              'Re-run setup? This will replace your current credentials. [y/N] ',
+            )
           )
             .trim()
             .toLowerCase();
@@ -200,9 +202,7 @@ program
         }
 
         // Step 5: Service account question — default yes
-        const saAnswer = (
-          await rl.question('Did you enable service account authorization? [Y/n] ')
-        )
+        const saAnswer = (await rl.question('Did you enable service account authorization? [Y/n] '))
           .trim()
           .toLowerCase();
         serviceAccount = saAnswer === '' || saAnswer === 'y' || saAnswer === 'yes';
