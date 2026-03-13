@@ -118,7 +118,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl invoices get <docNumber>` | `fortnox_get_invoice` | Get a single invoice by document number |
 | `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice with line items (mutation) |
 | `noxctl invoices update <docNumber> --input <file>` | `fortnox_update_invoice` | Update an invoice that has not been bookkeept (mutation) |
-| `noxctl invoices send <docNumber> [--method email\|print\|einvoice]` | `fortnox_send_invoice` | Send invoice via email (default), print, or e-invoice (mutation) |
+| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice` | Send invoice via email (default), print, or e-invoice. Supports email subject, body, and BCC (mutation) |
 | `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Book an invoice (mutation) |
 | `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
 
