@@ -64,16 +64,36 @@ export async function updateInvoice(
 
 export type SendMethod = 'email' | 'print' | 'einvoice';
 
+export interface SendEmailOptions {
+  subject?: string;
+  body?: string;
+  bcc?: string;
+}
+
 export async function sendInvoice(
   documentNumber: string,
   method: SendMethod = 'email',
+  emailOptions?: SendEmailOptions,
 ): Promise<Record<string, unknown>> {
   const documentId = documentSegment(documentNumber);
+
+  // Update EmailInformation before sending if any email options are provided
+  if (emailOptions && (emailOptions.subject || emailOptions.body || emailOptions.bcc)) {
+    const current = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}`);
+    const existing = (current.Invoice?.EmailInformation as Record<string, unknown>) || {};
+    const emailInfo: Record<string, unknown> = { ...existing };
+    if (emailOptions.subject) emailInfo.EmailSubject = emailOptions.subject;
+    if (emailOptions.body) emailInfo.EmailBody = emailOptions.body;
+    if (emailOptions.bcc) emailInfo.EmailAddressBCC = emailOptions.bcc;
+    await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}`, {
+      method: 'PUT',
+      body: { Invoice: { EmailInformation: emailInfo } },
+    });
+  }
+
   const endpointSuffix =
     method === 'email' ? 'email' : method === 'einvoice' ? 'einvoice' : 'print';
-  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}/${endpointSuffix}`, {
-    method: 'PUT',
-  });
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}/${endpointSuffix}`);
   return data?.Invoice || {};
 }
 

@@ -158,18 +158,25 @@ export function registerInvoiceTools(server: McpServer): void {
         .enum(['email', 'print', 'einvoice'])
         .optional()
         .describe('Sändmetod (default: email)'),
+      emailSubject: z.string().optional().describe('E-postens ämnesrad (default: behåller befintlig)'),
+      emailBody: z.string().optional().describe('E-postens brödtext'),
+      emailBcc: z.string().optional().describe('BCC-adress för kopia'),
       confirm: z.boolean().optional().describe('Bekräfta att fakturan ska skickas'),
       dryRun: z.boolean().optional().describe('Visa åtgärden utan att skicka fakturan'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ documentNumber, method, confirm, dryRun, includeRaw }) => {
+    async ({ documentNumber, method, emailSubject, emailBody, emailBcc, confirm, dryRun, includeRaw }) => {
       const sendMethod = method || 'email';
       if (dryRun) {
         return dryRunResponse(`send invoice ${documentNumber} via ${sendMethod}`);
       }
       if (!confirm) requireConfirmation(`send invoice ${documentNumber} via ${sendMethod}`);
 
-      const invoice = await sendInvoice(documentNumber, sendMethod);
+      const emailOptions =
+        emailSubject || emailBody || emailBcc
+          ? { subject: emailSubject, body: emailBody, bcc: emailBcc }
+          : undefined;
+      const invoice = await sendInvoice(documentNumber, sendMethod, emailOptions);
       return confirmationResponse(
         `Faktura ${documentNumber} skickad via ${sendMethod}.`,
         invoice,

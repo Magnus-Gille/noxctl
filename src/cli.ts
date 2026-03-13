@@ -415,15 +415,36 @@ invoices
       .choices(['email', 'print', 'einvoice'])
       .default('email'),
   )
+  .option('--subject <subject>', 'Email subject (default: keeps existing)')
+  .option('--body <body>', 'Email body text')
+  .option('--bcc <email>', 'BCC email address')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(
-    async (documentNumber: string, opts: { method: string; yes?: boolean; dryRun?: boolean }) => {
+    async (
+      documentNumber: string,
+      opts: {
+        method: string;
+        subject?: string;
+        body?: string;
+        bcc?: string;
+        yes?: boolean;
+        dryRun?: boolean;
+      },
+    ) => {
       const { sendInvoice } = await import('./operations/invoices.js');
       if (!(await confirmMutation(`Send invoice ${documentNumber} via ${opts.method}`, opts))) {
         return;
       }
-      const data = await sendInvoice(documentNumber, opts.method as 'email' | 'print' | 'einvoice');
+      const emailOptions =
+        opts.subject || opts.body || opts.bcc
+          ? { subject: opts.subject, body: opts.body, bcc: opts.bcc }
+          : undefined;
+      const data = await sendInvoice(
+        documentNumber,
+        opts.method as 'email' | 'print' | 'einvoice',
+        emailOptions,
+      );
       outputConfirmation(
         `Invoice ${documentNumber} sent via ${opts.method}.`,
         json(),
