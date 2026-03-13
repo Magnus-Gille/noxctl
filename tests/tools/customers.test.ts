@@ -136,9 +136,7 @@ describe('customer tools', () => {
           Address1: 'Storgatan 1',
           ZipCode: '11122',
           City: 'Stockholm',
-          Country: 'SE',
           VATNumber: 'SE556677889901',
-          DeliveryType: 'EMAIL',
           confirm: true,
         },
       });
@@ -146,7 +144,6 @@ describe('customer tools', () => {
       const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
       expect(body.Customer.OrganisationNumber).toBe('556677-8899');
       expect(body.Customer.City).toBe('Stockholm');
-      expect(body.Customer.DeliveryType).toBe('EMAIL');
     });
   });
 

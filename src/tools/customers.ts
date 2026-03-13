@@ -65,12 +65,7 @@ export function registerCustomerTools(server: McpServer): void {
       Address2: z.string().optional().describe('Adressrad 2'),
       ZipCode: z.string().optional().describe('Postnummer'),
       City: z.string().optional().describe('Ort'),
-      Country: z.string().optional().describe('Landskod (t.ex. SE)'),
       VATNumber: z.string().optional().describe('Momsregistreringsnummer'),
-      DeliveryType: z
-        .enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE'])
-        .optional()
-        .describe('Leveranssätt för faktura'),
       confirm: z.boolean().optional().describe('Bekräfta att kunden ska skapas'),
       dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa kunden'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
@@ -99,12 +94,7 @@ export function registerCustomerTools(server: McpServer): void {
       Address2: z.string().optional().describe('Adressrad 2'),
       ZipCode: z.string().optional().describe('Postnummer'),
       City: z.string().optional().describe('Ort'),
-      Country: z.string().optional().describe('Landskod'),
       VATNumber: z.string().optional().describe('Momsregistreringsnummer'),
-      DeliveryType: z
-        .enum(['EMAIL', 'PRINT', 'ELECTRONICINVOICE'])
-        .optional()
-        .describe('Leveranssätt för faktura'),
       confirm: z.boolean().optional().describe('Bekräfta att kunden ska uppdateras'),
       dryRun: z
         .boolean()
