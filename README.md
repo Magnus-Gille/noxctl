@@ -32,6 +32,7 @@ noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 
    | Swedish (SV)         | English (EN)        |
    |----------------------|---------------------|
+   | Artikel              | Article             |
    | Bokföring            | Bookkeeping         |
    | Faktura              | Invoice             |
    | Företagsinformation  | Company Information |
@@ -207,6 +208,7 @@ Your app is missing required scopes. Go to [developer.fortnox.se](https://develo
 
 | Swedish (SV)         | English (EN)        |
 |----------------------|---------------------|
+| Artikel              | Article             |
 | Bokföring            | Bookkeeping         |
 | Faktura              | Invoice             |
 | Företagsinformation  | Company Information |

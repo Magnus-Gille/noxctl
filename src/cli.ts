@@ -115,7 +115,7 @@ program
     console.log("You'll need a Fortnox app from developer.fortnox.se with:");
     console.log('  - Redirect URI: http://localhost:9876/callback');
     console.log(
-      '  - Scopes (Behörigheter): Bokföring, Faktura, Företagsinformation, Inställningar, Kund',
+      '  - Scopes (Behörigheter): Artikel, Bokföring, Faktura, Företagsinformation, Inställningar, Kund',
     );
     console.log('  - Service account enabled (recommended)');
     console.log('');
@@ -141,7 +141,7 @@ program
         process.exit(1);
       }
     } else {
-      const rl = createInterface({
+      let rl = createInterface({
         input: process.stdin,
         output: process.stdout,
       });
@@ -165,18 +165,18 @@ program
         } else {
           process.stdout.write('Client Secret: ');
         }
+        // Temporarily close rl so we can use raw mode for masked input
+        rl.close();
         const clientSecretAnswer = await new Promise<string>((resolve) => {
           let buf = '';
           const stdin = process.stdin;
-          const wasRaw = stdin.isRaw;
           stdin.setRawMode(true);
           stdin.resume();
           stdin.setEncoding('utf-8');
           const onData = (chunk: string) => {
             for (const ch of chunk) {
               if (ch === '\r' || ch === '\n') {
-                stdin.setRawMode(wasRaw ?? false);
-                stdin.pause();
+                stdin.setRawMode(false);
                 stdin.removeListener('data', onData);
                 process.stdout.write('\n');
                 resolve(buf.trim());
@@ -191,11 +191,15 @@ program
                 process.exit(1);
               } else {
                 buf += ch;
-                process.stdout.write('*');
               }
             }
           };
           stdin.on('data', onData);
+        });
+        // Re-create rl for subsequent questions
+        rl = createInterface({
+          input: process.stdin,
+          output: process.stdout,
         });
         clientSecret = clientSecretAnswer || envClientSecret || '';
 
@@ -205,7 +209,12 @@ program
         }
 
         // Step 5: Service account question — default yes
-        const saAnswer = (await rl.question('Did you enable service account authorization? [Y/n] '))
+        console.log('');
+        console.log('Service account mode lets noxctl refresh tokens automatically without');
+        console.log('opening a browser each time. Enable it in the Fortnox developer portal');
+        console.log('under your app\'s OAuth settings ("Möjliggör auktorisering som servicekonto").');
+        console.log('');
+        const saAnswer = (await rl.question('Is service account mode enabled for your app? [Y/n] '))
           .trim()
           .toLowerCase();
         serviceAccount = saAnswer === '' || saAnswer === 'y' || saAnswer === 'yes';
