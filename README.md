@@ -1,60 +1,66 @@
 # noxctl
 
-MCP server for Fortnox — manage invoices, customers, bookkeeping, and VAT directly from Claude Code.
+CLI and MCP server for Fortnox — manage invoices, customers, bookkeeping, and VAT from the terminal or from AI agents like Claude Code.
 
-## Quick start
-
-### From npm
-
-```bash
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx noxctl setup
-
-claude mcp add fortnox -- npx noxctl serve
 ```
-
-### From source
-
-```bash
-git clone https://github.com/Magnus-Gille/noxctl.git
-cd noxctl
-npm install
-npm run build
-
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> node dist/cli.js setup
-
-claude mcp add fortnox -- node /absolute/path/to/noxctl/dist/cli.js serve
+noxctl init                          # interactive setup wizard
+noxctl company info                  # verify connection
+noxctl customers list                # list customers
+noxctl invoices list --filter unpaid # unpaid invoices
+noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 ```
-
-Done. No manual tokens, no environment variables after setup.
 
 ## Prerequisites
 
 - **Node.js** 20+
 - **Fortnox account** with API access (Mellan plan or higher)
-- **Fortnox app** registered at [developer.fortnox.se](https://developer.fortnox.se/) with redirect URI `http://localhost:9876/callback`
 - **Linux only:** `secret-tool` available for secure credential storage
 
 ## Setup
 
 ### 1. Create a Fortnox app
 
-1. Go to [developer.fortnox.se](https://developer.fortnox.se/)
-2. Create a new app
-3. Set redirect URI to `http://localhost:9876/callback`
-4. Note your Client ID and Client Secret
-5. Request scopes: `customer`, `invoice`, `bookkeeping`, `companyinformation`, `settings`
-6. Enable "Service account" if you want to use the client credentials flow (recommended)
+> **Tip:** Run `npx noxctl init` for an interactive setup wizard that guides you through all of these steps.
+
+1. Go to [developer.fortnox.se](https://developer.fortnox.se/) and click **Integrationer** / **Integrations**
+2. Create a new app (integration)
+3. On the **OAuth** tab:
+   - Set **Redirect URI** to `http://localhost:9876/callback`
+   - Check **"Möjliggör auktorisering som servicekonto"** / **"Enable service account authorization"** (recommended)
+   - Copy your **Client ID** and **Client Secret**
+4. On the **Integration** tab, enable these scopes under **Behörigheter** / **Permissions**:
+
+   | Swedish (SV)         | English (EN)        |
+   |----------------------|---------------------|
+   | Bokföring            | Bookkeeping         |
+   | Faktura              | Invoice             |
+   | Företagsinformation  | Company Information |
+   | Inställningar        | Settings            |
+   | Kund                 | Customer            |
+
+5. Save the integration
 
 ### 2. Authenticate
 
+Set your credentials as environment variables, then run setup:
+
 ```bash
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> npx noxctl setup
+export FORTNOX_CLIENT_ID=<your-id>
+export FORTNOX_CLIENT_SECRET=<your-secret>
+export FORTNOX_SERVICE_ACCOUNT=1
+npx noxctl setup
 ```
 
-To enable the client credentials flow (recommended if you have service accounts enabled in the Developer Portal):
+> Drop the `FORTNOX_SERVICE_ACCOUNT` line if you did not enable service account authorization in step 1.
+
+If running from a local clone instead of npm:
 
 ```bash
-FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> FORTNOX_SERVICE_ACCOUNT=1 npx noxctl setup
+export FORTNOX_CLIENT_ID=<your-id>
+export FORTNOX_CLIENT_SECRET=<your-secret>
+export FORTNOX_SERVICE_ACCOUNT=1
+npm run build
+node dist/cli.js setup
 ```
 
 This opens your browser to log in to Fortnox. After authorization, credentials are stored in the OS secure store:
@@ -63,10 +69,9 @@ This opens your browser to log in to Fortnox. After authorization, credentials a
 - **Linux:** Secret Service via `secret-tool`
 - **Windows:** DPAPI-protected user store
 
-Legacy plaintext `~/.fortnox-mcp/credentials.json` files are read for migration only and removed on the next successful save.
+Token management is automatic after setup — no environment variables needed going forward.
 
-Token management is automatic:
-- **With service account (`FORTNOX_SERVICE_ACCOUNT=1`):** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
+- **With service account:** Uses client credentials flow with `TenantId` — no refresh tokens to manage. The tenant ID is fetched automatically during setup.
 - **Without service account (default):** Uses standard OAuth2 refresh token flow.
 
 ### 3. Register with Claude Code
@@ -81,47 +86,63 @@ If you are running from a local clone instead of npm:
 claude mcp add fortnox -- node /absolute/path/to/noxctl/dist/cli.js serve
 ```
 
+### 4. Verify the connection
+
+```bash
+noxctl company info
+```
+
+If running from source:
+
+```bash
+node dist/cli.js company info
+```
+
+You should see your company name, organisation number, and address. If this works, you're all set.
+
 ## Tools
+
+Every operation is available both as a CLI command and as an MCP tool. The CLI is the primary interface; the MCP server exposes the same operations to AI agents.
 
 ### Customers
 
-| Tool | Description |
-|------|-------------|
-| `fortnox_list_customers` | List/search customers |
-| `fortnox_get_customer` | Get a single customer |
-| `fortnox_create_customer` | Create a new customer |
-| `fortnox_update_customer` | Update an existing customer |
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl customers list [--search <term>]` | `fortnox_list_customers` | List/search customers |
+| `noxctl customers get <number>` | `fortnox_get_customer` | Get a single customer by customer number |
+| `noxctl customers create --name <name>` | `fortnox_create_customer` | Create a new customer (mutation) |
+| `noxctl customers update <number> --input <file>` | `fortnox_update_customer` | Update an existing customer (mutation) |
 
 ### Invoices
 
-| Tool | Description |
-|------|-------------|
-| `fortnox_list_invoices` | List/filter invoices |
-| `fortnox_get_invoice` | Get a single invoice |
-| `fortnox_create_invoice` | Create an invoice |
-| `fortnox_send_invoice` | Send invoice via email, print, or e-invoice |
-| `fortnox_bookkeep_invoice` | Book an invoice |
-| `fortnox_credit_invoice` | Credit an invoice |
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl invoices list [--filter <status>] [--customer <number>]` | `fortnox_list_invoices` | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked` |
+| `noxctl invoices get <docNumber>` | `fortnox_get_invoice` | Get a single invoice by document number |
+| `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice with line items (mutation) |
+| `noxctl invoices send <docNumber> [--method email\|print\|einvoice]` | `fortnox_send_invoice` | Send invoice via email (default), print, or e-invoice (mutation) |
+| `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Book an invoice (mutation) |
+| `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
 
 ### Bookkeeping
 
-| Tool | Description |
-|------|-------------|
-| `fortnox_list_vouchers` | List vouchers |
-| `fortnox_create_voucher` | Create a voucher |
-| `fortnox_list_accounts` | View chart of accounts |
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl vouchers list [--series <s>] [--from <date>] [--to <date>]` | `fortnox_list_vouchers` | List vouchers, optionally filtered by series and date range |
+| `noxctl vouchers create --input <file>` | `fortnox_create_voucher` | Create a voucher with debit/credit rows (mutation) |
+| `noxctl accounts list [--search <term>]` | `fortnox_list_accounts` | View chart of accounts, search by name or number |
 
 ### Tax
 
-| Tool | Description |
-|------|-------------|
-| `fortnox_tax_report` | VAT summary for a period (tax declaration support) |
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl tax report --from <date> --to <date>` | `fortnox_tax_report` | VAT summary for a period (tax declaration support). Dates in `YYYY-MM-DD` format |
 
 ### Company
 
-| Tool | Description |
-|------|-------------|
-| `fortnox_company_info` | Company information and settings |
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl company info` | `fortnox_company_info` | Company name, org number, address, and settings |
 
 ## CLI output
 
@@ -157,13 +178,51 @@ MCP tools:
 
 ## Examples
 
-Ask Claude naturally:
+Ask Claude naturally — works in both Swedish and English:
 
 - "Skapa en faktura till kund 42 för 10 konsulttimmar á 1200 kr"
-- "Visa alla obetalda fakturor"
-- "Vad har vi för utgående moms Q1 2025?"
-- "Bokför kontorsmaterial för 1250 kr inkl moms"
-- "Skicka faktura 1001 via e-post"
+- "Create an invoice for customer 42: 10 consulting hours at 1200 SEK"
+- "Visa alla obetalda fakturor" / "Show all unpaid invoices"
+- "Vad har vi för utgående moms Q1 2025?" / "What's our outgoing VAT for Q1 2025?"
+- "Bokför kontorsmaterial för 1250 kr inkl moms" / "Book office supplies for 1250 SEK incl VAT"
+- "Skicka faktura 1001 via e-post" / "Send invoice 1001 by email"
+
+## Troubleshooting
+
+**"FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET must be set"**
+
+Environment variables were not passed to the command. Use `export` to set them in your shell first:
+
+```bash
+export FORTNOX_CLIENT_ID=<your-id>
+export FORTNOX_CLIENT_SECRET=<your-secret>
+```
+
+Then run setup again. This avoids issues with long commands wrapping across lines.
+
+**"Not authenticated. Run `noxctl setup`"**
+
+Credentials are missing or were not saved. Re-run the setup step. On macOS, check that Keychain Access is not blocking the `security` command. On Linux, ensure `secret-tool` is installed (`sudo apt install libsecret-tools`).
+
+**403 Forbidden from Fortnox API**
+
+Your app is missing required scopes. Go to [developer.fortnox.se](https://developer.fortnox.se/), open your app, and check that these are enabled under **Behörigheter** / **Permissions**:
+
+| Swedish (SV)         | English (EN)        |
+|----------------------|---------------------|
+| Bokföring            | Bookkeeping         |
+| Faktura              | Invoice             |
+| Företagsinformation  | Company Information |
+| Inställningar        | Settings            |
+| Kund                 | Customer            |
+
+**"Token refresh failed"**
+
+Your refresh token may have expired or been revoked. Re-run setup to re-authenticate.
+
+**Port 9876 already in use**
+
+Another process is using the OAuth callback port. Close it or wait for a previous setup attempt to finish, then try again.
 
 ## Development
 

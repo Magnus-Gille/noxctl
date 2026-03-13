@@ -71,6 +71,212 @@ async function confirmMutation(
   }
 }
 
+// --- init (interactive setup wizard) ---
+program
+  .command('init')
+  .description('Interactive setup wizard — recommended onboarding path')
+  .action(async () => {
+    const { loadCredentials, runOAuthSetup } = await import('./auth.js');
+
+    // Step 1: Check if already configured
+    const existing = await loadCredentials();
+    if (existing) {
+      console.log('Existing credentials found.');
+
+      if (process.stdin.isTTY && process.stdout.isTTY) {
+        const rlExisting = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        try {
+          const answer = (
+            await rlExisting.question(
+              'Re-run setup? This will replace your current credentials. [y/N] ',
+            )
+          )
+            .trim()
+            .toLowerCase();
+          if (answer !== 'y' && answer !== 'yes') {
+            console.log('Run `noxctl company info` to verify your current connection.');
+            return;
+          }
+        } finally {
+          rlExisting.close();
+        }
+      } else {
+        console.log('Run `noxctl company info` to verify, or re-run interactively to reconfigure.');
+        return;
+      }
+    }
+
+    // Step 2: Welcome message
+    console.log('Welcome to noxctl setup!');
+    console.log('');
+    console.log("You'll need a Fortnox app from developer.fortnox.se with:");
+    console.log('  - Redirect URI: http://localhost:9876/callback');
+    console.log(
+      '  - Scopes (Behörigheter): Bokföring, Faktura, Företagsinformation, Inställningar, Kund',
+    );
+    console.log('  - Service account enabled (recommended)');
+    console.log('');
+    console.log('See the README for detailed portal instructions.');
+    console.log('');
+
+    const isTTY = process.stdin.isTTY && process.stdout.isTTY;
+
+    let clientId: string;
+    let clientSecret: string;
+    let serviceAccount: boolean;
+
+    if (!isTTY) {
+      // CI / non-interactive mode: fall back to env vars
+      clientId = process.env.FORTNOX_CLIENT_ID ?? '';
+      clientSecret = process.env.FORTNOX_CLIENT_SECRET ?? '';
+      serviceAccount = process.env.FORTNOX_SERVICE_ACCOUNT === '1';
+
+      if (!clientId || !clientSecret) {
+        console.error(
+          'Error: stdin is not a TTY. Set FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET env vars to run non-interactively.',
+        );
+        process.exit(1);
+      }
+    } else {
+      const rl = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      try {
+        // Step 3: Prompt for Client ID
+        const envClientId = process.env.FORTNOX_CLIENT_ID;
+        const clientIdPrompt = envClientId ? `Client ID [${envClientId}]: ` : 'Client ID: ';
+        const clientIdAnswer = (await rl.question(clientIdPrompt)).trim();
+        clientId = clientIdAnswer || envClientId || '';
+
+        if (!clientId) {
+          console.error('Error: Client ID is required.');
+          process.exit(1);
+        }
+
+        // Step 4: Prompt for Client Secret (masked input)
+        const envClientSecret = process.env.FORTNOX_CLIENT_SECRET;
+        if (envClientSecret) {
+          process.stdout.write('Client Secret [env var set — press Enter to use it]: ');
+        } else {
+          process.stdout.write('Client Secret: ');
+        }
+        const clientSecretAnswer = await new Promise<string>((resolve) => {
+          let buf = '';
+          const stdin = process.stdin;
+          const wasRaw = stdin.isRaw;
+          stdin.setRawMode(true);
+          stdin.resume();
+          stdin.setEncoding('utf-8');
+          const onData = (ch: string) => {
+            if (ch === '\r' || ch === '\n') {
+              stdin.setRawMode(wasRaw ?? false);
+              stdin.pause();
+              stdin.removeListener('data', onData);
+              process.stdout.write('\n');
+              resolve(buf.trim());
+            } else if (ch === '\u007f' || ch === '\b') {
+              if (buf.length > 0) {
+                buf = buf.slice(0, -1);
+                process.stdout.write('\b \b');
+              }
+            } else if (ch === '\u0003') {
+              // Ctrl-C
+              process.exit(1);
+            } else {
+              buf += ch;
+              process.stdout.write('*');
+            }
+          };
+          stdin.on('data', onData);
+        });
+        clientSecret = clientSecretAnswer || envClientSecret || '';
+
+        if (!clientSecret) {
+          console.error('Error: Client Secret is required.');
+          process.exit(1);
+        }
+
+        // Step 5: Service account question — default yes
+        const saAnswer = (await rl.question('Did you enable service account authorization? [Y/n] '))
+          .trim()
+          .toLowerCase();
+        serviceAccount = saAnswer === '' || saAnswer === 'y' || saAnswer === 'yes';
+      } finally {
+        rl.close();
+      }
+    }
+
+    // Step 6: Run OAuth flow
+    await runOAuthSetup({ clientId, clientSecret, serviceAccount });
+
+    // Step 7: Verify by fetching company info
+    try {
+      const { getCompanyInfo } = await import('./operations/company.js');
+      const data = await getCompanyInfo();
+      const company = data as Record<string, unknown>;
+      console.log('');
+      console.log('Connected successfully!');
+      if (company['CompanyName']) {
+        console.log(`  Company: ${company['CompanyName']}`);
+      }
+      if (company['OrganizationNumber']) {
+        console.log(`  Org number: ${company['OrganizationNumber']}`);
+      }
+    } catch {
+      console.log('');
+      console.log(
+        'OAuth completed. Could not verify company info — you can run `noxctl company info` manually.',
+      );
+    }
+
+    // Step 8: Offer to register MCP server with Claude Code
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      const rl2 = createInterface({
+        input: process.stdin,
+        output: process.stdout,
+      });
+
+      try {
+        console.log('');
+        const mcpAnswer = (await rl2.question('Register the MCP server with Claude Code? [Y/n] '))
+          .trim()
+          .toLowerCase();
+        const doRegister = mcpAnswer === '' || mcpAnswer === 'y' || mcpAnswer === 'yes';
+
+        if (doRegister) {
+          const { execFile } = await import('node:child_process');
+          // Detect whether we're running via npx or from a local build.
+          // All arguments below are static constants — no user input is interpolated.
+          const argv0 = process.argv[1] ?? '';
+          const useNpx = argv0.includes('npx') || argv0.includes('.bin/noxctl');
+          const mcpArgs = useNpx
+            ? ['mcp', 'add', 'fortnox', '--', 'npx', 'noxctl', 'serve']
+            : ['mcp', 'add', 'fortnox', '--', 'node', argv0, 'serve'];
+
+          await new Promise<void>((resolve) => {
+            execFile('claude', mcpArgs, (err) => {
+              if (err) {
+                const fallbackCmd = ['claude', ...mcpArgs].join(' ');
+                console.log('Could not register automatically. Run this manually:');
+                console.log(`  ${fallbackCmd}`);
+              } else {
+                console.log('MCP server registered. Restart Claude Code to pick it up.');
+              }
+              resolve();
+            });
+          });
+        }
+      } finally {
+        rl2.close();
+      }
+    }
+  });
+
 // --- setup ---
 program
   .command('setup')
