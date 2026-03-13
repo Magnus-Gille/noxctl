@@ -212,7 +212,9 @@ program
         console.log('');
         console.log('Service account mode lets noxctl refresh tokens automatically without');
         console.log('opening a browser each time. Enable it in the Fortnox developer portal');
-        console.log('under your app\'s OAuth settings ("Möjliggör auktorisering som servicekonto").');
+        console.log(
+          'under your app\'s OAuth settings ("Möjliggör auktorisering som servicekonto").',
+        );
         console.log('');
         const saAnswer = (await rl.question('Is service account mode enabled for your app? [Y/n] '))
           .trim()
@@ -288,9 +290,7 @@ program
         // Offer npm link for local clone users so `noxctl` is in PATH
         if (!useNpx) {
           console.log('');
-          const linkAnswer = (
-            await rl2.question('Add `noxctl` to your PATH via npm link? [Y/n] ')
-          )
+          const linkAnswer = (await rl2.question('Add `noxctl` to your PATH via npm link? [Y/n] '))
             .trim()
             .toLowerCase();
           const doLink = linkAnswer === '' || linkAnswer === 'y' || linkAnswer === 'yes';
@@ -397,9 +397,7 @@ invoices
       const { updateInvoice } = await import('./operations/invoices.js');
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
-      if (
-        !(await confirmMutation(`Update invoice ${documentNumber}`, opts, { Invoice: fields }))
-      ) {
+      if (!(await confirmMutation(`Update invoice ${documentNumber}`, opts, { Invoice: fields }))) {
         return;
       }
       const data = await updateInvoice(documentNumber, fields);
