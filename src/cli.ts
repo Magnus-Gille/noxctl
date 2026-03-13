@@ -316,6 +316,117 @@ program
     }
   });
 
+// --- logout ---
+program
+  .command('logout')
+  .description('Remove stored Fortnox credentials')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .action(async (opts: { yes?: boolean }) => {
+    const { loadCredentials } = await import('./auth.js');
+    const { deleteCredentialBlob } = await import('./credentials-store.js');
+
+    const existing = await loadCredentials();
+    if (!existing) {
+      console.log('No credentials found. Nothing to remove.');
+      return;
+    }
+
+    if (!(await confirmMutation('Remove stored Fortnox credentials', opts))) {
+      return;
+    }
+
+    const deleted = await deleteCredentialBlob();
+    if (deleted) {
+      console.log('Credentials removed.');
+    } else {
+      console.log('Could not remove credentials from the system keychain.');
+      console.log('They may have already been removed, or you may need to remove them manually.');
+    }
+  });
+
+// --- doctor ---
+program
+  .command('doctor')
+  .description('Check setup: credentials, token, API connectivity, and scopes')
+  .action(async () => {
+    const { loadCredentials } = await import('./auth.js');
+    let ok = true;
+
+    function pass(label: string, detail?: string) {
+      console.log(`  ✓ ${label}${detail ? ` — ${detail}` : ''}`);
+    }
+    function fail(label: string, detail?: string) {
+      ok = false;
+      console.log(`  ✗ ${label}${detail ? ` — ${detail}` : ''}`);
+    }
+
+    console.log('Checking noxctl setup...\n');
+
+    // 1. Node version
+    const nodeVersion = process.versions.node;
+    const major = parseInt(nodeVersion.split('.')[0]!, 10);
+    if (major >= 20) {
+      pass('Node.js', `v${nodeVersion}`);
+    } else {
+      fail('Node.js', `v${nodeVersion} (need 20+)`);
+    }
+
+    // 2. Credential store backend
+    const storeBackend =
+      process.platform === 'darwin'
+        ? 'macOS Keychain'
+        : process.platform === 'win32'
+          ? 'Windows DPAPI'
+          : 'Linux Secret Service';
+    pass('Credential store', storeBackend);
+
+    // 3. Credentials exist
+    const creds = await loadCredentials();
+    if (!creds) {
+      fail('Credentials', 'not found — run `noxctl init` to set up');
+      console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+      return;
+    }
+    pass('Credentials', 'found');
+
+    // 4. Client ID present
+    if (creds.client_id) {
+      pass('Client ID', `${creds.client_id.slice(0, 8)}...`);
+    } else {
+      fail('Client ID', 'missing');
+    }
+
+    // 5. Tenant ID (service account)
+    if (creds.tenant_id) {
+      pass('Service account', `tenant ${creds.tenant_id}`);
+    } else {
+      pass('Service account', 'not configured (using refresh token flow)');
+    }
+
+    // 6. Token expiry
+    const now = Date.now();
+    if (creds.expires_at > now) {
+      const minutesLeft = Math.round((creds.expires_at - now) / 60000);
+      pass('Access token', `valid for ~${minutesLeft} min`);
+    } else {
+      pass('Access token', 'expired (will auto-refresh on next request)');
+    }
+
+    // 7. API connectivity — try fetching company info
+    try {
+      const { getCompanyInfo } = await import('./operations/company.js');
+      const data = await getCompanyInfo();
+      const company = data as Record<string, unknown>;
+      const name = company['CompanyName'] || 'unknown';
+      pass('API connection', `${name}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      fail('API connection', msg);
+    }
+
+    console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+  });
+
 // --- serve (default command) ---
 program
   .command('serve', { isDefault: true })

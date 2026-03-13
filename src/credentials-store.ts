@@ -143,3 +143,43 @@ export async function saveCredentialBlob(secret: string): Promise<void> {
 
   await removeLegacySecret();
 }
+
+function deleteMacSecret(): boolean {
+  try {
+    execFileSync('security', ['delete-generic-password', '-a', ACCOUNT_NAME, '-s', SERVICE_NAME]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function deleteLinuxSecret(): boolean {
+  try {
+    execFileSync('secret-tool', ['clear', 'service', SERVICE_NAME, 'account', ACCOUNT_NAME]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function deleteWindowsSecret(): Promise<boolean> {
+  try {
+    await fs.rm(WINDOWS_CREDENTIALS_FILE, { force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteCredentialBlob(): Promise<boolean> {
+  let deleted = false;
+
+  if (process.platform === 'darwin') deleted = deleteMacSecret();
+  else if (process.platform === 'win32') deleted = await deleteWindowsSecret();
+  else deleted = deleteLinuxSecret();
+
+  // Also clean up legacy file if it exists
+  await removeLegacySecret();
+
+  return deleted;
+}
