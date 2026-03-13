@@ -172,24 +172,27 @@ program
           stdin.setRawMode(true);
           stdin.resume();
           stdin.setEncoding('utf-8');
-          const onData = (ch: string) => {
-            if (ch === '\r' || ch === '\n') {
-              stdin.setRawMode(wasRaw ?? false);
-              stdin.pause();
-              stdin.removeListener('data', onData);
-              process.stdout.write('\n');
-              resolve(buf.trim());
-            } else if (ch === '\u007f' || ch === '\b') {
-              if (buf.length > 0) {
-                buf = buf.slice(0, -1);
-                process.stdout.write('\b \b');
+          const onData = (chunk: string) => {
+            for (const ch of chunk) {
+              if (ch === '\r' || ch === '\n') {
+                stdin.setRawMode(wasRaw ?? false);
+                stdin.pause();
+                stdin.removeListener('data', onData);
+                process.stdout.write('\n');
+                resolve(buf.trim());
+                return;
+              } else if (ch === '\u007f' || ch === '\b') {
+                if (buf.length > 0) {
+                  buf = buf.slice(0, -1);
+                  process.stdout.write('\b \b');
+                }
+              } else if (ch === '\u0003') {
+                // Ctrl-C
+                process.exit(1);
+              } else {
+                buf += ch;
+                process.stdout.write('*');
               }
-            } else if (ch === '\u0003') {
-              // Ctrl-C
-              process.exit(1);
-            } else {
-              buf += ch;
-              process.stdout.write('*');
             }
           };
           stdin.on('data', onData);
@@ -242,6 +245,10 @@ program
       });
 
       try {
+        // Detect whether we're running via npx or from a local build.
+        const argv0 = process.argv[1] ?? '';
+        const useNpx = argv0.includes('npx') || argv0.includes('.bin/noxctl');
+
         console.log('');
         const mcpAnswer = (await rl2.question('Register the MCP server with Claude Code? [Y/n] '))
           .trim()
@@ -250,10 +257,7 @@ program
 
         if (doRegister) {
           const { execFile } = await import('node:child_process');
-          // Detect whether we're running via npx or from a local build.
           // All arguments below are static constants — no user input is interpolated.
-          const argv0 = process.argv[1] ?? '';
-          const useNpx = argv0.includes('npx') || argv0.includes('.bin/noxctl');
           const mcpArgs = useNpx
             ? ['mcp', 'add', 'fortnox', '--', 'npx', 'noxctl', 'serve']
             : ['mcp', 'add', 'fortnox', '--', 'node', argv0, 'serve'];
@@ -271,39 +275,36 @@ program
             });
           });
         }
+
+        // Offer npm link for local clone users so `noxctl` is in PATH
+        if (!useNpx) {
+          console.log('');
+          const linkAnswer = (
+            await rl2.question('Add `noxctl` to your PATH via npm link? [Y/n] ')
+          )
+            .trim()
+            .toLowerCase();
+          const doLink = linkAnswer === '' || linkAnswer === 'y' || linkAnswer === 'yes';
+
+          if (doLink) {
+            const { execFile: execFileLink } = await import('node:child_process');
+            await new Promise<void>((resolve) => {
+              execFileLink('npm', ['link'], { cwd: process.cwd() }, (err) => {
+                if (err) {
+                  console.log('Could not link automatically. Run this manually:');
+                  console.log('  npm link');
+                } else {
+                  console.log('Done! `noxctl` is now available globally.');
+                }
+                resolve();
+              });
+            });
+          }
+        }
       } finally {
         rl2.close();
       }
     }
-  });
-
-// --- setup ---
-program
-  .command('setup')
-  .description('Connect to your Fortnox account via OAuth')
-  .action(async () => {
-    const clientId = process.env.FORTNOX_CLIENT_ID;
-    const clientSecret = process.env.FORTNOX_CLIENT_SECRET;
-    const serviceAccount = process.env.FORTNOX_SERVICE_ACCOUNT === '1';
-
-    if (!clientId || !clientSecret) {
-      console.error('Error: FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET must be set.');
-      console.error('');
-      console.error('1. Go to https://developer.fortnox.se/');
-      console.error('2. Create an app with redirect URI: http://localhost:9876/callback');
-      console.error('3. Run:');
-      console.error(
-        '   FORTNOX_CLIENT_ID=<your-id> FORTNOX_CLIENT_SECRET=<your-secret> noxctl setup',
-      );
-      console.error('');
-      console.error(
-        'Optional: Add FORTNOX_SERVICE_ACCOUNT=1 to enable client credentials flow (requires service account enabled in Developer Portal)',
-      );
-      process.exit(1);
-    }
-
-    const { runOAuthSetup } = await import('./auth.js');
-    await runOAuthSetup({ clientId, clientSecret, serviceAccount });
   });
 
 // --- serve (default command) ---

@@ -42,28 +42,22 @@ noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 
 ### 2. Authenticate
 
-Set your credentials as environment variables, then run setup:
+Run the interactive setup wizard:
 
 ```bash
-export FORTNOX_CLIENT_ID=<your-id>
-export FORTNOX_CLIENT_SECRET=<your-secret>
-export FORTNOX_SERVICE_ACCOUNT=1
-npx noxctl setup
+npx noxctl init
 ```
 
-> Drop the `FORTNOX_SERVICE_ACCOUNT` line if you did not enable service account authorization in step 1.
-
-If running from a local clone instead of npm:
+If running from a local clone:
 
 ```bash
-export FORTNOX_CLIENT_ID=<your-id>
-export FORTNOX_CLIENT_SECRET=<your-secret>
-export FORTNOX_SERVICE_ACCOUNT=1
 npm run build
-node dist/cli.js setup
+node dist/cli.js init
 ```
 
-This opens your browser to log in to Fortnox. After authorization, credentials are stored in the OS secure store:
+The wizard will prompt for your Client ID and Client Secret (masked input), run the OAuth flow, verify the connection, and optionally register the MCP server with Claude Code.
+
+After authorization, credentials are stored in the OS secure store:
 
 - **macOS:** Keychain (`security`)
 - **Linux:** Secret Service via `secret-tool`
