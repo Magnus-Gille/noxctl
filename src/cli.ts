@@ -81,8 +81,30 @@ program
     // Step 1: Check if already configured
     const existing = await loadCredentials();
     if (existing) {
-      console.log('You are already set up. Run `noxctl company info` to verify your connection.');
-      return;
+      console.log('Existing credentials found.');
+
+      if (process.stdin.isTTY && process.stdout.isTTY) {
+        const rlExisting = createInterface({
+          input: process.stdin,
+          output: process.stdout,
+        });
+        try {
+          const answer = (
+            await rlExisting.question('Re-run setup? This will replace your current credentials. [y/N] ')
+          )
+            .trim()
+            .toLowerCase();
+          if (answer !== 'y' && answer !== 'yes') {
+            console.log('Run `noxctl company info` to verify your current connection.');
+            return;
+          }
+        } finally {
+          rlExisting.close();
+        }
+      } else {
+        console.log('Run `noxctl company info` to verify, or re-run interactively to reconfigure.');
+        return;
+      }
     }
 
     // Step 2: Welcome message
@@ -134,12 +156,42 @@ program
           process.exit(1);
         }
 
-        // Step 4: Prompt for Client Secret
+        // Step 4: Prompt for Client Secret (masked input)
         const envClientSecret = process.env.FORTNOX_CLIENT_SECRET;
-        const clientSecretPrompt = envClientSecret
-          ? 'Client Secret [env var set — press Enter to use it]: '
-          : 'Client Secret: ';
-        const clientSecretAnswer = (await rl.question(clientSecretPrompt)).trim();
+        if (envClientSecret) {
+          process.stdout.write('Client Secret [env var set — press Enter to use it]: ');
+        } else {
+          process.stdout.write('Client Secret: ');
+        }
+        const clientSecretAnswer = await new Promise<string>((resolve) => {
+          let buf = '';
+          const stdin = process.stdin;
+          const wasRaw = stdin.isRaw;
+          stdin.setRawMode(true);
+          stdin.resume();
+          stdin.setEncoding('utf-8');
+          const onData = (ch: string) => {
+            if (ch === '\r' || ch === '\n') {
+              stdin.setRawMode(wasRaw ?? false);
+              stdin.pause();
+              stdin.removeListener('data', onData);
+              process.stdout.write('\n');
+              resolve(buf.trim());
+            } else if (ch === '\u007f' || ch === '\b') {
+              if (buf.length > 0) {
+                buf = buf.slice(0, -1);
+                process.stdout.write('\b \b');
+              }
+            } else if (ch === '\u0003') {
+              // Ctrl-C
+              process.exit(1);
+            } else {
+              buf += ch;
+              process.stdout.write('*');
+            }
+          };
+          stdin.on('data', onData);
+        });
         clientSecret = clientSecretAnswer || envClientSecret || '';
 
         if (!clientSecret) {
@@ -209,8 +261,9 @@ program
           await new Promise<void>((resolve) => {
             execFile('claude', mcpArgs, (err) => {
               if (err) {
+                const fallbackCmd = ['claude', ...mcpArgs].join(' ');
                 console.log('Could not register automatically. Run this manually:');
-                console.log('  claude mcp add fortnox -- npx noxctl serve');
+                console.log(`  ${fallbackCmd}`);
               } else {
                 console.log('MCP server registered. Restart Claude Code to pick it up.');
               }
