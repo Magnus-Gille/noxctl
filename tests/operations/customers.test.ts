@@ -78,13 +78,13 @@ describe('customer operations', () => {
       mockFetch({ Customer: { CustomerNumber: '2', Name: 'New Corp' } });
       const { createCustomer } = await import('../../src/operations/customers.js');
 
-      await createCustomer({ Name: 'New Corp', Email: 'info@new.com' });
+      await createCustomer({ Name: 'New Corp', Email: 'info@new.example' });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[1].method).toBe('POST');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Customer.Name).toBe('New Corp');
-      expect(body.Customer.Email).toBe('info@new.com');
+      expect(body.Customer.Email).toBe('info@new.example');
     });
 
     it('unwraps the response', async () => {

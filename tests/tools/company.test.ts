@@ -35,9 +35,9 @@ describe('company tools', () => {
         CompanyInformation: {
           CompanyName: 'Northwind Services AB',
           OrganisationNumber: '556123-4567',
-          Address: 'Storgatan 1',
+          Address: 'Exempelgatan 1',
           ZipCode: '11122',
-          City: 'Stockholm',
+          City: 'Uppsala',
           Country: 'SE',
           Email: 'finance@northwind.example',
           DatabaseNumber: 12345,
@@ -50,7 +50,7 @@ describe('company tools', () => {
       const text = (result.content as { type: string; text: string }[])[0].text;
       expect(text).toContain('Northwind Services AB');
       expect(text).toContain('556123-4567');
-      expect(text).toContain('Stockholm');
+      expect(text).toContain('Uppsala');
     });
   });
 });

@@ -33,8 +33,8 @@ describe('supplier tools', () => {
     it('lists suppliers', async () => {
       mockFetch({
         Suppliers: [
-          { SupplierNumber: '1', Name: 'Anthropic' },
-          { SupplierNumber: '2', Name: 'Apple' },
+          { SupplierNumber: '1', Name: 'Nordic Office AB' },
+          { SupplierNumber: '2', Name: 'Sample Hosting AB' },
         ],
         MetaInformation: { '@TotalResources': 2, '@TotalPages': 1, '@CurrentPage': 1 },
       });
@@ -43,15 +43,19 @@ describe('supplier tools', () => {
       const result = await client.callTool({ name: 'fortnox_list_suppliers', arguments: {} });
 
       const text = (result.content as { type: string; text: string }[])[0].text;
-      expect(text).toContain('Anthropic');
-      expect(text).toContain('Apple');
+      expect(text).toContain('Nordic Office AB');
+      expect(text).toContain('Sample Hosting AB');
     });
   });
 
   describe('fortnox_get_supplier', () => {
     it('fetches a single supplier', async () => {
       mockFetch({
-        Supplier: { SupplierNumber: '1', Name: 'Anthropic', Email: 'billing@anthropic.com' },
+        Supplier: {
+          SupplierNumber: '1',
+          Name: 'Nordic Office AB',
+          Email: 'billing@nordic-office.example',
+        },
       });
 
       const { client } = await setupClientServer();
@@ -63,7 +67,7 @@ describe('supplier tools', () => {
       const parsed = JSON.parse(
         (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
       );
-      expect(parsed.Name).toBe('Anthropic');
+      expect(parsed.Name).toBe('Nordic Office AB');
     });
   });
 

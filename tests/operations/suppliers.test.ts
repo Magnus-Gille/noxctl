@@ -23,10 +23,10 @@ describe('supplier operations', () => {
       mockFetch({ Suppliers: [], MetaInformation: {} });
       const { listSuppliers } = await import('../../src/operations/suppliers.js');
 
-      await listSuppliers({ search: 'Anthropic' });
+      await listSuppliers({ search: 'Nordic' });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('name=Anthropic');
+      expect(calledUrl).toContain('name=Nordic');
     });
 
     it('returns the full envelope', async () => {

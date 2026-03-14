@@ -33,8 +33,8 @@ describe('supplier invoice tools', () => {
     it('lists supplier invoices', async () => {
       mockFetch({
         SupplierInvoices: [
-          { GivenNumber: 1, SupplierName: 'Apple', Total: 1299 },
-          { GivenNumber: 2, SupplierName: 'Fortnox AB', Total: 2490 },
+          { GivenNumber: 1, SupplierName: 'Sample Hosting AB', Total: 1299 },
+          { GivenNumber: 2, SupplierName: 'Nordic Office AB', Total: 2490 },
         ],
         MetaInformation: { '@TotalResources': 2, '@TotalPages': 1, '@CurrentPage': 1 },
       });
@@ -46,8 +46,8 @@ describe('supplier invoice tools', () => {
       });
 
       const text = (result.content as { type: string; text: string }[])[0].text;
-      expect(text).toContain('Apple');
-      expect(text).toContain('Fortnox');
+      expect(text).toContain('Sample Hosting AB');
+      expect(text).toContain('Nordic Office AB');
     });
 
     it('passes filter parameter', async () => {
@@ -69,9 +69,9 @@ describe('supplier invoice tools', () => {
       mockFetch({
         SupplierInvoice: {
           GivenNumber: 1,
-          SupplierName: 'Apple',
+          SupplierName: 'Sample Hosting AB',
           Total: 1299,
-          InvoiceNumber: 'UA30394930',
+          InvoiceNumber: 'SUP-2025-001',
         },
       });
 
@@ -84,7 +84,7 @@ describe('supplier invoice tools', () => {
       const parsed = JSON.parse(
         (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
       );
-      expect(parsed.InvoiceNumber).toBe('UA30394930');
+      expect(parsed.InvoiceNumber).toBe('SUP-2025-001');
     });
   });
 

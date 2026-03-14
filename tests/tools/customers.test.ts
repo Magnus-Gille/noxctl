@@ -78,7 +78,13 @@ describe('customer tools', () => {
 
   describe('fortnox_get_customer', () => {
     it('fetches a single customer', async () => {
-      mockFetch({ Customer: { CustomerNumber: '42', Name: 'Test AB', Email: 'test@example.com' } });
+      mockFetch({
+        Customer: {
+          CustomerNumber: '42',
+          Name: 'Example Customer AB',
+          Email: 'billing@example-customer.example',
+        },
+      });
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
@@ -90,7 +96,7 @@ describe('customer tools', () => {
         (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
       );
       expect(parsed.CustomerNumber).toBe('42');
-      expect(parsed.Name).toBe('Test AB');
+      expect(parsed.Name).toBe('Example Customer AB');
     });
 
     it('returns error for non-existent customer', async () => {
@@ -123,19 +129,19 @@ describe('customer tools', () => {
     });
 
     it('creates a customer with all optional fields', async () => {
-      mockFetch({ Customer: { CustomerNumber: '101', Name: 'Full Kund AB' } });
+      mockFetch({ Customer: { CustomerNumber: '101', Name: 'Full Example AB' } });
 
       const { client } = await setupClientServer();
       await client.callTool({
         name: 'fortnox_create_customer',
         arguments: {
-          Name: 'Full Kund AB',
+          Name: 'Full Example AB',
           OrganisationNumber: '556677-8899',
-          Email: 'info@fullkund.se',
+          Email: 'info@full-example.example',
           Phone: '08-123456',
-          Address1: 'Storgatan 1',
+          Address1: 'Exempelgatan 1',
           ZipCode: '11122',
-          City: 'Stockholm',
+          City: 'Uppsala',
           VATNumber: 'SE556677889901',
           confirm: true,
         },
@@ -143,39 +149,47 @@ describe('customer tools', () => {
 
       const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
       expect(body.Customer.OrganisationNumber).toBe('556677-8899');
-      expect(body.Customer.City).toBe('Stockholm');
+      expect(body.Customer.City).toBe('Uppsala');
     });
   });
 
   describe('fortnox_update_customer', () => {
     it('updates specific fields', async () => {
       mockFetch({
-        Customer: { CustomerNumber: '42', Name: 'Updated AB', Email: 'new@example.com' },
+        Customer: {
+          CustomerNumber: '42',
+          Name: 'Updated Example AB',
+          Email: 'accounts.updated@example.test',
+        },
       });
 
       const { client } = await setupClientServer();
       await client.callTool({
         name: 'fortnox_update_customer',
-        arguments: { customerNumber: '42', Email: 'new@example.com', confirm: true },
+        arguments: { customerNumber: '42', Email: 'accounts.updated@example.test', confirm: true },
       });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[0]).toContain('customers/42');
       expect(fetchCall[1].method).toBe('PUT');
       const body = JSON.parse(fetchCall[1].body);
-      expect(body.Customer.Email).toBe('new@example.com');
+      expect(body.Customer.Email).toBe('accounts.updated@example.test');
       expect(body.Customer.customerNumber).toBeUndefined(); // should not be in body
     });
 
     it('requires confirmation before updating a customer', async () => {
       mockFetch({
-        Customer: { CustomerNumber: '42', Name: 'Updated AB', Email: 'new@example.com' },
+        Customer: {
+          CustomerNumber: '42',
+          Name: 'Updated Example AB',
+          Email: 'accounts.updated@example.test',
+        },
       });
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
         name: 'fortnox_update_customer',
-        arguments: { customerNumber: '42', Email: 'new@example.com' },
+        arguments: { customerNumber: '42', Email: 'accounts.updated@example.test' },
       });
 
       expect(result.isError).toBe(true);
