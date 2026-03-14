@@ -176,15 +176,16 @@ When running from a local clone instead of an installed binary, replace `noxctl`
 
 ## Mutation safety
 
-Mutating commands now require explicit confirmation.
+Mutating commands require confirmation before executing. On interactive terminals, the CLI prompts with `[y/N]`. In non-interactive contexts (piped input, CI), pass `--yes` explicitly or the command will fail safely.
 
 CLI:
 
 ```bash
-noxctl invoices send 1001 --dry-run
-noxctl invoices send 1001 --yes
-noxctl customers update 42 --input customer.json --yes
-noxctl vouchers create --input voucher.json --dry-run
+noxctl invoices send 1001                              # prompts: "Send invoice 1001 via email. Continue? [y/N]"
+noxctl invoices send 1001 --yes                        # skip prompt (scripting/AI)
+noxctl invoices send 1001 --dry-run                    # preview without sending
+noxctl customers update 42 --input customer.json       # prompts for confirmation
+noxctl vouchers create --input voucher.json --dry-run  # preview payload
 ```
 
 MCP tools:

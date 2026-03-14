@@ -14,9 +14,10 @@ noxctl invoices list
 noxctl invoices list --output json
 noxctl customers get 25
 
-# Writing data (use --input for JSON, --yes to skip prompt)
+# Writing data (prompts for confirmation on TTY; use --yes to skip)
 echo '{"InvoiceRows": [...]}' | noxctl invoices update 28 --input - --yes
-noxctl invoices send 28 --yes
+noxctl invoices send 28              # prompts: Continue? [y/N]
+noxctl invoices send 28 --yes        # skip prompt (non-interactive/scripting)
 
 # Dry run first
 noxctl invoices create --customer 25 --input data.json --dry-run
@@ -35,7 +36,7 @@ noxctl invoices create --customer 25 --input data.json --dry-run
 
 ```bash
 npm run build       # TypeScript compile
-npm test            # Vitest (131 unit tests)
+npm test            # Vitest (193 unit tests)
 npm run test:live   # Live API tests (needs credentials)
 npm run lint        # ESLint
 npm run format      # Prettier
@@ -45,5 +46,5 @@ npm run format      # Prettier
 
 - All MCP tool descriptions are in Swedish
 - CLI commands mirror MCP tools 1:1
-- Mutations require `--yes` (CLI) or `confirm: true` (MCP)
+- Mutations prompt for confirmation on TTY; require `--yes` when piped (CLI) or `confirm: true` (MCP)
 - Both support `--dry-run` / `dryRun` to preview without executing
