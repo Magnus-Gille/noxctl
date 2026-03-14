@@ -127,6 +127,90 @@ export function formatTaxReport(report: Record<string, unknown>): string {
   return lines.join('\n');
 }
 
+export function formatFinancialReport(report: {
+  type: string;
+  sections?: {
+    label: string;
+    lines: { account: number; description: string; balance: number }[];
+    total: number;
+  }[];
+  netResult?: number;
+  assets?: {
+    label: string;
+    lines: { account: number; description: string; balance: number }[];
+    total: number;
+  }[];
+  totalAssets?: number;
+  liabilitiesAndEquity?: {
+    label: string;
+    lines: { account: number; description: string; balance: number }[];
+    total: number;
+  }[];
+  totalLiabilitiesAndEquity?: number;
+  financialYear?: number;
+}): string {
+  const lines: string[] = [];
+  const W = 70;
+
+  const yearLabel = report.financialYear ? ` (år ${report.financialYear})` : '';
+
+  function formatSection(section: {
+    label: string;
+    lines: { account: number; description: string; balance: number }[];
+    total: number;
+  }) {
+    lines.push('');
+    lines.push(section.label);
+    lines.push('─'.repeat(W));
+    for (const line of section.lines) {
+      const acct = String(line.account).padEnd(6);
+      const desc = truncate(stripControl(line.description), 40).padEnd(40);
+      const amount = line.balance.toFixed(2).padStart(15);
+      lines.push(`  ${acct}  ${desc}  ${amount}`);
+    }
+    lines.push(`${''.padEnd(50)}${'─'.repeat(15)}`);
+    lines.push(`${'Summa'.padEnd(50)}${section.total.toFixed(2).padStart(15)}`);
+  }
+
+  if (report.type === 'income-statement') {
+    lines.push(`RESULTATRÄKNING${yearLabel}`);
+    lines.push('═'.repeat(W));
+    for (const section of report.sections ?? []) {
+      formatSection(section);
+    }
+    lines.push('');
+    lines.push('═'.repeat(W));
+    lines.push(`${'RESULTAT'.padEnd(50)}${(report.netResult ?? 0).toFixed(2).padStart(15)}`);
+  } else {
+    lines.push(`BALANSRÄKNING${yearLabel}`);
+    lines.push('═'.repeat(W));
+
+    lines.push('');
+    lines.push('TILLGÅNGAR');
+    for (const section of report.assets ?? []) {
+      formatSection(section);
+    }
+    lines.push('');
+    lines.push('═'.repeat(W));
+    lines.push(
+      `${'SUMMA TILLGÅNGAR'.padEnd(50)}${(report.totalAssets ?? 0).toFixed(2).padStart(15)}`,
+    );
+
+    lines.push('');
+    lines.push('SKULDER OCH EGET KAPITAL');
+    for (const section of report.liabilitiesAndEquity ?? []) {
+      formatSection(section);
+    }
+    lines.push('');
+    lines.push('═'.repeat(W));
+    lines.push(
+      `${'SUMMA SKULDER OCH EGET KAPITAL'.padEnd(50)}${(report.totalLiabilitiesAndEquity ?? 0).toFixed(2).padStart(15)}`,
+    );
+  }
+
+  return lines.join('\n');
+}
+
 export interface OutputOptions {
   json: boolean;
 }
