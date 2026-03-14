@@ -1,6 +1,6 @@
 # noxctl
 
-CLI and MCP server for Fortnox — manage invoices, customers, bookkeeping, and VAT from the terminal or from AI agents like Claude Code.
+Command-line interface (CLI) and Model Context Protocol (MCP) server for Fortnox — manage invoices, customers, bookkeeping, and VAT (Value Added Tax) from the terminal or from AI (Artificial Intelligence) agents like Claude Code.
 
 ```
 noxctl init                          # interactive setup wizard
@@ -13,19 +13,19 @@ noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 ## Prerequisites
 
 - **Node.js** 20+
-- **Fortnox account** with API access (Mellan plan or higher)
+- **Fortnox account** with API (Application Programming Interface) access (Mellan plan or higher)
 - **Linux only:** `secret-tool` available for secure credential storage
 
 ## Setup
 
 ### 1. Create a Fortnox app
 
-> **Tip:** Run `npx noxctl init` for an interactive setup wizard that guides you through all of these steps.
+> **Tip:** Run `npx noxctl init` (npx is a tool included with npm, the Node Package Manager) for an interactive setup wizard that guides you through all of these steps.
 
 1. Go to [developer.fortnox.se](https://developer.fortnox.se/) and click **Integrationer** / **Integrations**
 2. Create a new app (integration)
-3. On the **OAuth** tab:
-   - Set **Redirect URI** to `http://localhost:9876/callback`
+3. On the **OAuth (Open Authorization)** tab:
+   - Set **Redirect URI (Uniform Resource Identifier)** to `http://localhost:9876/callback`
    - Check **"Möjliggör auktorisering som servicekonto"** / **"Enable service account authorization"** (recommended)
    - Copy your **Client ID** and **Client Secret**
 4. On the **Integration** tab, enable these scopes under **Behörigheter** / **Permissions**:
@@ -58,11 +58,11 @@ node dist/cli.js init
 
 The wizard will prompt for your Client ID and Client Secret (masked input), run the OAuth flow, verify the connection, and optionally register the MCP server with Claude Code.
 
-After authorization, credentials are stored in the OS secure store:
+After authorization, credentials are stored in the OS (Operating System) secure store:
 
 - **macOS:** Keychain (`security`)
 - **Linux:** Secret Service via `secret-tool`
-- **Windows:** DPAPI-protected user store
+- **Windows:** DPAPI (Data Protection API)-protected user store
 
 Token management is automatic after setup — no environment variables needed going forward.
 
@@ -118,7 +118,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl invoices get <docNumber>` | `fortnox_get_invoice` | Get a single invoice by document number |
 | `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice with line items (mutation) |
 | `noxctl invoices update <docNumber> --input <file>` | `fortnox_update_invoice` | Update an invoice that has not been bookkeept (mutation) |
-| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice` | Send invoice via email (default), print, or e-invoice. Supports email subject, body, and BCC (mutation) |
+| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice` | Send invoice via email (default), print, or e-invoice. Supports email subject, body, and BCC (Blind Carbon Copy) (mutation) |
 | `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Book an invoice (mutation) |
 | `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
 
@@ -156,7 +156,7 @@ By default, `noxctl` uses **table output** on interactive terminals and **JSON**
 
 ```bash
 noxctl invoices list              # table on terminal, JSON when piped
-noxctl -o json invoices list      # force JSON
+noxctl -o json invoices list      # force JSON (JavaScript Object Notation)
 noxctl -o table invoices list     # force table
 noxctl invoices list | jq .       # auto-JSON (piped)
 ```
@@ -187,7 +187,7 @@ MCP tools:
 Ask Claude naturally — works in both Swedish and English:
 
 - "Skapa en faktura till kund 42 för 10 konsulttimmar á 1200 kr"
-- "Create an invoice for customer 42: 10 consulting hours at 1200 SEK"
+- "Create an invoice for customer 42: 10 consulting hours at 1200 SEK (Swedish Krona)"
 - "Visa alla obetalda fakturor" / "Show all unpaid invoices"
 - "Vad har vi för utgående moms Q1 2025?" / "What's our outgoing VAT for Q1 2025?"
 - "Bokför kontorsmaterial för 1250 kr inkl moms" / "Book office supplies for 1250 SEK incl VAT"
@@ -255,6 +255,26 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 - Mutating actions require explicit confirmation or `dryRun`
 - MCP responses are summarized by default; raw Fortnox JSON is opt-in
 - Retries are limited to idempotent requests
+
+## Glossary
+
+| Abbreviation | Full term |
+|---|---|
+| AI | Artificial Intelligence |
+| API | Application Programming Interface |
+| BCC | Blind Carbon Copy — an email field that sends a copy to someone without other recipients seeing it |
+| CLI | Command Line Interface — a text-based way to interact with software by typing commands |
+| DPAPI | Data Protection API — a Windows feature for encrypting stored credentials |
+| JSON | JavaScript Object Notation — a widely used format for structured data |
+| MCP | Model Context Protocol — a standard that lets AI assistants use external tools and data sources |
+| MIT | Massachusetts Institute of Technology — refers to a permissive open-source software license |
+| npm | Node Package Manager — a tool for installing and managing JavaScript packages |
+| npx | A tool included with npm for running packages without installing them globally |
+| OAuth | Open Authorization — a standard protocol for granting apps limited access to accounts without sharing passwords |
+| OS | Operating System — the software that runs your computer (e.g. macOS, Windows, Linux) |
+| SEK | Swedish Krona — the currency of Sweden |
+| URI | Uniform Resource Identifier — an address that identifies a resource (similar to a web link) |
+| VAT | Value Added Tax — a consumption tax added at each stage of production |
 
 ## License
 
