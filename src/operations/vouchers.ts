@@ -32,6 +32,20 @@ export async function listVouchers(params: ListVouchersParams = {}): Promise<Vou
   });
 }
 
+export async function getVoucher(
+  series: string,
+  voucherNumber: string,
+  financialYear?: number,
+): Promise<Record<string, unknown>> {
+  const params: Record<string, string | number | undefined> = {};
+  if (financialYear) params.financialyear = financialYear;
+  const data = await fortnoxRequest<VoucherResponse>(
+    `vouchers/${voucherSeriesSegment(series)}/${encodeURIComponent(voucherNumber)}`,
+    { params },
+  );
+  return data.Voucher;
+}
+
 export async function createVoucher(
   params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {

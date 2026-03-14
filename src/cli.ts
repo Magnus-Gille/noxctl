@@ -18,6 +18,7 @@ import {
   customerDetailColumns,
   voucherListColumns,
   voucherDetailColumns,
+  voucherRowColumns,
   accountListColumns,
   companyDetailColumns,
   articleListColumns,
@@ -831,6 +832,25 @@ vouchers
       MetaInformation?: Record<string, unknown>;
     };
     outputList(envelope.Vouchers ?? [], voucherListColumns, json(), data, envelope.MetaInformation);
+  });
+
+vouchers
+  .command('get <series> <voucherNumber>')
+  .description('Get a single voucher with rows (account, debit, credit)')
+  .option('--year <number>', 'Financial year', parseInt)
+  .action(async (series: string, voucherNumber: string, opts: { year?: number }) => {
+    const { getVoucher } = await import('./operations/vouchers.js');
+    const data = await getVoucher(series, voucherNumber, opts.year);
+    if (json()) {
+      console.log(JSON.stringify(data, null, 2));
+    } else {
+      outputDetail(data as Record<string, unknown>, voucherDetailColumns, false);
+      const rows = (data as Record<string, unknown>).VoucherRows as Record<string, unknown>[];
+      if (rows?.length) {
+        console.log('\nRows:');
+        outputList(rows, voucherRowColumns, false, rows);
+      }
+    }
   });
 
 vouchers

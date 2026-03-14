@@ -79,6 +79,14 @@ export const voucherDetailColumns: Column[] = [
   { key: 'Description', header: 'Description', width: 50 },
 ];
 
+// 8 + 2 + 12 + 2 + 12 + 2 + 30 = 68
+export const voucherRowColumns: Column[] = [
+  { key: 'Account', header: 'Account', width: 8, align: 'right' },
+  { key: 'Debit', header: 'Debit', width: 12, align: 'right', format: currency },
+  { key: 'Credit', header: 'Credit', width: 12, align: 'right', format: currency },
+  { key: 'Description', header: 'Description', width: 30 },
+];
+
 // --- Article views (target ≤80 cols) ---
 
 // 10 + 2 + 30 + 2 + 10 + 2 + 6 + 2 + 10 = 74

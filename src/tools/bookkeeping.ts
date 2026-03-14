@@ -1,8 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listAccounts } from '../operations/accounts.js';
-import { listVouchers, createVoucher } from '../operations/vouchers.js';
-import { accountListColumns, voucherDetailColumns, voucherListColumns } from '../views.js';
+import { listVouchers, getVoucher, createVoucher } from '../operations/vouchers.js';
+import {
+  accountListColumns,
+  voucherDetailColumns,
+  voucherListColumns,
+  voucherRowColumns,
+} from '../views.js';
 import {
   detailResponse,
   dryRunResponse,
@@ -44,6 +49,26 @@ export function registerBookkeepingTools(server: McpServer): void {
         data.MetaInformation,
         includeRaw,
       );
+    },
+  );
+
+  server.tool(
+    'fortnox_get_voucher',
+    'Hämta en enskild verifikation med rader (konto, debet, kredit) från Fortnox',
+    {
+      series: z.string().describe('Verifikationsserie (t.ex. "A")'),
+      voucherNumber: z.string().describe('Verifikationsnummer'),
+      financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ series, voucherNumber, financialYear, includeRaw }) => {
+      const data = await getVoucher(series, voucherNumber, financialYear);
+      const rows = (data.VoucherRows as Record<string, unknown>[]) ?? [];
+      const header = detailResponse(data, voucherDetailColumns, data, false);
+      const rowTable = listResponse(rows, voucherRowColumns, data, undefined, includeRaw);
+      const headerText = (header.content as { type: string; text: string }[])[0].text;
+      const rowText = (rowTable.content as { type: string; text: string }[])[0].text;
+      return { content: [{ type: 'text' as const, text: `${headerText}\n\nRows:\n${rowText}` }] };
     },
   );
 
