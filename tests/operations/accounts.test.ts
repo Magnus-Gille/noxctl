@@ -29,7 +29,7 @@ describe('accounts operations', () => {
       const { listAccounts } = await import('../../src/operations/accounts.js');
 
       const result = await listAccounts();
-      expect(result).toHaveLength(2);
+      expect(result.Accounts).toHaveLength(2);
     });
 
     it('filters by description search term', async () => {
@@ -43,7 +43,7 @@ describe('accounts operations', () => {
       const { listAccounts } = await import('../../src/operations/accounts.js');
 
       const result = await listAccounts({ search: 'moms' });
-      expect(result).toHaveLength(2);
+      expect(result.Accounts).toHaveLength(2);
     });
 
     it('filters by account number', async () => {
@@ -57,7 +57,7 @@ describe('accounts operations', () => {
       const { listAccounts } = await import('../../src/operations/accounts.js');
 
       const result = await listAccounts({ search: '193' });
-      expect(result).toHaveLength(2);
+      expect(result.Accounts).toHaveLength(2);
     });
 
     it('search is case-insensitive', async () => {
@@ -67,7 +67,7 @@ describe('accounts operations', () => {
       const { listAccounts } = await import('../../src/operations/accounts.js');
 
       const result = await listAccounts({ search: 'FÖRETAG' });
-      expect(result).toHaveLength(1);
+      expect(result.Accounts).toHaveLength(1);
     });
 
     it('passes financialYear to Fortnox', async () => {

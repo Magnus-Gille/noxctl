@@ -1,4 +1,4 @@
-import { fortnoxRequest } from '../fortnox-client.js';
+import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
 interface InvoiceResponse {
@@ -17,18 +17,31 @@ export interface ListInvoicesParams {
   toDate?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
 }
 
 export async function listInvoices(params: ListInvoicesParams = {}): Promise<InvoicesResponse> {
+  const queryParams: Record<string, string | number | undefined> = {
+    filter: params.filter,
+    customernumber: params.customerNumber,
+    fromdate: params.fromDate,
+    todate: params.toDate,
+  };
+
+  if (params.all) {
+    const { items, totalResources } = await fetchAllPages<Record<string, unknown>>(
+      'invoices',
+      'Invoices',
+      queryParams,
+    );
+    return {
+      Invoices: items,
+      MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+    };
+  }
+
   return fortnoxRequest<InvoicesResponse>('invoices', {
-    params: {
-      filter: params.filter,
-      customernumber: params.customerNumber,
-      fromdate: params.fromDate,
-      todate: params.toDate,
-      page: params.page || 1,
-      limit: params.limit || 100,
-    },
+    params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
   });
 }
 

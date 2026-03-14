@@ -1,4 +1,4 @@
-import { fortnoxRequest } from '../fortnox-client.js';
+import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 
 interface ArticleResponse {
   Article: Record<string, unknown>;
@@ -13,15 +13,28 @@ export interface ListArticlesParams {
   search?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
 }
 
 export async function listArticles(params: ListArticlesParams = {}): Promise<ArticlesResponse> {
+  const queryParams: Record<string, string | number | undefined> = {
+    ...(params.search ? { description: params.search } : {}),
+  };
+
+  if (params.all) {
+    const { items, totalResources } = await fetchAllPages<Record<string, unknown>>(
+      'articles',
+      'Articles',
+      queryParams,
+    );
+    return {
+      Articles: items,
+      MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+    };
+  }
+
   return fortnoxRequest<ArticlesResponse>('articles', {
-    params: {
-      page: params.page || 1,
-      limit: params.limit || 100,
-      ...(params.search ? { description: params.search } : {}),
-    },
+    params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
   });
 }
 

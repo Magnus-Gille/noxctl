@@ -22,10 +22,11 @@ export function registerSupplierTools(server: McpServer): void {
       search: z.string().optional().describe('Sökterm (namn)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
       limit: z.number().optional().describe('Antal per sida (default 100, max 500)'),
+      all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ search, page, limit, includeRaw }) => {
-      const data = await listSuppliers({ search, page, limit });
+    async ({ search, page, limit, all, includeRaw }) => {
+      const data = await listSuppliers({ search, page, limit, all });
       return listResponse(
         data.Suppliers ?? [],
         supplierListColumns,

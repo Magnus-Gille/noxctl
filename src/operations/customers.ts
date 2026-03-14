@@ -1,4 +1,4 @@
-import { fortnoxRequest } from '../fortnox-client.js';
+import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 import { customerSegment } from '../identifiers.js';
 
 interface CustomerResponse {
@@ -14,15 +14,28 @@ export interface ListCustomersParams {
   search?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
 }
 
 export async function listCustomers(params: ListCustomersParams = {}): Promise<CustomersResponse> {
+  const queryParams: Record<string, string | number | undefined> = {
+    ...(params.search ? { name: params.search } : {}),
+  };
+
+  if (params.all) {
+    const { items, totalResources } = await fetchAllPages<Record<string, unknown>>(
+      'customers',
+      'Customers',
+      queryParams,
+    );
+    return {
+      Customers: items,
+      MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+    };
+  }
+
   return fortnoxRequest<CustomersResponse>('customers', {
-    params: {
-      page: params.page || 1,
-      limit: params.limit || 100,
-      ...(params.search ? { name: params.search } : {}),
-    },
+    params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
   });
 }
 

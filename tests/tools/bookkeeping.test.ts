@@ -166,8 +166,8 @@ describe('bookkeeping tools', () => {
       const parsed = JSON.parse(
         (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
       );
-      expect(parsed).toHaveLength(2);
-      expect(parsed[0].Description).toContain('moms');
+      expect(parsed.Accounts).toHaveLength(2);
+      expect(parsed.Accounts[0].Description).toContain('moms');
     });
 
     it('filters accounts by account number', async () => {
@@ -188,7 +188,7 @@ describe('bookkeeping tools', () => {
       const parsed = JSON.parse(
         (result.content as { type: string; text: string }[])[0].text.split('Raw JSON:\n')[1],
       );
-      expect(parsed).toHaveLength(2);
+      expect(parsed.Accounts).toHaveLength(2);
     });
 
     it('requires confirmation before creating a voucher', async () => {

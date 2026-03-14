@@ -1,4 +1,4 @@
-import { fortnoxRequest } from '../fortnox-client.js';
+import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 import { voucherSeriesSegment } from '../identifiers.js';
 
 interface VoucherResponse {
@@ -17,18 +17,32 @@ export interface ListVouchersParams {
   toDate?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
 }
 
 export async function listVouchers(params: ListVouchersParams = {}): Promise<VouchersResponse> {
   const subpath = params.series ? `sublist/${voucherSeriesSegment(params.series)}` : '';
-  return fortnoxRequest<VouchersResponse>(`vouchers/${subpath}`, {
-    params: {
-      financialyear: params.financialYear,
-      fromdate: params.fromDate,
-      todate: params.toDate,
-      page: params.page || 1,
-      limit: params.limit || 100,
-    },
+  const endpoint = `vouchers/${subpath}`;
+  const queryParams: Record<string, string | number | undefined> = {
+    financialyear: params.financialYear,
+    fromdate: params.fromDate,
+    todate: params.toDate,
+  };
+
+  if (params.all) {
+    const { items, totalResources } = await fetchAllPages<Record<string, unknown>>(
+      endpoint,
+      'Vouchers',
+      queryParams,
+    );
+    return {
+      Vouchers: items,
+      MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+    };
+  }
+
+  return fortnoxRequest<VouchersResponse>(endpoint, {
+    params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
   });
 }
 

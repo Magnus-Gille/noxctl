@@ -139,3 +139,35 @@ export async function fortnoxRequest<T>(
     return JSON.parse(text) as T;
   }, retryable);
 }
+
+/**
+ * Fetch all pages of a paginated Fortnox list endpoint.
+ * `dataKey` is the envelope key (e.g. "Invoices", "Customers").
+ */
+export async function fetchAllPages<T extends Record<string, unknown>>(
+  endpoint: string,
+  dataKey: string,
+  params: Record<string, string | number | undefined> = {},
+): Promise<{ items: T[]; totalResources: number }> {
+  const all: T[] = [];
+  let page = 1;
+  let totalPages = 1;
+  let totalResources = 0;
+
+  do {
+    const data = await fortnoxRequest<Record<string, unknown>>(endpoint, {
+      params: { ...params, page, limit: 100 },
+    });
+    const items = (data[dataKey] as T[]) ?? [];
+    all.push(...items);
+
+    const meta = data.MetaInformation as
+      | { '@TotalPages': number; '@CurrentPage': number; '@TotalResources': number }
+      | undefined;
+    totalPages = meta?.['@TotalPages'] ?? 1;
+    totalResources = meta?.['@TotalResources'] ?? all.length;
+    page++;
+  } while (page <= totalPages);
+
+  return { items: all, totalResources };
+}

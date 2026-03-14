@@ -457,6 +457,7 @@ invoices
   .option('--to <date>', 'To date (YYYY-MM-DD)')
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listInvoices } = await import('./operations/invoices.js');
     const data = await listInvoices({
@@ -466,6 +467,7 @@ invoices
       toDate: opts.to,
       page: opts.page,
       limit: opts.limit,
+      all: opts.all,
     });
     const envelope = data as unknown as {
       Invoices: Record<string, unknown>[];
@@ -666,14 +668,19 @@ accounts
   .description('List accounts')
   .option('--search <term>', 'Search by account name or number')
   .option('--year <number>', 'Financial year', parseInt)
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listAccounts } = await import('./operations/accounts.js');
     const data = await listAccounts({
       search: opts.search,
       financialYear: opts.year,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
     });
-    const items = Array.isArray(data) ? data : [];
-    outputList(items as Record<string, unknown>[], accountListColumns, json(), data);
+    outputList(data.Accounts ?? [], accountListColumns, json(), data, data.MetaInformation);
   });
 
 // --- customers ---
@@ -685,12 +692,14 @@ customers
   .option('--search <term>', 'Search by name')
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listCustomers } = await import('./operations/customers.js');
     const data = await listCustomers({
       search: opts.search,
       page: opts.page,
       limit: opts.limit,
+      all: opts.all,
     });
     const envelope = data as unknown as {
       Customers: Record<string, unknown>[];
@@ -766,12 +775,14 @@ articles
   .option('--search <term>', 'Search by description')
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listArticles } = await import('./operations/articles.js');
     const data = await listArticles({
       search: opts.search,
       page: opts.page,
       limit: opts.limit,
+      all: opts.all,
     });
     const envelope = data as unknown as {
       Articles: Record<string, unknown>[];
@@ -843,12 +854,14 @@ suppliers
   .option('--search <term>', 'Search by name')
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listSuppliers } = await import('./operations/suppliers.js');
     const data = await listSuppliers({
       search: opts.search,
       page: opts.page,
       limit: opts.limit,
+      all: opts.all,
     });
     const envelope = data as unknown as {
       Suppliers: Record<string, unknown>[];
@@ -933,6 +946,7 @@ supplierInvoices
   .option('--to <date>', 'To date (YYYY-MM-DD)')
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listSupplierInvoices } = await import('./operations/supplier-invoices.js');
     const data = await listSupplierInvoices({
@@ -942,6 +956,7 @@ supplierInvoices
       toDate: opts.to,
       page: opts.page,
       limit: opts.limit,
+      all: opts.all,
     });
     const envelope = data as unknown as {
       SupplierInvoices: Record<string, unknown>[];
@@ -1031,6 +1046,7 @@ vouchers
   .option('--year <number>', 'Financial year', parseInt)
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
     const { listVouchers } = await import('./operations/vouchers.js');
     const data = await listVouchers({
@@ -1040,6 +1056,7 @@ vouchers
       financialYear: opts.year,
       page: opts.page,
       limit: opts.limit,
+      all: opts.all,
     });
     const envelope = data as unknown as {
       Vouchers: Record<string, unknown>[];

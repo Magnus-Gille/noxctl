@@ -39,9 +39,10 @@ export function registerSupplierInvoiceTools(server: McpServer): void {
       toDate: z.string().optional().describe('Till datum (YYYY-MM-DD)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
       limit: z.number().optional().describe('Antal per sida (default 100, max 500)'),
+      all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ filter, supplierNumber, fromDate, toDate, page, limit, includeRaw }) => {
+    async ({ filter, supplierNumber, fromDate, toDate, page, limit, all, includeRaw }) => {
       const data = await listSupplierInvoices({
         filter,
         supplierNumber,
@@ -49,6 +50,7 @@ export function registerSupplierInvoiceTools(server: McpServer): void {
         toDate,
         page,
         limit,
+        all,
       });
       return listResponse(
         data.SupplierInvoices ?? [],

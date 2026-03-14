@@ -1,4 +1,4 @@
-import { fortnoxRequest } from '../fortnox-client.js';
+import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 
 interface SupplierInvoiceResponse {
   SupplierInvoice: Record<string, unknown>;
@@ -16,20 +16,34 @@ export interface ListSupplierInvoicesParams {
   toDate?: string;
   page?: number;
   limit?: number;
+  all?: boolean;
 }
 
 export async function listSupplierInvoices(
   params: ListSupplierInvoicesParams = {},
 ): Promise<SupplierInvoicesResponse> {
   const subpath = params.filter ? `?filter=${encodeURIComponent(params.filter)}` : '';
-  return fortnoxRequest<SupplierInvoicesResponse>(`supplierinvoices${subpath}`, {
-    params: {
-      page: params.page || 1,
-      limit: params.limit || 100,
-      ...(params.supplierNumber ? { suppliernumber: params.supplierNumber } : {}),
-      ...(params.fromDate ? { fromdate: params.fromDate } : {}),
-      ...(params.toDate ? { todate: params.toDate } : {}),
-    },
+  const endpoint = `supplierinvoices${subpath}`;
+  const queryParams: Record<string, string | number | undefined> = {
+    ...(params.supplierNumber ? { suppliernumber: params.supplierNumber } : {}),
+    ...(params.fromDate ? { fromdate: params.fromDate } : {}),
+    ...(params.toDate ? { todate: params.toDate } : {}),
+  };
+
+  if (params.all) {
+    const { items, totalResources } = await fetchAllPages<Record<string, unknown>>(
+      endpoint,
+      'SupplierInvoices',
+      queryParams,
+    );
+    return {
+      SupplierInvoices: items,
+      MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+    };
+  }
+
+  return fortnoxRequest<SupplierInvoicesResponse>(endpoint, {
+    params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
   });
 }
 

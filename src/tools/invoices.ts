@@ -45,6 +45,7 @@ export function registerInvoiceTools(server: McpServer): void {
       toDate: z.string().optional().describe('Till datum (YYYY-MM-DD)'),
       page: z.number().optional().describe('Sidnummer'),
       limit: z.number().optional().describe('Antal per sida'),
+      all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({ includeRaw, ...params }) => {

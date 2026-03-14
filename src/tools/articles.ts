@@ -17,10 +17,11 @@ export function registerArticleTools(server: McpServer): void {
       search: z.string().optional().describe('Sökterm (beskrivning)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
       limit: z.number().optional().describe('Antal per sida (default 100, max 500)'),
+      all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ search, page, limit, includeRaw }) => {
-      const data = await listArticles({ search, page, limit });
+    async ({ search, page, limit, all, includeRaw }) => {
+      const data = await listArticles({ search, page, limit, all });
       return listResponse(
         data.Articles ?? [],
         articleListColumns,

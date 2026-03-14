@@ -38,10 +38,19 @@ export function registerBookkeepingTools(server: McpServer): void {
       toDate: z.string().optional().describe('Till datum (YYYY-MM-DD)'),
       page: z.number().optional().describe('Sidnummer'),
       limit: z.number().optional().describe('Antal per sida'),
+      all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ financialYear, series, fromDate, toDate, page, limit, includeRaw }) => {
-      const data = await listVouchers({ financialYear, series, fromDate, toDate, page, limit });
+    async ({ financialYear, series, fromDate, toDate, page, limit, all, includeRaw }) => {
+      const data = await listVouchers({
+        financialYear,
+        series,
+        fromDate,
+        toDate,
+        page,
+        limit,
+        all,
+      });
       return listResponse(
         data.Vouchers ?? [],
         voucherListColumns,
@@ -104,11 +113,18 @@ export function registerBookkeepingTools(server: McpServer): void {
     {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
       search: z.string().optional().describe('Sök på kontonamn'),
+      all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({ includeRaw, ...params }) => {
-      const accounts = await listAccounts(params);
-      return listResponse(accounts, accountListColumns, accounts, undefined, includeRaw);
+      const data = await listAccounts(params);
+      return listResponse(
+        data.Accounts ?? [],
+        accountListColumns,
+        data,
+        data.MetaInformation,
+        includeRaw,
+      );
     },
   );
 }
