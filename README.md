@@ -276,6 +276,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 | URI | Uniform Resource Identifier — an address that identifies a resource (similar to a web link) |
 | VAT | Value Added Tax — a consumption tax added at each stage of production |
 
+## Disclaimer
+
+noxctl is an independent open-source project — not affiliated with, endorsed by, or certified by Fortnox AB.
+
+**You are responsible for your own bookkeeping.** Under Swedish law (Bokföringslagen), the company owner or board bears full responsibility for the correctness of all accounting records, regardless of what tools are used. noxctl is an instrument that executes your instructions — review entries before confirming, especially when using `--yes` or `confirm: true`.
+
+**Privacy note:** When using noxctl with AI assistants, be aware that customer and supplier data (names, addresses, organisation numbers) may be included in AI model context. Use `includeRaw: false` (the default) to minimize data exposure, and ensure your use complies with GDPR and any data processing agreements you have in place.
+
+**Fortnox API access** requires your own developer credentials and a Fortnox subscription. You must comply with the [Fortnox Developer Agreement](https://developer.fortnox.se/). noxctl does not redistribute any Fortnox-owned code or data.
+
 ## License
 
 MIT
