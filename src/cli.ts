@@ -431,6 +431,48 @@ program
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       fail('API connection', msg);
+      console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+      return;
+    }
+
+    // 8. Scope validation — probe each scope with a lightweight GET
+    const { SCOPES } = await import('./auth.js');
+    const { fortnoxRequest, FortnoxApiError } = await import('./fortnox-client.js');
+
+    const scopeEndpoints: Record<string, string> = {
+      article: 'articles?limit=1',
+      customer: 'customers?limit=1',
+      invoice: 'invoices?limit=1',
+      supplier: 'suppliers?limit=1',
+      supplierinvoice: 'supplierinvoices?limit=1',
+      bookkeeping: 'vouchers?limit=1',
+      companyinformation: 'companyinformation',
+      settings: 'settings/company',
+    };
+
+    const required = SCOPES.split(' ');
+    const missing: string[] = [];
+
+    for (const scope of required) {
+      const endpoint = scopeEndpoints[scope];
+      if (!endpoint) continue;
+      try {
+        await fortnoxRequest(endpoint);
+      } catch (err) {
+        if (err instanceof FortnoxApiError && err.statusCode === 403) {
+          missing.push(scope);
+        }
+        // Non-403 errors (e.g. 500) are not scope problems — ignore here
+      }
+    }
+
+    if (missing.length === 0) {
+      pass('Scopes', `all ${required.length} scopes authorized`);
+    } else {
+      fail(
+        'Scopes',
+        `missing: ${missing.join(', ')}. Enable them in your Fortnox app at developer.fortnox.se`,
+      );
     }
 
     console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
