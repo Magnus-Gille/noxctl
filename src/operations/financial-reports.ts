@@ -25,6 +25,8 @@ interface VouchersResponse {
 
 export interface FinancialReportParams {
   financialYear?: number;
+  fromDate?: string;
+  toDate?: string;
 }
 
 export interface ReportLine {
@@ -42,6 +44,7 @@ export interface ReportSection {
 export interface IncomeStatement {
   type: 'income-statement';
   financialYear?: number;
+  period?: { from: string; to: string };
   sections: ReportSection[];
   netResult: number;
 }
@@ -49,6 +52,7 @@ export interface IncomeStatement {
 export interface BalanceSheet {
   type: 'balance-sheet';
   financialYear?: number;
+  asOfDate?: string;
   assets: ReportSection[];
   totalAssets: number;
   liabilitiesAndEquity: ReportSection[];
@@ -117,6 +121,8 @@ interface VoucherDetailResponse {
 /** Fetch all vouchers (list + individual details) and sum debit/credit per account. */
 async function fetchVoucherSums(
   financialYear?: number,
+  fromDate?: string,
+  toDate?: string,
 ): Promise<Map<number, { debit: number; credit: number }>> {
   const sums = new Map<number, { debit: number; credit: number }>();
 
@@ -127,7 +133,13 @@ async function fetchVoucherSums(
 
   do {
     const data = await fortnoxRequest<VouchersResponse>('vouchers', {
-      params: { financialyear: financialYear, page, limit: 100 },
+      params: {
+        financialyear: financialYear,
+        fromdate: fromDate,
+        todate: toDate,
+        page,
+        limit: 100,
+      },
     });
     for (const v of data.Vouchers ?? []) {
       vouchers.push({
@@ -163,10 +175,43 @@ interface AccountBalance {
 }
 
 /** Compute closing balances: BalanceBroughtForward + debit - credit for each account. */
-async function computeBalances(financialYear?: number): Promise<AccountBalance[]> {
+async function computeBalances(
+  financialYear?: number,
+  fromDate?: string,
+  toDate?: string,
+): Promise<AccountBalance[]> {
   const [accounts, voucherSums] = await Promise.all([
     fetchAllAccounts(financialYear),
-    fetchVoucherSums(financialYear),
+    fetchVoucherSums(financialYear, fromDate, toDate),
+  ]);
+
+  return accounts
+    .map((a) => {
+      const movement = voucherSums.get(a.Number);
+      const debit = movement?.debit ?? 0;
+      const credit = movement?.credit ?? 0;
+      // For period-scoped income statements (fromDate set), skip BBF
+      // since we only want the period's movements for P&L accounts.
+      // For balance sheets, always include BBF.
+      const bbf = fromDate ? 0 : a.BalanceBroughtForward;
+      const closingBalance = bbf + debit - credit;
+      return {
+        number: a.Number,
+        description: a.Description,
+        closingBalance,
+      };
+    })
+    .filter((a) => a.closingBalance !== 0);
+}
+
+/** Compute balance sheet balances: always includes BBF + movements up to toDate. */
+async function computeBalanceSheetBalances(
+  financialYear?: number,
+  toDate?: string,
+): Promise<AccountBalance[]> {
+  const [accounts, voucherSums] = await Promise.all([
+    fetchAllAccounts(financialYear),
+    fetchVoucherSums(financialYear, undefined, toDate),
   ]);
 
   return accounts
@@ -209,7 +254,7 @@ function buildSection(
 export async function getIncomeStatement(
   params: FinancialReportParams = {},
 ): Promise<IncomeStatement> {
-  const balances = await computeBalances(params.financialYear);
+  const balances = await computeBalances(params.financialYear, params.fromDate, params.toDate);
 
   const sections: ReportSection[] = [];
   for (const group of INCOME_STATEMENT_GROUPS) {
@@ -222,13 +267,17 @@ export async function getIncomeStatement(
   return {
     type: 'income-statement',
     financialYear: params.financialYear,
+    period:
+      params.fromDate || params.toDate
+        ? { from: params.fromDate ?? '', to: params.toDate ?? '' }
+        : undefined,
     sections,
     netResult,
   };
 }
 
 export async function getBalanceSheet(params: FinancialReportParams = {}): Promise<BalanceSheet> {
-  const balances = await computeBalances(params.financialYear);
+  const balances = await computeBalanceSheetBalances(params.financialYear, params.toDate);
 
   const assets: ReportSection[] = [];
   for (const group of BALANCE_SHEET_ASSET_GROUPS) {
@@ -245,6 +294,7 @@ export async function getBalanceSheet(params: FinancialReportParams = {}): Promi
   return {
     type: 'balance-sheet',
     financialYear: params.financialYear,
+    asOfDate: params.toDate,
     assets,
     totalAssets: assets.reduce((sum, s) => sum + s.total, 0),
     liabilitiesAndEquity,

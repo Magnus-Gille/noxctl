@@ -148,11 +148,24 @@ export function formatFinancialReport(report: {
   }[];
   totalLiabilitiesAndEquity?: number;
   financialYear?: number;
+  period?: { from: string; to: string };
+  asOfDate?: string;
 }): string {
   const lines: string[] = [];
   const W = 70;
 
-  const yearLabel = report.financialYear ? ` (år ${report.financialYear})` : '';
+  let subtitle = '';
+  if (report.period?.from && report.period?.to) {
+    subtitle = ` ${report.period.from} — ${report.period.to}`;
+  } else if (report.period?.from) {
+    subtitle = ` från ${report.period.from}`;
+  } else if (report.period?.to) {
+    subtitle = ` t.o.m. ${report.period.to}`;
+  } else if (report.asOfDate) {
+    subtitle = ` per ${report.asOfDate}`;
+  } else if (report.financialYear) {
+    subtitle = ` (år ${report.financialYear})`;
+  }
 
   // sign = 1 keeps BAS convention, sign = -1 flips for display readability
   function formatSection(
@@ -178,7 +191,7 @@ export function formatFinancialReport(report: {
 
   if (report.type === 'income-statement') {
     // Negate: revenue (credit) becomes positive, costs (debit) become negative
-    lines.push(`RESULTATRÄKNING${yearLabel}`);
+    lines.push(`RESULTATRÄKNING${subtitle}`);
     lines.push('═'.repeat(W));
     for (const section of report.sections ?? []) {
       formatSection(section, -1);
@@ -187,7 +200,7 @@ export function formatFinancialReport(report: {
     lines.push('═'.repeat(W));
     lines.push(`${'RESULTAT'.padEnd(50)}${(-(report.netResult ?? 0)).toFixed(2).padStart(15)}`);
   } else {
-    lines.push(`BALANSRÄKNING${yearLabel}`);
+    lines.push(`BALANSRÄKNING${subtitle}`);
     lines.push('═'.repeat(W));
 
     lines.push('');

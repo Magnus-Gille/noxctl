@@ -651,9 +651,15 @@ reports
   .alias('resultat')
   .description('Income statement (resultaträkning)')
   .option('--year <number>', 'Financial year', parseInt)
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
   .action(async (opts) => {
     const { getIncomeStatement } = await import('./operations/financial-reports.js');
-    const data = await getIncomeStatement({ financialYear: opts.year });
+    const data = await getIncomeStatement({
+      financialYear: opts.year,
+      fromDate: opts.from,
+      toDate: opts.to,
+    });
     if (json()) {
       console.log(JSON.stringify(data, null, 2));
     } else {
@@ -666,9 +672,10 @@ reports
   .alias('balans')
   .description('Balance sheet (balansräkning)')
   .option('--year <number>', 'Financial year', parseInt)
+  .option('--to <date>', 'As-of date (YYYY-MM-DD)')
   .action(async (opts) => {
     const { getBalanceSheet } = await import('./operations/financial-reports.js');
-    const data = await getBalanceSheet({ financialYear: opts.year });
+    const data = await getBalanceSheet({ financialYear: opts.year, toDate: opts.to });
     if (json()) {
       console.log(JSON.stringify(data, null, 2));
     } else {
