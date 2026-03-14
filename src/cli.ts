@@ -23,6 +23,11 @@ import {
   companyDetailColumns,
   articleListColumns,
   articleDetailColumns,
+  supplierListColumns,
+  supplierDetailColumns,
+  supplierInvoiceListColumns,
+  supplierInvoiceDetailColumns,
+  supplierInvoiceConfirmColumns,
 } from './views.js';
 
 const program = new Command();
@@ -792,6 +797,179 @@ articles
       outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
     },
   );
+
+// --- suppliers ---
+const suppliers = program.command('suppliers').description('Supplier operations');
+
+suppliers
+  .command('list')
+  .description('List/search suppliers')
+  .option('--search <term>', 'Search by name')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .action(async (opts) => {
+    const { listSuppliers } = await import('./operations/suppliers.js');
+    const data = await listSuppliers({
+      search: opts.search,
+      page: opts.page,
+      limit: opts.limit,
+    });
+    const envelope = data as unknown as {
+      Suppliers: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.Suppliers ?? [],
+      supplierListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+suppliers
+  .command('get <supplierNumber>')
+  .description('Get a single supplier')
+  .action(async (supplierNumber: string) => {
+    const { getSupplier } = await import('./operations/suppliers.js');
+    const data = await getSupplier(supplierNumber);
+    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+  });
+
+suppliers
+  .command('create')
+  .description('Create a supplier')
+  .requiredOption('--name <name>', 'Supplier name')
+  .option('--input <file>', 'Supplier data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createSupplier } = await import('./operations/suppliers.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params = { ...input, Name: opts.name };
+    if (!(await confirmMutation(`Create supplier "${opts.name}"`, opts, { Supplier: params }))) {
+      return;
+    }
+    const data = await createSupplier(params);
+    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+  });
+
+suppliers
+  .command('update <supplierNumber>')
+  .description('Update a supplier')
+  .requiredOption('--input <file>', 'Supplier data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (supplierNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateSupplier } = await import('./operations/suppliers.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update supplier ${supplierNumber}`, opts, { Supplier: fields }))
+      ) {
+        return;
+      }
+      const data = await updateSupplier(supplierNumber, fields);
+      outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+    },
+  );
+
+// --- supplier-invoices ---
+const supplierInvoices = program
+  .command('supplier-invoices')
+  .alias('si')
+  .description('Supplier invoice operations (leverantörsfakturor)');
+
+supplierInvoices
+  .command('list')
+  .description('List/filter supplier invoices')
+  .option(
+    '--filter <filter>',
+    'Filter: cancelled, fullypaid, unpaid, unpaidoverdue, unbooked, pendingpayment',
+  )
+  .option('--supplier <number>', 'Filter by supplier number')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .action(async (opts) => {
+    const { listSupplierInvoices } = await import('./operations/supplier-invoices.js');
+    const data = await listSupplierInvoices({
+      filter: opts.filter,
+      supplierNumber: opts.supplier,
+      fromDate: opts.from,
+      toDate: opts.to,
+      page: opts.page,
+      limit: opts.limit,
+    });
+    const envelope = data as unknown as {
+      SupplierInvoices: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.SupplierInvoices ?? [],
+      supplierInvoiceListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+supplierInvoices
+  .command('get <givenNumber>')
+  .description('Get a single supplier invoice')
+  .action(async (givenNumber: string) => {
+    const { getSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const data = await getSupplierInvoice(givenNumber);
+    outputDetail(data as Record<string, unknown>, supplierInvoiceDetailColumns, json());
+  });
+
+supplierInvoices
+  .command('create')
+  .description('Create a supplier invoice')
+  .requiredOption('--supplier <number>', 'Supplier number')
+  .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    const params = { SupplierNumber: opts.supplier, ...input };
+    if (
+      !(await confirmMutation(`Create supplier invoice for supplier ${opts.supplier}`, opts, {
+        SupplierInvoice: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createSupplierInvoice(params);
+    outputDetail(data as Record<string, unknown>, supplierInvoiceDetailColumns, json());
+  });
+
+supplierInvoices
+  .command('bookkeep <givenNumber>')
+  .description('Bookkeep a supplier invoice')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (givenNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { bookkeepSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    if (!(await confirmMutation(`Bookkeep supplier invoice ${givenNumber}`, opts))) {
+      return;
+    }
+    const data = await bookkeepSupplierInvoice(givenNumber);
+    outputConfirmation(
+      `Supplier invoice ${givenNumber} bookkeept.`,
+      json(),
+      data,
+      supplierInvoiceConfirmColumns,
+    );
+  });
 
 // --- company ---
 const company = program.command('company').description('Company operations');

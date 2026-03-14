@@ -109,6 +109,65 @@ export const articleDetailColumns: Column[] = [
   { key: 'Active', header: 'Active', width: 5 },
 ];
 
+// --- Supplier views (target ≤80 cols) ---
+
+// 7 + 2 + 25 + 2 + 12 + 2 + 12 + 2 + 14 = 78
+export const supplierListColumns: Column[] = [
+  { key: 'SupplierNumber', header: '#', width: 7, align: 'right' },
+  { key: 'Name', header: 'Name', width: 25 },
+  { key: 'OrganisationNumber', header: 'Org Nr', width: 12 },
+  { key: 'City', header: 'City', width: 12 },
+  { key: 'Email', header: 'Email', width: 14 },
+];
+
+export const supplierDetailColumns: Column[] = [
+  { key: 'SupplierNumber', header: 'Supplier #', width: 20 },
+  { key: 'Name', header: 'Name', width: 40 },
+  { key: 'OrganisationNumber', header: 'Org Nr', width: 20 },
+  { key: 'Email', header: 'Email', width: 40 },
+  { key: 'Phone1', header: 'Phone', width: 20 },
+  { key: 'Address1', header: 'Address', width: 40 },
+  { key: 'ZipCode', header: 'Zip Code', width: 10 },
+  { key: 'City', header: 'City', width: 20 },
+  { key: 'BG', header: 'Bankgiro', width: 15 },
+  { key: 'PG', header: 'Plusgiro', width: 15 },
+  { key: 'BankAccountNumber', header: 'Bank Account', width: 20 },
+];
+
+// --- Supplier invoice views (target ≤80 cols) ---
+
+// 7 + 2 + 20 + 2 + 10 + 2 + 10 + 2 + 10 + 2 + 10 = 77
+export const supplierInvoiceListColumns: Column[] = [
+  { key: 'GivenNumber', header: 'Inv #', width: 7, align: 'right' },
+  { key: 'SupplierName', header: 'Supplier', width: 20 },
+  { key: 'InvoiceDate', header: 'Date', width: 10 },
+  { key: 'DueDate', header: 'Due', width: 10 },
+  { key: 'Total', header: 'Total', width: 10, align: 'right', format: currency },
+  { key: 'Balance', header: 'Balance', width: 10, align: 'right', format: currency },
+];
+
+export const supplierInvoiceDetailColumns: Column[] = [
+  { key: 'GivenNumber', header: 'Given #', width: 20 },
+  { key: 'SupplierNumber', header: 'Supplier #', width: 20 },
+  { key: 'SupplierName', header: 'Supplier', width: 40 },
+  { key: 'InvoiceNumber', header: 'Invoice Nr', width: 20 },
+  { key: 'InvoiceDate', header: 'Invoice Date', width: 10 },
+  { key: 'DueDate', header: 'Due Date', width: 10 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Balance', header: 'Balance', width: 20, format: currency },
+  { key: 'Currency', header: 'Currency', width: 5 },
+  { key: 'Booked', header: 'Booked', width: 5 },
+  { key: 'OCR', header: 'OCR', width: 20 },
+  { key: 'Comments', header: 'Comments', width: 40 },
+];
+
+export const supplierInvoiceConfirmColumns: Column[] = [
+  { key: 'GivenNumber', header: 'Given #', width: 20 },
+  { key: 'SupplierNumber', header: 'Supplier #', width: 20 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Booked', header: 'Booked', width: 5 },
+];
+
 // --- Account views (target ≤80 cols) ---
 
 // 8 + 2 + 50 + 2 + 6 = 68
