@@ -12,7 +12,7 @@ import {
 export function registerArticleTools(server: McpServer): void {
   server.tool(
     'fortnox_list_articles',
-    'Lista/sök artiklar i Fortnox',
+    'Lista/sök artiklar i Fortnox. Returnerar: ArticleNumber, Description, SalesPrice, Unit, Active.',
     {
       search: z.string().optional().describe('Sökterm (beskrivning)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
@@ -34,7 +34,7 @@ export function registerArticleTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_article',
-    'Hämta en enskild artikel från Fortnox',
+    'Hämta en enskild artikel från Fortnox. Returnerar: ArticleNumber, Description, SalesPrice, PurchasePrice, Unit, SalesAccount, VAT, Active.',
     {
       articleNumber: z.string().describe('Artikelnummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),

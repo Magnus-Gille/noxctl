@@ -30,7 +30,7 @@ const VoucherSeriesSchema = z
 export function registerBookkeepingTools(server: McpServer): void {
   server.tool(
     'fortnox_list_vouchers',
-    'Lista verifikationer i Fortnox',
+    'Lista verifikationer i Fortnox. Returnerar: VoucherSeries, VoucherNumber, TransactionDate, Description.',
     {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
       series: z.string().optional().describe('Verifikationsserie (t.ex. "A")'),
@@ -63,7 +63,7 @@ export function registerBookkeepingTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_voucher',
-    'Hämta en enskild verifikation med rader (konto, debet, kredit) från Fortnox',
+    'Hämta en enskild verifikation med rader från Fortnox. Returnerar: VoucherSeries, VoucherNumber, TransactionDate, Description, samt VoucherRows med Account, Debit, Credit.',
     {
       series: z.string().describe('Verifikationsserie (t.ex. "A")'),
       voucherNumber: z.string().describe('Verifikationsnummer'),
@@ -109,7 +109,7 @@ export function registerBookkeepingTools(server: McpServer): void {
 
   server.tool(
     'fortnox_list_accounts',
-    'Visa kontoplan i Fortnox',
+    'Visa kontoplan i Fortnox. Returnerar: Number, Description, SRU.',
     {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
       search: z.string().optional().describe('Sök på kontonamn'),

@@ -17,7 +17,7 @@ import {
 export function registerSupplierTools(server: McpServer): void {
   server.tool(
     'fortnox_list_suppliers',
-    'Lista/sök leverantörer i Fortnox',
+    'Lista/sök leverantörer i Fortnox. Returnerar: SupplierNumber, Name, OrganisationNumber, City, Email.',
     {
       search: z.string().optional().describe('Sökterm (namn)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
@@ -39,7 +39,7 @@ export function registerSupplierTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_supplier',
-    'Hämta en enskild leverantör från Fortnox',
+    'Hämta en enskild leverantör från Fortnox. Returnerar: SupplierNumber, Name, OrganisationNumber, Email, Phone1, Address1, ZipCode, City, BG, PG, BankAccountNumber.',
     {
       supplierNumber: z.string().describe('Leverantörsnummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),

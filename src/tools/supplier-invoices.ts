@@ -28,7 +28,7 @@ const SupplierInvoiceRowSchema = z.object({
 export function registerSupplierInvoiceTools(server: McpServer): void {
   server.tool(
     'fortnox_list_supplier_invoices',
-    'Lista leverantörsfakturor i Fortnox',
+    'Lista leverantörsfakturor i Fortnox. Returnerar: GivenNumber, SupplierName, InvoiceDate, DueDate, Total, Balance.',
     {
       filter: z
         .enum(['fullypaid', 'cancelled', 'unpaid', 'unpaidoverdue', 'unbooked', 'pendingpayment'])
@@ -64,7 +64,7 @@ export function registerSupplierInvoiceTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_supplier_invoice',
-    'Hämta en enskild leverantörsfaktura från Fortnox',
+    'Hämta en enskild leverantörsfaktura från Fortnox. Returnerar: GivenNumber, SupplierNumber, SupplierName, InvoiceNumber, InvoiceDate, DueDate, Total, Balance, Currency, Booked, OCR, Comments.',
     {
       givenNumber: z.string().describe('Leverantörsfakturanummer (GivenNumber)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),

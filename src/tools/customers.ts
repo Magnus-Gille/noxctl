@@ -21,7 +21,7 @@ const CustomerNumberSchema = z
 export function registerCustomerTools(server: McpServer): void {
   server.tool(
     'fortnox_list_customers',
-    'Lista/sök kunder i Fortnox',
+    'Lista/sök kunder i Fortnox. Returnerar: CustomerNumber, Name, OrganisationNumber, City, Email.',
     {
       search: z.string().optional().describe('Sökterm (namn, kundnummer, orgnummer)'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
@@ -43,7 +43,7 @@ export function registerCustomerTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_customer',
-    'Hämta en enskild kund från Fortnox',
+    'Hämta en enskild kund från Fortnox. Returnerar: CustomerNumber, Name, OrganisationNumber, Email, Phone, Address1, ZipCode, City, Country, VATNumber.',
     {
       customerNumber: CustomerNumberSchema.describe('Kundnummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),

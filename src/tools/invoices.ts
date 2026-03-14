@@ -34,7 +34,7 @@ const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be 
 export function registerInvoiceTools(server: McpServer): void {
   server.tool(
     'fortnox_list_invoices',
-    'Lista/filtrera fakturor i Fortnox',
+    'Lista/filtrera fakturor i Fortnox. Returnerar: DocumentNumber, CustomerName, InvoiceDate, DueDate, Total, Balance.',
     {
       filter: z
         .enum(['cancelled', 'fullypaid', 'unpaid', 'unpaidoverdue', 'unbooked'])
@@ -62,7 +62,7 @@ export function registerInvoiceTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_invoice',
-    'Hämta en enskild faktura från Fortnox',
+    'Hämta en enskild faktura från Fortnox. Returnerar: DocumentNumber, CustomerNumber, CustomerName, InvoiceDate, DueDate, Total, Balance, Currency, Booked, Sent, OurReference, InvoiceRows.',
     {
       documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
