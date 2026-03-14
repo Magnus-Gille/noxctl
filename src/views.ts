@@ -79,6 +79,28 @@ export const voucherDetailColumns: Column[] = [
   { key: 'Description', header: 'Description', width: 50 },
 ];
 
+// --- Article views (target ≤80 cols) ---
+
+// 10 + 2 + 30 + 2 + 10 + 2 + 6 + 2 + 10 = 74
+export const articleListColumns: Column[] = [
+  { key: 'ArticleNumber', header: 'Art #', width: 10, align: 'right' },
+  { key: 'Description', header: 'Description', width: 30 },
+  { key: 'SalesPrice', header: 'Price', width: 10, align: 'right', format: currency },
+  { key: 'Unit', header: 'Unit', width: 6 },
+  { key: 'Active', header: 'Active', width: 10 },
+];
+
+export const articleDetailColumns: Column[] = [
+  { key: 'ArticleNumber', header: 'Article #', width: 20 },
+  { key: 'Description', header: 'Description', width: 40 },
+  { key: 'SalesPrice', header: 'Sales Price', width: 20, format: currency },
+  { key: 'PurchasePrice', header: 'Purchase Price', width: 20, format: currency },
+  { key: 'Unit', header: 'Unit', width: 10 },
+  { key: 'SalesAccount', header: 'Sales Account', width: 10 },
+  { key: 'VAT', header: 'VAT %', width: 10 },
+  { key: 'Active', header: 'Active', width: 5 },
+];
+
 // --- Account views (target ≤80 cols) ---
 
 // 8 + 2 + 50 + 2 + 6 = 68

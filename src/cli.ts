@@ -20,6 +20,8 @@ import {
   voucherDetailColumns,
   accountListColumns,
   companyDetailColumns,
+  articleListColumns,
+  articleDetailColumns,
 } from './views.js';
 
 const program = new Command();
@@ -710,6 +712,83 @@ customers
       }
       const data = await updateCustomer(customerNumber, fields);
       outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+    },
+  );
+
+// --- articles ---
+const articles = program.command('articles').description('Article operations');
+
+articles
+  .command('list')
+  .description('List/search articles')
+  .option('--search <term>', 'Search by description')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .action(async (opts) => {
+    const { listArticles } = await import('./operations/articles.js');
+    const data = await listArticles({
+      search: opts.search,
+      page: opts.page,
+      limit: opts.limit,
+    });
+    const envelope = data as unknown as {
+      Articles: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(envelope.Articles ?? [], articleListColumns, json(), data, envelope.MetaInformation);
+  });
+
+articles
+  .command('get <articleNumber>')
+  .description('Get a single article')
+  .action(async (articleNumber: string) => {
+    const { getArticle } = await import('./operations/articles.js');
+    const data = await getArticle(articleNumber);
+    outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+  });
+
+articles
+  .command('create')
+  .description('Create an article')
+  .requiredOption('--description <text>', 'Article description')
+  .option('--article-number <number>', 'Article number (auto-generated if omitted)')
+  .option('--input <file>', 'Article data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createArticle } = await import('./operations/articles.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = { ...input, Description: opts.description };
+    if (opts.articleNumber) params.ArticleNumber = opts.articleNumber;
+    if (
+      !(await confirmMutation(`Create article "${opts.description}"`, opts, { Article: params }))
+    ) {
+      return;
+    }
+    const data = await createArticle(params);
+    outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+  });
+
+articles
+  .command('update <articleNumber>')
+  .description('Update an article')
+  .requiredOption('--input <file>', 'Article data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (articleNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateArticle } = await import('./operations/articles.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (!(await confirmMutation(`Update article ${articleNumber}`, opts, { Article: fields }))) {
+        return;
+      }
+      const data = await updateArticle(articleNumber, fields);
+      outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
     },
   );
 
