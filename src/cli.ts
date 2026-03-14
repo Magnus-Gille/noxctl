@@ -492,6 +492,15 @@ invoices
   .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"InvoiceRows":[{"ArticleNumber":"1","DeliveredQuantity":10,"Price":1500}]}' | noxctl invoices create --customer 25 --input - --dry-run
+
+  # Minimal JSON (Description instead of ArticleNumber):
+  echo '{"InvoiceRows":[{"Description":"Consulting","DeliveredQuantity":8,"Price":1200,"AccountNumber":3001,"VAT":25}]}' | noxctl invoices create --customer 25 --input - --yes`,
+  )
   .action(async (opts) => {
     const { createInvoice } = await import('./operations/invoices.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -514,6 +523,13 @@ invoices
   .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"DueDate":"2026-04-30","OurReference":"Casey Example"}' | noxctl invoices update 28 --input - --dry-run
+  echo '{"InvoiceRows":[{"ArticleNumber":"1","DeliveredQuantity":5,"Price":2000}]}' | noxctl invoices update 28 --input - --yes`,
+  )
   .action(
     async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
       const { updateInvoice } = await import('./operations/invoices.js');
@@ -730,6 +746,13 @@ customers
   .option('--input <file>', 'Customer data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl customers create --name "Acme AB" --yes
+  echo '{"OrganisationNumber":"556677-8899","Email":"info@acme.se","City":"Stockholm"}' | noxctl customers create --name "Acme AB" --input - --yes`,
+  )
   .action(async (opts) => {
     const { createCustomer } = await import('./operations/customers.js');
     let input: Record<string, unknown> = {};
@@ -751,6 +774,12 @@ customers
   .requiredOption('--input <file>', 'Customer data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"Email":"new@acme.se","Phone":"08-123456"}' | noxctl customers update 25 --input - --yes`,
+  )
   .action(
     async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
       const { updateCustomer } = await import('./operations/customers.js');
@@ -808,6 +837,13 @@ articles
   .option('--input <file>', 'Article data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl articles create --description "Konsulttimme" --yes
+  echo '{"SalesPrice":1500,"Unit":"tim","SalesAccount":3001,"VAT":25}' | noxctl articles create --description "Konsulttimme" --input - --yes`,
+  )
   .action(async (opts) => {
     const { createArticle } = await import('./operations/articles.js');
     let input: Record<string, unknown> = {};
@@ -832,6 +868,12 @@ articles
   .requiredOption('--input <file>', 'Article data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"SalesPrice":1800}' | noxctl articles update 1 --input - --yes`,
+  )
   .action(
     async (articleNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
       const { updateArticle } = await import('./operations/articles.js');
@@ -892,6 +934,13 @@ suppliers
   .option('--input <file>', 'Supplier data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl suppliers create --name "Dustin AB" --yes
+  echo '{"OrganisationNumber":"556123-4567","BG":"123-4567","Email":"faktura@dustin.se"}' | noxctl suppliers create --name "Dustin AB" --input - --yes`,
+  )
   .action(async (opts) => {
     const { createSupplier } = await import('./operations/suppliers.js');
     let input: Record<string, unknown> = {};
@@ -913,6 +962,12 @@ suppliers
   .requiredOption('--input <file>', 'Supplier data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"Email":"new@dustin.se","BG":"765-4321"}' | noxctl suppliers update 1 --input - --yes`,
+  )
   .action(
     async (supplierNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
       const { updateSupplier } = await import('./operations/suppliers.js');
@@ -987,6 +1042,12 @@ supplierInvoices
   .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"InvoiceDate":"2026-03-01","DueDate":"2026-03-30","Total":1250,"OCR":"12345","SupplierInvoiceRows":[{"Account":6570,"Debit":1000,"Credit":0},{"Account":2641,"Debit":250,"Credit":0},{"Account":2440,"Debit":0,"Credit":1250}]}' | noxctl supplier-invoices create --supplier 1 --input - --dry-run`,
+  )
   .action(async (opts) => {
     const { createSupplierInvoice } = await import('./operations/supplier-invoices.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -1090,6 +1151,12 @@ vouchers
   .requiredOption('--input <file>', 'Voucher data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"Description":"Bankkostnad","TransactionDate":"2026-03-01","VoucherRows":[{"Account":6570,"Debit":500},{"Account":1930,"Credit":500}]}' | noxctl vouchers create --input - --dry-run`,
+  )
   .action(async (opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
     const { createVoucher } = await import('./operations/vouchers.js');
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
