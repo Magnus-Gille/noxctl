@@ -24,7 +24,7 @@ The server runs locally via stdio — no HTTP server to host or manage. Claude C
 
 ### OAuth2 setup flow
 
-`noxctl setup` starts a temporary local HTTP server on port 9876, binds it to `127.0.0.1`, opens the browser for Fortnox login, validates a per-run OAuth `state`, receives the callback, exchanges the code for tokens, saves them, and exits. After this one-time setup, no environment variables are needed.
+`noxctl init` starts a temporary local HTTP server on port 9876, binds it to `127.0.0.1`, opens the browser for Fortnox login, validates a per-run OAuth `state`, receives the callback, exchanges the code for tokens, saves them, and exits. After this one-time setup, no environment variables are needed.
 
 ### Token management
 

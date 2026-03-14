@@ -155,7 +155,7 @@ export async function refreshAccessToken(creds: FortnoxCredentials): Promise<For
 export async function getValidToken(): Promise<string> {
   const creds = await loadCredentials();
   if (!creds) {
-    throw new Error('Not authenticated. Run `noxctl setup` to connect your Fortnox account.');
+    throw new Error('Not authenticated. Run `noxctl init` to connect your Fortnox account.');
   }
 
   // Token still valid — use it
@@ -275,7 +275,7 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
 
         if (state !== oauthState) {
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end('<h1>Ogiltig OAuth-state</h1><p>Försök igen från noxctl setup.</p>');
+          res.end('<h1>Ogiltig OAuth-state</h1><p>Försök igen från noxctl init.</p>');
           server.close();
           finish(new Error('OAuth state mismatch'));
           return;

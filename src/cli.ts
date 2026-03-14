@@ -110,7 +110,7 @@ program
     }
 
     // Step 2: Welcome message
-    console.log('Welcome to noxctl setup!');
+    console.log('Welcome to noxctl init!');
     console.log('');
     console.log("You'll need a Fortnox app from developer.fortnox.se with:");
     console.log('  - Redirect URI: http://localhost:9876/callback');
@@ -360,7 +360,7 @@ program
       console.log(`  ✗ ${label}${detail ? ` — ${detail}` : ''}`);
     }
 
-    console.log('Checking noxctl setup...\n');
+    console.log('Checking noxctl configuration...\n');
 
     // 1. Node version
     const nodeVersion = process.versions.node;

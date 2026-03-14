@@ -206,7 +206,7 @@ export FORTNOX_CLIENT_SECRET=<your-secret>
 
 Then run setup again. This avoids issues with long commands wrapping across lines.
 
-**"Not authenticated. Run `noxctl setup`"**
+**"Not authenticated. Run `noxctl init`"**
 
 Credentials are missing or were not saved. Re-run the setup step. On macOS, check that Keychain Access is not blocking the `security` command. On Linux, ensure `secret-tool` is installed (`sudo apt install libsecret-tools`).
 
