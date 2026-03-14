@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -44,8 +46,6 @@ function saveMacSecret(secret: string): void {
   // argument, which is briefly visible via `ps`. Instead, use an inline Swift
   // script that reads the secret from stdin and writes to the Keychain via
   // the Security framework — the secret never appears in process arguments.
-  const fsSync = require('node:fs') as typeof import('node:fs');
-  const os = require('node:os') as typeof import('node:os');
   const scriptPath = path.join(os.tmpdir(), `noxctl-keychain-${process.pid}.swift`);
 
   const swiftScript = `
