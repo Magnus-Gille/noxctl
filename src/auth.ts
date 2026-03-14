@@ -267,10 +267,13 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
         const state = url.searchParams.get('state');
 
         if (error) {
+          const errorDesc = url.searchParams.get('error_description') || '';
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
-          res.end(`<h1>Autentisering misslyckades</h1><p>${escapeHtml(error)}</p>`);
+          res.end(
+            `<h1>Autentisering misslyckades</h1><p>${escapeHtml(error)}</p><p>${escapeHtml(errorDesc)}</p>`,
+          );
           server.close();
-          finish(new Error(`OAuth error: ${error}`));
+          finish(new Error(`OAuth error: ${error}${errorDesc ? ` — ${errorDesc}` : ''}`));
           return;
         }
 

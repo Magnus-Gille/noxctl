@@ -9,6 +9,7 @@ import {
   outputDetail,
   outputConfirmation,
   formatTaxReport,
+  formatFinancialReport,
 } from './formatter.js';
 import {
   invoiceListColumns,
@@ -123,7 +124,7 @@ program
     console.log("You'll need a Fortnox app from developer.fortnox.se with:");
     console.log('  - Redirect URI: http://localhost:9876/callback');
     console.log(
-      '  - Scopes (Behörigheter): Artikel, Bokföring, Faktura, Företagsinformation, Inställningar, Kund',
+      '  - Scopes (Behörigheter): Artikel, Bokföring, Faktura, Företagsinformation, Inställningar, Kund, Leverantör, Leverantörsfaktura',
     );
     console.log('  - Service account enabled (recommended)');
     console.log('');
@@ -619,6 +620,41 @@ tax
       console.log(JSON.stringify(data, null, 2));
     } else {
       console.log(formatTaxReport(data as unknown as Record<string, unknown>));
+    }
+  });
+
+// --- reports ---
+const reports = program
+  .command('reports')
+  .description('Financial reports (resultat/balansräkning)');
+
+reports
+  .command('income')
+  .alias('resultat')
+  .description('Income statement (resultaträkning)')
+  .option('--year <number>', 'Financial year', parseInt)
+  .action(async (opts) => {
+    const { getIncomeStatement } = await import('./operations/financial-reports.js');
+    const data = await getIncomeStatement({ financialYear: opts.year });
+    if (json()) {
+      console.log(JSON.stringify(data, null, 2));
+    } else {
+      console.log(formatFinancialReport(data));
+    }
+  });
+
+reports
+  .command('balance')
+  .alias('balans')
+  .description('Balance sheet (balansräkning)')
+  .option('--year <number>', 'Financial year', parseInt)
+  .action(async (opts) => {
+    const { getBalanceSheet } = await import('./operations/financial-reports.js');
+    const data = await getBalanceSheet({ financialYear: opts.year });
+    if (json()) {
+      console.log(JSON.stringify(data, null, 2));
+    } else {
+      console.log(formatFinancialReport(data));
     }
   });
 
