@@ -30,14 +30,64 @@ export interface FortnoxError {
 }
 
 export class FortnoxApiError extends Error {
+  public readonly hint?: string;
+
   constructor(
     public readonly statusCode: number,
     public readonly fortnoxMessage: string,
     public readonly details?: string,
+    endpoint?: string,
   ) {
-    super(`Fortnox API error (${statusCode}): ${fortnoxMessage}`);
+    const hint = getErrorHint(statusCode, fortnoxMessage, endpoint);
+    const parts = [`Fortnox API error (${statusCode}): ${fortnoxMessage}`];
+    if (hint) parts.push(`Hint: ${hint}`);
+    super(parts.join('\n'));
     this.name = 'FortnoxApiError';
+    this.hint = hint;
   }
+}
+
+function getErrorHint(statusCode: number, message: string, endpoint?: string): string | undefined {
+  switch (statusCode) {
+    case 401:
+      return 'Authentication failed. Try `noxctl init` to re-authenticate.';
+    case 403:
+      if (endpoint) {
+        const scope = endpointToScope(endpoint);
+        if (scope) {
+          return `Missing "${scope}" scope. Enable it in your Fortnox app at developer.fortnox.se, then re-run \`noxctl init\`.`;
+        }
+      }
+      return 'Forbidden. Check that your Fortnox app has the required scopes enabled at developer.fortnox.se.';
+    case 404:
+      return 'Resource not found. Verify the ID/number exists in Fortnox.';
+    case 429:
+      return 'Rate limited by Fortnox. The request will be retried automatically.';
+    default:
+      if (statusCode >= 500) {
+        return 'Fortnox server error. Try again in a moment.';
+      }
+      return undefined;
+  }
+}
+
+function endpointToScope(endpoint: string): string | undefined {
+  const path = endpoint.split('?')[0]!.toLowerCase();
+  const mapping: Record<string, string> = {
+    articles: 'article',
+    customers: 'customer',
+    invoices: 'invoice',
+    suppliers: 'supplier',
+    supplierinvoices: 'supplierinvoice',
+    vouchers: 'bookkeeping',
+    accounts: 'bookkeeping',
+    companyinformation: 'companyinformation',
+    settings: 'settings',
+  };
+  for (const [prefix, scope] of Object.entries(mapping)) {
+    if (path.startsWith(prefix)) return scope;
+  }
+  return undefined;
 }
 
 async function retryWithBackoff<T>(
@@ -129,7 +179,7 @@ export async function fortnoxRequest<T>(
       } catch {
         // ignore parse errors
       }
-      throw new FortnoxApiError(response.status, errorMessage, details);
+      throw new FortnoxApiError(response.status, errorMessage, details, endpoint);
     }
 
     // Some endpoints return empty responses (e.g., DELETE)

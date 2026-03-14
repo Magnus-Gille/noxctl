@@ -135,4 +135,72 @@ describe('fortnox-client', () => {
     ).rejects.toThrow(FortnoxApiError);
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
+
+  describe('error hints', () => {
+    it('includes scope hint for 403 on a known endpoint', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Forbidden', code: 0 } }),
+      });
+
+      try {
+        await fortnoxRequest('invoices?limit=1');
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(FortnoxApiError);
+        const e = err as FortnoxApiError;
+        expect(e.hint).toContain('invoice');
+        expect(e.message).toContain('Hint:');
+      }
+    });
+
+    it('includes auth hint for 401', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Unauthorized', code: 0 } }),
+      });
+
+      try {
+        await fortnoxRequest('customers');
+        expect.unreachable();
+      } catch (err) {
+        const e = err as FortnoxApiError;
+        expect(e.hint).toContain('noxctl init');
+      }
+    });
+
+    it('includes not-found hint for 404', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Not found', code: 2000428 } }),
+      });
+
+      try {
+        await fortnoxRequest('customers/999');
+        expect.unreachable();
+      } catch (err) {
+        const e = err as FortnoxApiError;
+        expect(e.hint).toContain('not found');
+      }
+    });
+
+    it('includes server error hint for 500', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Internal error', code: 0 } }),
+      });
+
+      try {
+        await fortnoxRequest('customers');
+        expect.unreachable();
+      } catch (err) {
+        const e = err as FortnoxApiError;
+        expect(e.hint).toContain('server error');
+      }
+    });
+  });
 });
