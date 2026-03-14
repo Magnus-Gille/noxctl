@@ -155,11 +155,11 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Utility
 
-| CLI | Description |
-|-----|-------------|
-| `noxctl init` | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
-| `noxctl doctor` | Validate setup: Node version, credentials, token status, API connectivity |
-| `noxctl logout` | Remove stored credentials from the OS keychain |
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl init` | — | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
+| `noxctl doctor` | `fortnox_status` | Validate setup: Node version, credentials, token status, API connectivity, and scopes |
+| `noxctl logout` | — | Remove stored credentials from the OS keychain |
 
 ## CLI output
 
