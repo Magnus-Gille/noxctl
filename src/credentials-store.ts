@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 
 const CREDENTIALS_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || '~',
@@ -40,16 +40,72 @@ function loadMacSecret(): string | null {
 }
 
 function saveMacSecret(secret: string): void {
-  execFileSync('security', [
-    'add-generic-password',
-    '-a',
-    ACCOUNT_NAME,
-    '-s',
-    SERVICE_NAME,
-    '-w',
-    secret,
-    '-U',
-  ]);
+  // macOS `security add-generic-password -w` requires the password as a CLI
+  // argument, which is briefly visible via `ps`. Instead, use an inline Swift
+  // script that reads the secret from stdin and writes to the Keychain via
+  // the Security framework — the secret never appears in process arguments.
+  const fsSync = require('node:fs') as typeof import('node:fs');
+  const os = require('node:os') as typeof import('node:os');
+  const scriptPath = path.join(os.tmpdir(), `noxctl-keychain-${process.pid}.swift`);
+
+  const swiftScript = `
+import Foundation
+import Security
+
+let data = FileHandle.standardInput.readDataToEndOfFile()
+guard let password = String(data: data, encoding: .utf8) else { exit(1) }
+
+let service = "${SERVICE_NAME}"
+let account = "${ACCOUNT_NAME}"
+
+let deleteQuery: [String: Any] = [
+  kSecClass as String: kSecClassGenericPassword,
+  kSecAttrService as String: service,
+  kSecAttrAccount as String: account
+]
+SecItemDelete(deleteQuery as CFDictionary)
+
+let pwData = password.data(using: String.Encoding.utf8)!
+let addQuery: [String: Any] = [
+  kSecClass as String: kSecClassGenericPassword,
+  kSecAttrService as String: service,
+  kSecAttrAccount as String: account,
+  kSecValueData as String: pwData
+]
+let status = SecItemAdd(addQuery as CFDictionary, nil)
+if status != errSecSuccess { exit(1) }
+`;
+
+  try {
+    fsSync.writeFileSync(scriptPath, swiftScript, { mode: 0o600 });
+
+    const result = spawnSync('swift', [scriptPath], {
+      input: secret,
+      encoding: 'utf-8',
+    });
+
+    if (result.status !== 0) {
+      throw new Error(result.stderr || 'Swift keychain helper failed');
+    }
+  } catch {
+    // Fallback to security CLI if Swift is unavailable or fails
+    execFileSync('security', [
+      'add-generic-password',
+      '-a',
+      ACCOUNT_NAME,
+      '-s',
+      SERVICE_NAME,
+      '-w',
+      secret,
+      '-U',
+    ]);
+  } finally {
+    try {
+      fsSync.unlinkSync(scriptPath);
+    } catch {
+      // ignore cleanup failure
+    }
+  }
 }
 
 function loadLinuxSecret(): string | null {
@@ -95,19 +151,28 @@ function loadWindowsSecret(): string | null {
 }
 
 function saveWindowsSecret(secret: string): void {
-  const encoded = Buffer.from(secret, 'utf-8').toString('base64');
-  execFileSync('powershell', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
+  // Read the secret from stdin instead of embedding it in the PowerShell
+  // command string, which would be visible via `ps` / Task Manager.
+  const result = spawnSync(
+    'powershell',
     [
-      `[IO.Directory]::CreateDirectory('${CREDENTIALS_DIR}') | Out-Null`,
-      `$plain = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encoded}'))`,
-      '$bytes = [Text.Encoding]::UTF8.GetBytes($plain)',
-      '$protected = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
-      `[IO.File]::WriteAllText('${WINDOWS_CREDENTIALS_FILE}', [Convert]::ToBase64String($protected), [Text.Encoding]::UTF8)`,
-    ].join('; '),
-  ]);
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      [
+        `[IO.Directory]::CreateDirectory('${CREDENTIALS_DIR}') | Out-Null`,
+        '$plain = [Console]::In.ReadToEnd()',
+        '$bytes = [Text.Encoding]::UTF8.GetBytes($plain)',
+        '$protected = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
+        `[IO.File]::WriteAllText('${WINDOWS_CREDENTIALS_FILE}', [Convert]::ToBase64String($protected), [Text.Encoding]::UTF8)`,
+      ].join('; '),
+    ],
+    { input: secret, encoding: 'utf-8' },
+  );
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to save credentials: ${result.stderr || 'unknown error'}`);
+  }
 }
 
 async function loadLegacySecret(): Promise<string | null> {
