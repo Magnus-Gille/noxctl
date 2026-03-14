@@ -4,6 +4,7 @@ import {
   formatDetail,
   formatMeta,
   formatTaxReport,
+  formatFinancialReport,
   isJsonMode,
   type Column,
 } from '../src/formatter.js';
@@ -192,6 +193,100 @@ describe('formatTaxReport', () => {
   it('handles empty report gracefully', () => {
     const output = formatTaxReport({});
     expect(output).toBe('');
+  });
+});
+
+describe('formatFinancialReport', () => {
+  it('renders income statement with negated signs', () => {
+    const report = {
+      type: 'income-statement',
+      sections: [
+        {
+          label: 'Nettoomsättning (Revenue)',
+          lines: [{ account: 3001, description: 'Försäljning', balance: -30000 }],
+          total: -30000,
+        },
+        {
+          label: 'Övriga externa kostnader',
+          lines: [{ account: 6570, description: 'Bankkostnader', balance: 2000 }],
+          total: 2000,
+        },
+      ],
+      netResult: -28000,
+    };
+    const output = formatFinancialReport(report);
+    expect(output).toContain('RESULTATRÄKNING');
+    // Revenue should be positive (negated from -30000)
+    expect(output).toContain('30000.00');
+    // Costs should be negative (negated from 2000)
+    expect(output).toContain('-2000.00');
+    // Net result should be positive (negated from -28000 = profit)
+    expect(output).toContain('28000.00');
+  });
+
+  it('renders balance sheet with correct sign convention', () => {
+    const report = {
+      type: 'balance-sheet',
+      assets: [
+        {
+          label: 'Kassa och bank',
+          lines: [{ account: 1930, description: 'Bank', balance: 100000 }],
+          total: 100000,
+        },
+      ],
+      totalAssets: 100000,
+      liabilitiesAndEquity: [
+        {
+          label: 'Eget kapital',
+          lines: [{ account: 2081, description: 'Aktiekapital', balance: -25000 }],
+          total: -25000,
+        },
+      ],
+      totalLiabilitiesAndEquity: -25000,
+    };
+    const output = formatFinancialReport(report);
+    expect(output).toContain('BALANSRÄKNING');
+    expect(output).toContain('TILLGÅNGAR');
+    // Assets stay positive
+    expect(output).toContain('100000.00');
+    // Equity negated to positive
+    expect(output).toContain('25000.00');
+    expect(output).toContain('SKULDER OCH EGET KAPITAL');
+  });
+
+  it('shows period in header for income statement', () => {
+    const report = {
+      type: 'income-statement',
+      period: { from: '2026-01-01', to: '2026-03-31' },
+      sections: [],
+      netResult: 0,
+    };
+    const output = formatFinancialReport(report);
+    expect(output).toContain('2026-01-01 — 2026-03-31');
+  });
+
+  it('shows as-of date in header for balance sheet', () => {
+    const report = {
+      type: 'balance-sheet',
+      asOfDate: '2026-01-31',
+      assets: [],
+      totalAssets: 0,
+      liabilitiesAndEquity: [],
+      totalLiabilitiesAndEquity: 0,
+    };
+    const output = formatFinancialReport(report);
+    expect(output).toContain('per 2026-01-31');
+  });
+
+  it('shows financial year when no period specified', () => {
+    const report = {
+      type: 'income-statement',
+      financialYear: 2,
+      sections: [],
+      netResult: 0,
+    };
+    const output = formatFinancialReport(report);
+    expect(output).toContain('(år 2)');
   });
 });
 
