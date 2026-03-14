@@ -83,7 +83,8 @@ export async function generateTaxReport(params: GenerateTaxReportParams): Promis
       balance: a.BalanceCarriedForward,
     })),
     summary: {
-      note: 'Kontrollera beloppen mot Fortnox momsrapport innan deklaration.',
+      note:
+        'Informativ sammanstallning. Kontrollera beloppen mot Fortnox momsrapport och bokforingen innan deklaration.',
     },
   };
 }

@@ -20,8 +20,10 @@ function appendRawJson(text: string, raw: unknown, includeRaw?: boolean): string
   if (!includeRaw) return text;
 
   const rawJson = JSON.stringify(raw, null, 2);
-  if (!text) return rawJson;
-  return `${text}\n\nRaw JSON:\n${rawJson}`;
+  const warning =
+    'Warning: includeRaw may expose additional accounting and personal data in logs, terminals, and AI transcripts.';
+  if (!text) return `${warning}\n\nRaw JSON:\n${rawJson}`;
+  return `${text}\n\n${warning}\n\nRaw JSON:\n${rawJson}`;
 }
 
 export function listResponse(

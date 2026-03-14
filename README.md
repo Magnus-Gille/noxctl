@@ -10,11 +10,20 @@ noxctl invoices list --filter unpaid # unpaid invoices
 noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 ```
 
+## Status
+
+noxctl is an independent open-source project. It is not affiliated with, endorsed by, or certified by Fortnox AB.
+
+Use it with your own Fortnox account and developer credentials. You are responsible for complying with Fortnox terms, Swedish bookkeeping/tax rules, and your own privacy obligations.
+
 ## Prerequisites
 
 - **Node.js** 20+
-- **Fortnox account** with API (Application Programming Interface) access (Mellan plan or higher)
+- **Fortnox account** with API (Application Programming Interface) access
+- **Your own Fortnox developer app** with the required scopes enabled
 - **Linux only:** `secret-tool` available for secure credential storage
+
+Fortnox product plans, API activation requirements, and integration licensing can change. Verify the current Fortnox requirements before publishing or relying on this setup for business-critical work.
 
 ## Setup
 
@@ -40,6 +49,8 @@ noxctl -o json invoices list | jq .  # JSON output for scripting/AI
    | Kund                 | Customer            |
 
 5. Save the integration
+
+You are creating and authorizing your own Fortnox app here. noxctl does not ship shared Fortnox credentials and does not bypass Fortnox's authorization model.
 
 ### 2. Authenticate
 
@@ -134,7 +145,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 | CLI | MCP tool | Description |
 |-----|----------|-------------|
-| `noxctl tax report --from <date> --to <date>` | `fortnox_tax_report` | VAT summary for a period (tax declaration support). Dates in `YYYY-MM-DD` format |
+| `noxctl tax report --from <date> --to <date>` | `fortnox_tax_report` | Informational VAT summary for a period. Reconcile against Fortnox before filing. Dates in `YYYY-MM-DD` format |
 
 ### Company
 
@@ -181,6 +192,27 @@ MCP tools:
 - Mutating tools require `confirm: true`
 - Use `dryRun: true` to preview a request without sending it
 - Raw Fortnox JSON is opt-in via `includeRaw: true`
+- `includeRaw: true` can expose more accounting and personal data to AI transcripts, logs, and terminals than the summarized default output
+
+## Privacy and AI Use
+
+If you use noxctl through Claude, MCP clients, or other AI tooling, customer, supplier, invoice, and bookkeeping data may leave the local Fortnox UI context and enter third-party systems.
+
+- Keep `includeRaw` off unless you truly need the full payload
+- Review your AI provider's retention, logging, and processor terms
+- Make sure your GDPR setup covers this use, including processor agreements and any required third-country transfer assessment
+- Prefer synthetic data when testing prompts, demos, and examples
+
+See [PRIVACY.md](PRIVACY.md) for the project-specific privacy notes.
+
+## Tax and Accounting Limits
+
+noxctl can help you inspect Fortnox data and submit operations you choose to confirm. It does not make legal judgments for you.
+
+- The VAT report is an informational summary, not a filed declaration
+- Swedish bookkeeping responsibility remains with the company owner or board
+- Review invoices, vouchers, and VAT totals before confirming or filing anything
+- Reconcile VAT figures against Fortnox's own momsrapport and your accounting records before submitting to Skatteverket
 
 ## Examples
 
@@ -282,9 +314,11 @@ noxctl is an independent open-source project — not affiliated with, endorsed b
 
 **You are responsible for your own bookkeeping.** Under Swedish law (Bokföringslagen), the company owner or board bears full responsibility for the correctness of all accounting records, regardless of what tools are used. noxctl is an instrument that executes your instructions — review entries before confirming, especially when using `--yes` or `confirm: true`.
 
-**Privacy note:** When using noxctl with AI assistants, be aware that customer and supplier data (names, addresses, organisation numbers) may be included in AI model context. Use `includeRaw: false` (the default) to minimize data exposure, and ensure your use complies with GDPR and any data processing agreements you have in place.
+**Privacy note:** When using noxctl with AI assistants, customer and supplier data may enter third-party AI systems. Use `includeRaw: false` unless full payloads are necessary, and make sure your use complies with GDPR, processor agreements, and any required transfer assessments.
 
-**Fortnox API access** requires your own developer credentials and a Fortnox subscription. You must comply with the [Fortnox Developer Agreement](https://developer.fortnox.se/). noxctl does not redistribute any Fortnox-owned code or data.
+**Tax note:** The VAT report is an informational summary only. Reconcile it against Fortnox and your accounting records before submitting anything to Skatteverket.
+
+**Fortnox API access** requires your own developer credentials and Fortnox setup. You must comply with the applicable Fortnox terms. noxctl does not redistribute any Fortnox-owned code or data.
 
 ## License
 

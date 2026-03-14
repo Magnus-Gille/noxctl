@@ -50,7 +50,7 @@ Mutating CLI commands require `--yes` or an interactive TTY confirmation and sup
 
 ### Privacy minimization
 
-MCP tools return summarized views by default (tables/details over selected fields). Raw Fortnox JSON is opt-in via `includeRaw: true`.
+MCP tools return summarized views by default (tables/details over selected fields). Raw Fortnox JSON is opt-in via `includeRaw: true`, and the raw path should be treated as higher-risk because it can expose more accounting and personal data to AI transcripts, logs, and terminals.
 
 ### Error handling
 
