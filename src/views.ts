@@ -168,6 +168,115 @@ export const supplierInvoiceConfirmColumns: Column[] = [
   { key: 'Booked', header: 'Booked', width: 5 },
 ];
 
+// --- Invoice payment views (target ≤80 cols) ---
+
+// 8 + 2 + 10 + 2 + 10 + 2 + 12 + 2 + 10 + 2 + 10 = 70
+export const invoicePaymentListColumns: Column[] = [
+  { key: 'Number', header: '#', width: 8, align: 'right' },
+  { key: 'InvoiceNumber', header: 'Invoice #', width: 10, align: 'right' },
+  { key: 'PaymentDate', header: 'Date', width: 10 },
+  { key: 'Amount', header: 'Amount', width: 12, align: 'right', format: currency },
+  { key: 'Currency', header: 'Currency', width: 10 },
+  { key: 'Source', header: 'Source', width: 10 },
+];
+
+export const invoicePaymentDetailColumns: Column[] = [
+  { key: 'Number', header: 'Payment #', width: 20 },
+  { key: 'InvoiceNumber', header: 'Invoice #', width: 20 },
+  { key: 'PaymentDate', header: 'Payment Date', width: 10 },
+  { key: 'Amount', header: 'Amount', width: 20, format: currency },
+  { key: 'AmountCurrency', header: 'Amount (Currency)', width: 20, format: currency },
+  { key: 'Currency', header: 'Currency', width: 5 },
+  { key: 'Source', header: 'Source', width: 20 },
+];
+
+// --- Supplier invoice payment views (target ≤80 cols) ---
+
+export const supplierInvoicePaymentListColumns: Column[] = [
+  { key: 'Number', header: '#', width: 8, align: 'right' },
+  { key: 'InvoiceNumber', header: 'Invoice #', width: 10, align: 'right' },
+  { key: 'PaymentDate', header: 'Date', width: 10 },
+  { key: 'Amount', header: 'Amount', width: 12, align: 'right', format: currency },
+  { key: 'Currency', header: 'Currency', width: 10 },
+  { key: 'Source', header: 'Source', width: 10 },
+];
+
+export const supplierInvoicePaymentDetailColumns: Column[] = [
+  { key: 'Number', header: 'Payment #', width: 20 },
+  { key: 'InvoiceNumber', header: 'Invoice #', width: 20 },
+  { key: 'PaymentDate', header: 'Payment Date', width: 10 },
+  { key: 'Amount', header: 'Amount', width: 20, format: currency },
+  { key: 'AmountCurrency', header: 'Amount (Currency)', width: 20, format: currency },
+  { key: 'Currency', header: 'Currency', width: 5 },
+  { key: 'Source', header: 'Source', width: 20 },
+];
+
+// --- Offer views (target ≤80 cols) ---
+
+// 7 + 2 + 20 + 2 + 10 + 2 + 10 + 2 + 10 + 2 + 10 = 77
+export const offerListColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Doc #', width: 7, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 20 },
+  { key: 'OfferDate', header: 'Date', width: 10 },
+  { key: 'ExpireDate', header: 'Expires', width: 10 },
+  { key: 'Total', header: 'Total', width: 10, align: 'right', format: currency },
+  { key: 'Sent', header: 'Sent', width: 10 },
+];
+
+export const offerDetailColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 20 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 20 },
+  { key: 'CustomerName', header: 'Customer', width: 40 },
+  { key: 'OfferDate', header: 'Offer Date', width: 10 },
+  { key: 'ExpireDate', header: 'Expire Date', width: 10 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Currency', header: 'Currency', width: 5 },
+  { key: 'Sent', header: 'Sent', width: 5 },
+  { key: 'Cancelled', header: 'Cancelled', width: 5 },
+  { key: 'OurReference', header: 'Our Reference', width: 30 },
+  { key: 'YourReference', header: 'Your Reference', width: 30 },
+];
+
+export const offerConfirmColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 20 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 20 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Sent', header: 'Sent', width: 5 },
+];
+
+// --- Order views (target ≤80 cols) ---
+
+// 7 + 2 + 20 + 2 + 10 + 2 + 10 + 2 + 10 + 2 + 10 = 77
+export const orderListColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Doc #', width: 7, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 20 },
+  { key: 'OrderDate', header: 'Date', width: 10 },
+  { key: 'DeliveryDate', header: 'Delivery', width: 10 },
+  { key: 'Total', header: 'Total', width: 10, align: 'right', format: currency },
+  { key: 'Sent', header: 'Sent', width: 10 },
+];
+
+export const orderDetailColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 20 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 20 },
+  { key: 'CustomerName', header: 'Customer', width: 40 },
+  { key: 'OrderDate', header: 'Order Date', width: 10 },
+  { key: 'DeliveryDate', header: 'Delivery Date', width: 10 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Currency', header: 'Currency', width: 5 },
+  { key: 'Sent', header: 'Sent', width: 5 },
+  { key: 'Cancelled', header: 'Cancelled', width: 5 },
+  { key: 'OurReference', header: 'Our Reference', width: 30 },
+  { key: 'YourReference', header: 'Your Reference', width: 30 },
+];
+
+export const orderConfirmColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 20 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 20 },
+  { key: 'Total', header: 'Total', width: 20, format: currency },
+  { key: 'Sent', header: 'Sent', width: 5 },
+];
+
 // --- Account views (target ≤80 cols) ---
 
 // 8 + 2 + 50 + 2 + 6 = 68

@@ -4,7 +4,7 @@
   "description": "CLI and MCP server for Fortnox accounting — invoices, customers, bookkeeping, and VAT",
   "type": "module",
   "bin": {
-    "noxctl": "./dist/cli.js"
+    "noxctl": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "scripts": {

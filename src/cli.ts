@@ -29,6 +29,14 @@ import {
   supplierInvoiceListColumns,
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
+  invoicePaymentListColumns,
+  invoicePaymentDetailColumns,
+  supplierInvoicePaymentListColumns,
+  supplierInvoicePaymentDetailColumns,
+  offerListColumns,
+  offerDetailColumns,
+  orderListColumns,
+  orderDetailColumns,
 } from './views.js';
 
 const program = new Command();
@@ -1219,6 +1227,423 @@ Examples:
     }
     const data = await createVoucher(params);
     outputDetail(data as Record<string, unknown>, voucherDetailColumns, json());
+  });
+
+// --- invoice-payments ---
+const invoicePayments = program
+  .command('invoice-payments')
+  .alias('ip')
+  .description('Invoice payment operations (inbetalningar)');
+
+invoicePayments
+  .command('list')
+  .description('List invoice payments')
+  .option('--invoice <number>', 'Filter by invoice number')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listInvoicePayments } = await import('./operations/invoice-payments.js');
+    const data = await listInvoicePayments({
+      invoiceNumber: opts.invoice,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      InvoicePayments: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.InvoicePayments ?? [],
+      invoicePaymentListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+invoicePayments
+  .command('get <paymentNumber>')
+  .description('Get a single invoice payment')
+  .action(async (paymentNumber: string) => {
+    const { getInvoicePayment } = await import('./operations/invoice-payments.js');
+    const data = await getInvoicePayment(paymentNumber);
+    outputDetail(data as Record<string, unknown>, invoicePaymentDetailColumns, json());
+  });
+
+invoicePayments
+  .command('create')
+  .description('Register a payment against an invoice')
+  .requiredOption('--invoice <number>', 'Invoice number')
+  .requiredOption('--amount <amount>', 'Payment amount', parseFloat)
+  .requiredOption('--date <date>', 'Payment date (YYYY-MM-DD)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl invoice-payments create --invoice 1001 --amount 5000 --date 2026-03-20 --dry-run
+  noxctl ip create --invoice 1001 --amount 5000 --date 2026-03-20 --yes`,
+  )
+  .action(async (opts) => {
+    const { createInvoicePayment } = await import('./operations/invoice-payments.js');
+    const params = {
+      InvoiceNumber: parseInt(opts.invoice, 10),
+      Amount: opts.amount,
+      PaymentDate: opts.date,
+    };
+    if (
+      !(await confirmMutation(
+        `Register payment of ${opts.amount} for invoice ${opts.invoice}`,
+        opts,
+        {
+          InvoicePayment: params,
+        },
+      ))
+    ) {
+      return;
+    }
+    const data = await createInvoicePayment(params);
+    outputDetail(data as Record<string, unknown>, invoicePaymentDetailColumns, json());
+  });
+
+invoicePayments
+  .command('delete <paymentNumber>')
+  .description('Delete an invoice payment')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteInvoicePayment } = await import('./operations/invoice-payments.js');
+    if (!(await confirmMutation(`Delete invoice payment ${paymentNumber}`, opts))) {
+      return;
+    }
+    await deleteInvoicePayment(paymentNumber);
+    outputConfirmation(`Invoice payment ${paymentNumber} deleted.`, json(), {});
+  });
+
+// --- supplier-invoice-payments ---
+const supplierInvoicePayments = program
+  .command('supplier-invoice-payments')
+  .alias('sip')
+  .description('Supplier invoice payment operations (utbetalningar)');
+
+supplierInvoicePayments
+  .command('list')
+  .description('List supplier invoice payments')
+  .option('--invoice <number>', 'Filter by invoice number')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listSupplierInvoicePayments } =
+      await import('./operations/supplier-invoice-payments.js');
+    const data = await listSupplierInvoicePayments({
+      invoiceNumber: opts.invoice,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      SupplierInvoicePayments: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.SupplierInvoicePayments ?? [],
+      supplierInvoicePaymentListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+supplierInvoicePayments
+  .command('get <paymentNumber>')
+  .description('Get a single supplier invoice payment')
+  .action(async (paymentNumber: string) => {
+    const { getSupplierInvoicePayment } = await import('./operations/supplier-invoice-payments.js');
+    const data = await getSupplierInvoicePayment(paymentNumber);
+    outputDetail(data as Record<string, unknown>, supplierInvoicePaymentDetailColumns, json());
+  });
+
+supplierInvoicePayments
+  .command('create')
+  .description('Register a payment against a supplier invoice')
+  .requiredOption('--invoice <number>', 'Supplier invoice number')
+  .requiredOption('--amount <amount>', 'Payment amount', parseFloat)
+  .requiredOption('--date <date>', 'Payment date (YYYY-MM-DD)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl supplier-invoice-payments create --invoice 501 --amount 3000 --date 2026-03-20 --dry-run
+  noxctl sip create --invoice 501 --amount 3000 --date 2026-03-20 --yes`,
+  )
+  .action(async (opts) => {
+    const { createSupplierInvoicePayment } =
+      await import('./operations/supplier-invoice-payments.js');
+    const params = {
+      InvoiceNumber: opts.invoice,
+      Amount: opts.amount,
+      PaymentDate: opts.date,
+    };
+    if (
+      !(await confirmMutation(
+        `Register payment of ${opts.amount} for supplier invoice ${opts.invoice}`,
+        opts,
+        { SupplierInvoicePayment: params },
+      ))
+    ) {
+      return;
+    }
+    const data = await createSupplierInvoicePayment(params);
+    outputDetail(data as Record<string, unknown>, supplierInvoicePaymentDetailColumns, json());
+  });
+
+supplierInvoicePayments
+  .command('delete <paymentNumber>')
+  .description('Delete a supplier invoice payment')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteSupplierInvoicePayment } =
+      await import('./operations/supplier-invoice-payments.js');
+    if (!(await confirmMutation(`Delete supplier invoice payment ${paymentNumber}`, opts))) {
+      return;
+    }
+    await deleteSupplierInvoicePayment(paymentNumber);
+    outputConfirmation(`Supplier invoice payment ${paymentNumber} deleted.`, json(), {});
+  });
+
+// --- offers ---
+const offers = program.command('offers').description('Offer/quote operations (offerter)');
+
+offers
+  .command('list')
+  .description('List/filter offers')
+  .option('--filter <filter>', 'Filter: cancelled, expired, ordercreated, invoicecreated')
+  .option('--customer <number>', 'Filter by customer number')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listOffers } = await import('./operations/offers.js');
+    const data = await listOffers({
+      filter: opts.filter,
+      customerNumber: opts.customer,
+      fromDate: opts.from,
+      toDate: opts.to,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      Offers: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(envelope.Offers ?? [], offerListColumns, json(), data, envelope.MetaInformation);
+  });
+
+offers
+  .command('get <documentNumber>')
+  .description('Get a single offer')
+  .action(async (documentNumber: string) => {
+    const { getOffer } = await import('./operations/offers.js');
+    const data = await getOffer(documentNumber);
+    outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+  });
+
+offers
+  .command('create')
+  .description('Create an offer')
+  .requiredOption('--customer <number>', 'Customer number')
+  .requiredOption('--input <file>', 'Offer data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"OfferRows":[{"Description":"Consulting","DeliveredQuantity":10,"Price":1200}]}' | noxctl offers create --customer 25 --input - --dry-run`,
+  )
+  .action(async (opts) => {
+    const { createOffer } = await import('./operations/offers.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    const params = { CustomerNumber: opts.customer, ...input };
+    if (
+      !(await confirmMutation(`Create offer for customer ${opts.customer}`, opts, {
+        Offer: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createOffer(params);
+    outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+  });
+
+offers
+  .command('update <documentNumber>')
+  .description('Update an offer')
+  .requiredOption('--input <file>', 'Offer data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateOffer } = await import('./operations/offers.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (!(await confirmMutation(`Update offer ${documentNumber}`, opts, { Offer: fields }))) {
+        return;
+      }
+      const data = await updateOffer(documentNumber, fields);
+      outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+    },
+  );
+
+offers
+  .command('create-invoice <documentNumber>')
+  .description('Create an invoice from an offer')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { createInvoiceFromOffer } = await import('./operations/offers.js');
+    if (!(await confirmMutation(`Create invoice from offer ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await createInvoiceFromOffer(documentNumber);
+    outputConfirmation(
+      `Invoice created from offer ${documentNumber}.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+    );
+  });
+
+offers
+  .command('create-order <documentNumber>')
+  .description('Create an order from an offer')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { createOrderFromOffer } = await import('./operations/offers.js');
+    if (!(await confirmMutation(`Create order from offer ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await createOrderFromOffer(documentNumber);
+    outputConfirmation(`Order created from offer ${documentNumber}.`, json(), data);
+  });
+
+// --- orders ---
+const orders = program.command('orders').description('Order operations (ordrar)');
+
+orders
+  .command('list')
+  .description('List/filter orders')
+  .option('--filter <filter>', 'Filter: cancelled, invoicecreated, invoicenotcreated')
+  .option('--customer <number>', 'Filter by customer number')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listOrders } = await import('./operations/orders.js');
+    const data = await listOrders({
+      filter: opts.filter,
+      customerNumber: opts.customer,
+      fromDate: opts.from,
+      toDate: opts.to,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      Orders: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(envelope.Orders ?? [], orderListColumns, json(), data, envelope.MetaInformation);
+  });
+
+orders
+  .command('get <documentNumber>')
+  .description('Get a single order')
+  .action(async (documentNumber: string) => {
+    const { getOrder } = await import('./operations/orders.js');
+    const data = await getOrder(documentNumber);
+    outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+  });
+
+orders
+  .command('create')
+  .description('Create an order')
+  .requiredOption('--customer <number>', 'Customer number')
+  .requiredOption('--input <file>', 'Order data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"OrderRows":[{"Description":"Consulting","DeliveredQuantity":10,"Price":1200}]}' | noxctl orders create --customer 25 --input - --dry-run`,
+  )
+  .action(async (opts) => {
+    const { createOrder } = await import('./operations/orders.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    const params = { CustomerNumber: opts.customer, ...input };
+    if (
+      !(await confirmMutation(`Create order for customer ${opts.customer}`, opts, {
+        Order: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createOrder(params);
+    outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+  });
+
+orders
+  .command('update <documentNumber>')
+  .description('Update an order')
+  .requiredOption('--input <file>', 'Order data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateOrder } = await import('./operations/orders.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (!(await confirmMutation(`Update order ${documentNumber}`, opts, { Order: fields }))) {
+        return;
+      }
+      const data = await updateOrder(documentNumber, fields);
+      outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+    },
+  );
+
+orders
+  .command('create-invoice <documentNumber>')
+  .description('Create an invoice from an order')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { createInvoiceFromOrder } = await import('./operations/orders.js');
+    if (!(await confirmMutation(`Create invoice from order ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await createInvoiceFromOrder(documentNumber);
+    outputConfirmation(
+      `Invoice created from order ${documentNumber}.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+    );
   });
 
 // Error handling

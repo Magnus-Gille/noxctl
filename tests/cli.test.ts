@@ -123,6 +123,49 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('update');
   });
 
+  it('noxctl invoice-payments --help shows subcommands', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'invoice-payments', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('delete');
+  });
+
+  it('noxctl supplier-invoice-payments --help shows subcommands', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'supplier-invoice-payments', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('delete');
+  });
+
+  it('noxctl offers --help shows subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'offers', '--help'], execOpts) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('update');
+    expect(output).toContain('create-invoice');
+    expect(output).toContain('create-order');
+  });
+
+  it('noxctl orders --help shows subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'orders', '--help'], execOpts) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('update');
+    expect(output).toContain('create-invoice');
+  });
+
   it('unknown command exits non-zero', () => {
     expect(() => {
       execFileSync('node', [CLI_PATH, 'nonexistent'], { ...execOpts, stdio: 'pipe' });
