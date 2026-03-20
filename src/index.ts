@@ -14,6 +14,10 @@ import { registerInvoicePaymentTools } from './tools/invoice-payments.js';
 import { registerSupplierInvoicePaymentTools } from './tools/supplier-invoice-payments.js';
 import { registerOfferTools } from './tools/offers.js';
 import { registerOrderTools } from './tools/orders.js';
+import { registerProjectTools } from './tools/projects.js';
+import { registerCostCenterTools } from './tools/costcenters.js';
+import { registerTaxReductionTools } from './tools/taxreductions.js';
+import { registerPriceListTools } from './tools/pricelists.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -35,6 +39,10 @@ export function createServer(): McpServer {
   registerSupplierInvoicePaymentTools(server);
   registerOfferTools(server);
   registerOrderTools(server);
+  registerProjectTools(server);
+  registerCostCenterTools(server);
+  registerTaxReductionTools(server);
+  registerPriceListTools(server);
 
   return server;
 }

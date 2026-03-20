@@ -277,6 +277,103 @@ export const orderConfirmColumns: Column[] = [
   { key: 'Sent', header: 'Sent', width: 5 },
 ];
 
+// --- Project views (target ≤80 cols) ---
+
+// 10 + 2 + 30 + 2 + 10 + 2 + 10 + 2 + 10 = 78
+export const projectListColumns: Column[] = [
+  { key: 'ProjectNumber', header: 'Proj #', width: 10, align: 'right' },
+  { key: 'Description', header: 'Description', width: 30 },
+  { key: 'Status', header: 'Status', width: 10 },
+  { key: 'StartDate', header: 'Start', width: 10 },
+  { key: 'EndDate', header: 'End', width: 10 },
+];
+
+export const projectDetailColumns: Column[] = [
+  { key: 'ProjectNumber', header: 'Project #', width: 20 },
+  { key: 'Description', header: 'Description', width: 40 },
+  { key: 'Status', header: 'Status', width: 10 },
+  { key: 'StartDate', header: 'Start Date', width: 10 },
+  { key: 'EndDate', header: 'End Date', width: 10 },
+  { key: 'ContactPerson', header: 'Contact', width: 30 },
+  { key: 'ProjectLeader', header: 'Leader', width: 30 },
+  { key: 'Comments', header: 'Comments', width: 40 },
+];
+
+// --- Cost Center views (target ≤80 cols) ---
+
+// 10 + 2 + 40 + 2 + 10 = 64
+export const costCenterListColumns: Column[] = [
+  { key: 'Code', header: 'Code', width: 10 },
+  { key: 'Description', header: 'Description', width: 40 },
+  { key: 'Active', header: 'Active', width: 10 },
+];
+
+export const costCenterDetailColumns: Column[] = [
+  { key: 'Code', header: 'Code', width: 20 },
+  { key: 'Description', header: 'Description', width: 40 },
+  { key: 'Active', header: 'Active', width: 5 },
+  { key: 'Note', header: 'Note', width: 40 },
+];
+
+// --- Tax Reduction views (target ≤80 cols) ---
+
+// 6 + 2 + 20 + 2 + 5 + 2 + 10 + 2 + 12 + 2 + 12 = 75
+export const taxReductionListColumns: Column[] = [
+  { key: 'Id', header: 'ID', width: 6, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 20 },
+  { key: 'TypeOfReduction', header: 'Type', width: 5 },
+  { key: 'ReferenceNumber', header: 'Ref #', width: 10 },
+  { key: 'AskedAmount', header: 'Asked', width: 12, align: 'right', format: currency },
+  { key: 'ApprovedAmount', header: 'Approved', width: 12, align: 'right', format: currency },
+];
+
+export const taxReductionDetailColumns: Column[] = [
+  { key: 'Id', header: 'ID', width: 10 },
+  { key: 'CustomerName', header: 'Customer', width: 40 },
+  { key: 'TypeOfReduction', header: 'Type', width: 5 },
+  { key: 'ReferenceNumber', header: 'Reference #', width: 20 },
+  { key: 'ReferenceDocumentType', header: 'Doc Type', width: 10 },
+  { key: 'AskedAmount', header: 'Asked Amount', width: 20, format: currency },
+  { key: 'ApprovedAmount', header: 'Approved Amount', width: 20, format: currency },
+  { key: 'PropertyDesignation', header: 'Property', width: 30 },
+];
+
+// --- Price List views (target ≤80 cols) ---
+
+// 10 + 2 + 30 + 2 + 20 + 2 + 10 = 76
+export const priceListListColumns: Column[] = [
+  { key: 'Code', header: 'Code', width: 10 },
+  { key: 'Description', header: 'Description', width: 30 },
+  { key: 'Comments', header: 'Comments', width: 20 },
+  { key: 'PreSelected', header: 'Default', width: 10 },
+];
+
+export const priceListDetailColumns: Column[] = [
+  { key: 'Code', header: 'Code', width: 20 },
+  { key: 'Description', header: 'Description', width: 40 },
+  { key: 'Comments', header: 'Comments', width: 40 },
+  { key: 'PreSelected', header: 'Pre-selected', width: 5 },
+];
+
+// --- Price views (target ≤80 cols) ---
+
+// 12 + 2 + 10 + 2 + 12 + 2 + 12 + 2 + 10 = 64
+export const priceListColumns: Column[] = [
+  { key: 'ArticleNumber', header: 'Article #', width: 12 },
+  { key: 'PriceList', header: 'List', width: 10 },
+  { key: 'Price', header: 'Price', width: 12, align: 'right', format: currency },
+  { key: 'FromQuantity', header: 'From Qty', width: 12, align: 'right' },
+  { key: 'Percent', header: 'Discount %', width: 10, align: 'right' },
+];
+
+export const priceDetailColumns: Column[] = [
+  { key: 'ArticleNumber', header: 'Article #', width: 20 },
+  { key: 'PriceList', header: 'Price List', width: 20 },
+  { key: 'Price', header: 'Price', width: 20, format: currency },
+  { key: 'FromQuantity', header: 'From Quantity', width: 20 },
+  { key: 'Percent', header: 'Discount %', width: 10 },
+];
+
 // --- Account views (target ≤80 cols) ---
 
 // 8 + 2 + 50 + 2 + 6 = 68

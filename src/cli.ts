@@ -37,6 +37,16 @@ import {
   offerDetailColumns,
   orderListColumns,
   orderDetailColumns,
+  projectListColumns,
+  projectDetailColumns,
+  costCenterListColumns,
+  costCenterDetailColumns,
+  taxReductionListColumns,
+  taxReductionDetailColumns,
+  priceListListColumns,
+  priceListDetailColumns,
+  priceListColumns,
+  priceDetailColumns,
 } from './views.js';
 
 const program = new Command();
@@ -1644,6 +1654,409 @@ orders
       data,
       invoiceConfirmColumns,
     );
+  });
+
+// --- projects ---
+const projects = program.command('projects').description('Project operations');
+
+projects
+  .command('list')
+  .description('List projects')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listProjects } = await import('./operations/projects.js');
+    const data = await listProjects({
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      Projects: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(envelope.Projects ?? [], projectListColumns, json(), data, envelope.MetaInformation);
+  });
+
+projects
+  .command('get <projectNumber>')
+  .description('Get a single project')
+  .action(async (projectNumber: string) => {
+    const { getProject } = await import('./operations/projects.js');
+    const data = await getProject(projectNumber);
+    outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+  });
+
+projects
+  .command('create')
+  .description('Create a project')
+  .requiredOption('--description <text>', 'Project description')
+  .option('--project-number <number>', 'Project number (auto-generated if omitted)')
+  .option('--status <status>', 'Status (ONGOING or COMPLETED)')
+  .option('--input <file>', 'Project data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createProject } = await import('./operations/projects.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = { ...input, Description: opts.description };
+    if (opts.projectNumber) params.ProjectNumber = opts.projectNumber;
+    if (opts.status) params.Status = opts.status;
+    if (
+      !(await confirmMutation(`Create project "${opts.description}"`, opts, { Project: params }))
+    ) {
+      return;
+    }
+    const data = await createProject(params);
+    outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+  });
+
+projects
+  .command('update <projectNumber>')
+  .description('Update a project')
+  .requiredOption('--input <file>', 'Project data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (projectNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateProject } = await import('./operations/projects.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (!(await confirmMutation(`Update project ${projectNumber}`, opts, { Project: fields }))) {
+        return;
+      }
+      const data = await updateProject(projectNumber, fields);
+      outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+    },
+  );
+
+// --- cost centers ---
+const costcenters = program.command('costcenters').description('Cost center operations');
+
+costcenters
+  .command('list')
+  .description('List cost centers')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listCostCenters } = await import('./operations/costcenters.js');
+    const data = await listCostCenters({
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      CostCenters: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.CostCenters ?? [],
+      costCenterListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+costcenters
+  .command('get <code>')
+  .description('Get a single cost center')
+  .action(async (code: string) => {
+    const { getCostCenter } = await import('./operations/costcenters.js');
+    const data = await getCostCenter(code);
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+  });
+
+costcenters
+  .command('create')
+  .description('Create a cost center')
+  .requiredOption('--code <code>', 'Cost center code')
+  .requiredOption('--description <text>', 'Description')
+  .option('--input <file>', 'Cost center data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createCostCenter } = await import('./operations/costcenters.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      Code: opts.code,
+      Description: opts.description,
+    };
+    if (
+      !(await confirmMutation(`Create cost center "${opts.code}"`, opts, { CostCenter: params }))
+    ) {
+      return;
+    }
+    const data = await createCostCenter(params);
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+  });
+
+costcenters
+  .command('update <code>')
+  .description('Update a cost center')
+  .requiredOption('--input <file>', 'Cost center data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (code: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateCostCenter } = await import('./operations/costcenters.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update cost center ${code}`, opts, { CostCenter: fields }))) {
+      return;
+    }
+    const data = await updateCostCenter(code, fields);
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+  });
+
+costcenters
+  .command('delete <code>')
+  .description('Delete a cost center')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (code: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteCostCenter } = await import('./operations/costcenters.js');
+    if (!(await confirmMutation(`Delete cost center ${code}`, opts))) {
+      return;
+    }
+    await deleteCostCenter(code);
+    console.log(`Cost center ${code} deleted.`);
+  });
+
+// --- tax reductions (ROT/RUT) ---
+const taxreductions = program
+  .command('tax-reductions')
+  .description('Tax reduction (ROT/RUT) operations');
+
+taxreductions
+  .command('list')
+  .description('List tax reductions')
+  .option('--filter <type>', 'Filter by document type (invoices, offers, orders)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listTaxReductions } = await import('./operations/taxreductions.js');
+    const data = await listTaxReductions({
+      filter: opts.filter,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      TaxReductions: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.TaxReductions ?? [],
+      taxReductionListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+taxreductions
+  .command('get <id>')
+  .description('Get a single tax reduction')
+  .action(async (id: string) => {
+    const { getTaxReduction } = await import('./operations/taxreductions.js');
+    const data = await getTaxReduction(parseInt(id, 10));
+    outputDetail(data as Record<string, unknown>, taxReductionDetailColumns, json());
+  });
+
+taxreductions
+  .command('create')
+  .description('Create a tax reduction (ROT/RUT)')
+  .requiredOption('--reference <number>', 'Reference number (e.g. invoice number)')
+  .requiredOption('--type <type>', 'Type of reduction (rot or rut)')
+  .requiredOption('--document-type <type>', 'Document type (INVOICE, OFFER, ORDER)')
+  .requiredOption('--customer-name <name>', 'Customer name')
+  .requiredOption('--amount <amount>', 'Asked amount in öre', parseInt)
+  .option('--property <designation>', 'Property designation (required for ROT)')
+  .option('--input <file>', 'Tax reduction data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createTaxReduction } = await import('./operations/taxreductions.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      ReferenceNumber: opts.reference,
+      ReferenceDocumentType: opts.documentType,
+      TypeOfReduction: opts.type,
+      CustomerName: opts.customerName,
+      AskedAmount: opts.amount,
+    };
+    if (opts.property) params.PropertyDesignation = opts.property;
+    if (
+      !(await confirmMutation(
+        `Create ${opts.type.toUpperCase()} tax reduction for ref ${opts.reference}`,
+        opts,
+        { TaxReduction: params },
+      ))
+    ) {
+      return;
+    }
+    const data = await createTaxReduction(params);
+    outputDetail(data as Record<string, unknown>, taxReductionDetailColumns, json());
+  });
+
+// --- price lists ---
+const pricelists = program.command('pricelists').description('Price list operations');
+
+pricelists
+  .command('list')
+  .description('List price lists')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listPriceLists } = await import('./operations/pricelists.js');
+    const data = await listPriceLists({
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      PriceLists: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.PriceLists ?? [],
+      priceListListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+pricelists
+  .command('get <code>')
+  .description('Get a single price list')
+  .action(async (code: string) => {
+    const { getPriceList } = await import('./operations/pricelists.js');
+    const data = await getPriceList(code);
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+  });
+
+pricelists
+  .command('create')
+  .description('Create a price list')
+  .requiredOption('--code <code>', 'Price list code')
+  .requiredOption('--description <text>', 'Description')
+  .option('--input <file>', 'Price list data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createPriceList } = await import('./operations/pricelists.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      Code: opts.code,
+      Description: opts.description,
+    };
+    if (!(await confirmMutation(`Create price list "${opts.code}"`, opts, { PriceList: params }))) {
+      return;
+    }
+    const data = await createPriceList(params);
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+  });
+
+pricelists
+  .command('update <code>')
+  .description('Update a price list')
+  .requiredOption('--input <file>', 'Price list data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (code: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updatePriceList } = await import('./operations/pricelists.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update price list ${code}`, opts, { PriceList: fields }))) {
+      return;
+    }
+    const data = await updatePriceList(code, fields);
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+  });
+
+// --- prices ---
+const prices = program.command('prices').description('Price operations within price lists');
+
+prices
+  .command('list')
+  .description('List prices in a price list')
+  .requiredOption('--pricelist <code>', 'Price list code')
+  .option('--article <number>', 'Filter by article number')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .action(async (opts) => {
+    const { listPrices } = await import('./operations/pricelists.js');
+    const data = await listPrices({
+      priceListCode: opts.pricelist,
+      articleNumber: opts.article,
+      page: opts.page,
+      limit: opts.limit,
+    });
+    const envelope = data as unknown as {
+      Prices: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(envelope.Prices ?? [], priceListColumns, json(), data, envelope.MetaInformation);
+  });
+
+prices
+  .command('get')
+  .description('Get a specific price')
+  .requiredOption('--pricelist <code>', 'Price list code')
+  .requiredOption('--article <number>', 'Article number')
+  .option('--from-quantity <number>', 'From quantity (default 0)', parseInt)
+  .action(async (opts) => {
+    const { getPrice } = await import('./operations/pricelists.js');
+    const data = await getPrice(opts.pricelist, opts.article, opts.fromQuantity);
+    outputDetail(data as Record<string, unknown>, priceDetailColumns, json());
+  });
+
+prices
+  .command('update')
+  .description('Update a price')
+  .requiredOption('--pricelist <code>', 'Price list code')
+  .requiredOption('--article <number>', 'Article number')
+  .option('--from-quantity <number>', 'From quantity (default 0)', parseInt)
+  .requiredOption('--input <file>', 'Price data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { updatePrice } = await import('./operations/pricelists.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (
+      !(await confirmMutation(`Update price ${opts.pricelist}/${opts.article}`, opts, {
+        Price: fields,
+      }))
+    ) {
+      return;
+    }
+    const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
+    outputDetail(data as Record<string, unknown>, priceDetailColumns, json());
   });
 
 // Error handling

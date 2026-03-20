@@ -87,6 +87,11 @@ function endpointToScope(endpoint: string): string | undefined {
     accounts: 'bookkeeping',
     companyinformation: 'companyinformation',
     settings: 'settings',
+    projects: 'project',
+    costcenters: 'costcenter',
+    taxreductions: 'invoice',
+    pricelists: 'price',
+    prices: 'price',
   };
   for (const [prefix, scope] of Object.entries(mapping)) {
     if (path.startsWith(prefix)) return scope;
