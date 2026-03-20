@@ -6,7 +6,6 @@ dist/
 credentials.json
 credentials.dpapi
 ~/.fortnox-mcp/
-STATUS.md
 PLAN.md
 .claude/
 debate/

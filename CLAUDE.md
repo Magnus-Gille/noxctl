@@ -23,6 +23,10 @@ noxctl invoices send 28 --yes        # skip prompt (non-interactive/scripting)
 noxctl invoices create --customer 25 --input data.json --dry-run
 ```
 
+## Backlog
+
+See `TODO.md` for the prioritized backlog and instructions for adding new resources.
+
 ## Project structure
 
 - `src/operations/` — Fortnox API calls (shared by CLI and MCP)
