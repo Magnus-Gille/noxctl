@@ -40,7 +40,7 @@ See `TODO.md` for the prioritized backlog and instructions for adding new resour
 
 ```bash
 npm run build       # TypeScript compile
-npm test            # Vitest (254 unit tests)
+npm test            # Vitest (323 unit tests)
 npm run test:live   # Live API tests (needs credentials)
 npm run lint        # ESLint
 npm run format      # Prettier

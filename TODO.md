@@ -3,9 +3,9 @@
 ## Current State
 
 - Published to npm as `noxctl@0.1.0`
-- 14 operations modules: invoices, customers, suppliers, articles, vouchers, accounts, financial reports, tax, company, invoice payments, supplier invoice payments, offers, orders
+- 18 operations modules: invoices, customers, suppliers, articles, vouchers, accounts, financial reports, tax, company, invoice payments, supplier invoice payments, offers, orders, projects, cost centers, tax reductions (ROT/RUT), price lists, prices
 - Full sales pipeline: offer → order → invoice → payment
-- 254 unit tests across 31 files
+- 323 unit tests across 39 files
 
 ## Backlog
 
@@ -19,10 +19,10 @@
 
 ### Tier 3 — More API Coverage
 
-6. **Projects / Cost Centers** — tracking revenue/costs per project
+6. ~~**Projects / Cost Centers**~~ ✅ Done
 7. **Contracts** — recurring invoicing automation
-8. **Tax Reductions (ROT/RUT)** — essential for Swedish tradespeople
-9. **Price Lists / Prices** — multi-tier pricing
+8. ~~**Tax Reductions (ROT/RUT)**~~ ✅ Done
+9. ~~**Price Lists / Prices**~~ ✅ Done
 10. **Financial Years / Locked Period** — context for period-aware operations
 
 ### Tier 4 — Backlog
