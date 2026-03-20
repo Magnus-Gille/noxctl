@@ -36,7 +36,7 @@ noxctl invoices create --customer 25 --input data.json --dry-run
 
 ```bash
 npm run build       # TypeScript compile
-npm test            # Vitest (193 unit tests)
+npm test            # Vitest (254 unit tests)
 npm run test:live   # Live API tests (needs credentials)
 npm run lint        # ESLint
 npm run format      # Prettier
