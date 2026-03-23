@@ -1,0 +1,97 @@
+name: API Drift Check
+
+on:
+  schedule:
+    - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  check-api-spec:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for API changes
+        id: diff
+        run: |
+          chmod +x scripts/check-api-changes.sh
+          OUTPUT=$(bash scripts/check-api-changes.sh 2>&1) || EXIT_CODE=$?
+          EXIT_CODE=${EXIT_CODE:-0}
+          echo "$OUTPUT"
+
+          {
+            echo "summary<<EOF"
+            echo "$OUTPUT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ "$EXIT_CODE" -eq 1 ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif [ "$EXIT_CODE" -eq 2 ]; then
+            echo "error=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit updated snapshot
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add api-spec/openapi.json
+          git commit -m "chore: update Fortnox OpenAPI snapshot"
+          git push
+
+      - name: Open issue on API change
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          DIFF_SUMMARY: ${{ steps.diff.outputs.summary }}
+        with:
+          script: |
+            const summary = process.env.DIFF_SUMMARY;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Fortnox API spec changed (${new Date().toISOString().slice(0, 10)})`,
+              body: [
+                'The weekly API drift check detected changes in the Fortnox OpenAPI spec.',
+                '',
+                '```',
+                summary,
+                '```',
+                '',
+                'Review the changes and update operations/tools if needed.',
+                '',
+                'Updated snapshot committed to `api-spec/openapi.json`.',
+              ].join('\n'),
+              labels: ['api-drift'],
+            });
+
+      - name: Open issue on fetch error
+        if: steps.diff.outputs.error == 'true'
+        uses: actions/github-script@v7
+        env:
+          DIFF_SUMMARY: ${{ steps.diff.outputs.summary }}
+        with:
+          script: |
+            const summary = process.env.DIFF_SUMMARY;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Fortnox API spec fetch failed (${new Date().toISOString().slice(0, 10)})`,
+              body: [
+                'The weekly API drift check could not fetch the OpenAPI spec.',
+                '',
+                '```',
+                summary,
+                '```',
+                '',
+                'This may be transient (rate limiting) or indicate a URL change.',
+              ].join('\n'),
+              labels: ['api-drift'],
+            });
