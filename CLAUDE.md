@@ -35,6 +35,8 @@ See `TODO.md` for the prioritized backlog and instructions for adding new resour
 - `src/fortnox-client.ts` — HTTP client with rate limiting and retry
 - `src/views.ts` — Column definitions for table output
 - `src/formatter.ts` — Table/JSON output formatting
+- `api-spec/openapi.json` — Fortnox OpenAPI snapshot (for drift detection)
+- `scripts/check-api-changes.sh` — Spec differ (used by CI)
 
 ## Dev commands
 

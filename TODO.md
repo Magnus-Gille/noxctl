@@ -7,6 +7,10 @@
 - Full sales pipeline: offer → order → invoice → payment
 - 323 unit tests across 39 files
 
+## API Drift Detection
+
+Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and diffs against `api-spec/openapi.json`. Opens a GitHub issue labeled `api-drift` when endpoints change. Can also be triggered manually from Actions tab.
+
 ## Backlog
 
 ### Tier 2 — Usability
