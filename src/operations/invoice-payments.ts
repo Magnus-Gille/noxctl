@@ -63,3 +63,15 @@ export async function deleteInvoicePayment(paymentNumber: string): Promise<void>
     method: 'DELETE',
   });
 }
+
+export async function bookkeepInvoicePayment(
+  paymentNumber: string,
+): Promise<Record<string, unknown>> {
+  const data = await fortnoxRequest<InvoicePaymentResponse>(
+    `invoicepayments/${documentSegment(paymentNumber)}/bookkeep`,
+    {
+      method: 'PUT',
+    },
+  );
+  return data?.InvoicePayment || {};
+}

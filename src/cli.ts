@@ -461,6 +461,7 @@ program
       article: 'articles?limit=1',
       customer: 'customers?limit=1',
       invoice: 'invoices?limit=1',
+      payment: 'invoicepayments?limit=1',
       supplier: 'suppliers?limit=1',
       supplierinvoice: 'supplierinvoices?limit=1',
       bookkeeping: 'vouchers?limit=1',
@@ -1331,6 +1332,20 @@ invoicePayments
     }
     await deleteInvoicePayment(paymentNumber);
     outputConfirmation(`Invoice payment ${paymentNumber} deleted.`, json(), {});
+  });
+
+invoicePayments
+  .command('bookkeep <paymentNumber>')
+  .description('Bookkeep an invoice payment')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { bookkeepInvoicePayment } = await import('./operations/invoice-payments.js');
+    if (!(await confirmMutation(`Bookkeep invoice payment ${paymentNumber}`, opts))) {
+      return;
+    }
+    const result = await bookkeepInvoicePayment(paymentNumber);
+    outputConfirmation(`Invoice payment ${paymentNumber} bookkeept.`, json(), result);
   });
 
 // --- supplier-invoice-payments ---
