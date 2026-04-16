@@ -4,17 +4,34 @@
 
 ```
 src/
-├── cli.ts              # Entry point: setup wizard or MCP server
-├── index.ts            # MCP server creation and startup
-├── auth.ts             # OAuth2: setup flow, token exchange, refresh, storage
-├── fortnox-client.ts   # HTTP client: rate limiting, retry, error handling
-└── tools/
-    ├── customers.ts    # Customer CRUD (4 tools)
-    ├── invoices.ts     # Invoice lifecycle (6 tools)
-    ├── bookkeeping.ts  # Vouchers + chart of accounts (3 tools)
-    ├── tax.ts          # VAT report (1 tool)
-    └── company.ts      # Company info (1 tool)
+├── cli.ts                  # CLI entry point (Commander): init, doctor, logout, serve, resource subcommands
+├── index.ts                # MCP server creation and startup (stdio)
+├── auth.ts                 # OAuth2: setup flow, token exchange, refresh, service-account mode
+├── credentials-store.ts    # OS keychain (macOS Security / Linux secret-tool / Windows DPAPI)
+├── fortnox-client.ts       # HTTP client: rate limiting, retry, endpoint→scope error hints
+├── formatter.ts            # Table/JSON output rendering
+├── tool-output.ts          # Shared MCP tool response formatting
+├── views.ts                # Column definitions for list/detail/confirm views
+├── identifiers.ts          # Shared Zod types for identifiers
+├── operations/             # Fortnox API calls (shared by CLI and MCP)
+│   ├── accounts.ts                    articles.ts            company.ts
+│   ├── costcenters.ts                 customers.ts           financial-reports.ts
+│   ├── invoices.ts                    invoice-payments.ts    offers.ts
+│   ├── orders.ts                      pricelists.ts          projects.ts
+│   ├── supplier-invoices.ts           supplier-invoice-payments.ts
+│   ├── suppliers.ts                   tax.ts                 taxreductions.ts
+│   └── vouchers.ts
+└── tools/                  # MCP tool registrations (Zod schemas, Swedish descriptions)
+    ├── articles.ts                    bookkeeping.ts         company.ts
+    ├── costcenters.ts                 customers.ts           financial-reports.ts
+    ├── invoices.ts                    invoice-payments.ts    offers.ts
+    ├── orders.ts                      pricelists.ts          projects.ts
+    ├── status.ts                      supplier-invoices.ts   supplier-invoice-payments.ts
+    ├── suppliers.ts                   tax.ts                 taxreductions.ts
+    └── (vouchers + accounts live in bookkeeping.ts)
 ```
+
+Each resource pairs an `operations/<name>.ts` module (pure API calls, used by both transports) with a `tools/<name>.ts` module (MCP registration with Zod schemas). CLI subcommands in `cli.ts` mirror the MCP tools 1:1.
 
 ## Key design decisions
 
