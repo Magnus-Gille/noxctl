@@ -45,6 +45,19 @@ function emptyIndex(): ProfileIndex {
   return { schema_version: PROFILE_INDEX_SCHEMA_VERSION, profiles: [] };
 }
 
+function canonicalName(name: string): string {
+  return validateProfileName(name).toLowerCase();
+}
+
+function isMissingFileError(err: unknown): boolean {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    (err as { code?: string }).code === 'ENOENT'
+  );
+}
+
 async function ensureConfigDir(): Promise<void> {
   await fs.mkdir(configDir(), { recursive: true, mode: 0o700 });
 }
@@ -57,8 +70,14 @@ async function atomicWrite(target: string, contents: string, mode = 0o600): Prom
 }
 
 export async function readProfileIndex(): Promise<ProfileIndex> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(profilesIndexFile(), 'utf-8');
+    raw = await fs.readFile(profilesIndexFile(), 'utf-8');
+  } catch (err) {
+    if (isMissingFileError(err)) return emptyIndex();
+    throw err;
+  }
+  try {
     const parsed = JSON.parse(raw) as Partial<ProfileIndex>;
     if (!parsed || !Array.isArray(parsed.profiles)) return emptyIndex();
     return {
@@ -66,6 +85,7 @@ export async function readProfileIndex(): Promise<ProfileIndex> {
       profiles: parsed.profiles,
     };
   } catch {
+    // Corrupt JSON — degrade to empty so Chunk C's migration can recover.
     return emptyIndex();
   }
 }
@@ -75,9 +95,9 @@ export async function writeProfileIndex(idx: ProfileIndex): Promise<void> {
 }
 
 export async function upsertProfile(entry: ProfileIndexEntry): Promise<void> {
-  validateProfileName(entry.name);
+  const canonical = canonicalName(entry.name);
   const idx = await readProfileIndex();
-  const existing = idx.profiles.findIndex((p) => p.name === entry.name);
+  const existing = idx.profiles.findIndex((p) => p.name.toLowerCase() === canonical);
   if (existing >= 0) {
     idx.profiles[existing] = { ...idx.profiles[existing], ...entry };
   } else {
@@ -87,22 +107,30 @@ export async function upsertProfile(entry: ProfileIndexEntry): Promise<void> {
 }
 
 export async function removeProfile(name: string): Promise<void> {
-  validateProfileName(name);
+  const canonical = canonicalName(name);
   const idx = await readProfileIndex();
   const before = idx.profiles.length;
-  idx.profiles = idx.profiles.filter((p) => p.name !== name);
+  idx.profiles = idx.profiles.filter((p) => p.name.toLowerCase() !== canonical);
   if (idx.profiles.length !== before) {
     await writeProfileIndex(idx);
   }
 }
 
 export async function readActivePointer(): Promise<string | null> {
+  let raw: string;
   try {
-    const raw = await fs.readFile(activePointerFile(), 'utf-8');
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
+    raw = await fs.readFile(activePointerFile(), 'utf-8');
+  } catch (err) {
+    if (isMissingFileError(err)) return null;
+    throw err;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
     return validateProfileName(trimmed);
   } catch {
+    // Corrupt pointer contents — treat as absent so later resolution can
+    // fall through to the env var or default. Chunk D's `doctor` surfaces this.
     return null;
   }
 }

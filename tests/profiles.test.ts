@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -105,6 +105,34 @@ describe('profile index I/O', () => {
     expect(idx.profiles[0]!.company_name).toBe('Updated AB');
   });
 
+  it('upsertProfile matches names case-insensitively', async () => {
+    await upsertProfile({
+      name: 'Demo',
+      created_at: '2026-04-19T00:00:00.000Z',
+      schema_version: 2,
+    });
+    await upsertProfile({
+      name: 'demo',
+      company_name: 'Demo AB',
+      created_at: '2026-04-19T01:00:00.000Z',
+      schema_version: 2,
+    });
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toHaveLength(1);
+    expect(idx.profiles[0]!.company_name).toBe('Demo AB');
+  });
+
+  it('removeProfile matches names case-insensitively', async () => {
+    await upsertProfile({
+      name: 'Demo',
+      created_at: '2026-04-19T00:00:00.000Z',
+      schema_version: 2,
+    });
+    await removeProfile('DEMO');
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toEqual([]);
+  });
+
   it('removeProfile drops the entry', async () => {
     await upsertProfile({
       name: 'demo',
@@ -136,6 +164,15 @@ describe('profile index I/O', () => {
     await fs.writeFile(paths.profilesIndexFile, '{ not json');
     const idx = await readProfileIndex();
     expect(idx).toEqual({ schema_version: 1, profiles: [] });
+  });
+
+  it('re-throws non-ENOENT errors from readProfileIndex', async () => {
+    const permErr = Object.assign(new Error('EACCES: permission denied'), {
+      code: 'EACCES',
+    });
+    const spy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(permErr);
+    await expect(readProfileIndex()).rejects.toMatchObject({ code: 'EACCES' });
+    spy.mockRestore();
   });
 });
 
@@ -170,5 +207,14 @@ describe('active pointer I/O', () => {
     await fs.mkdir(paths.configDir, { recursive: true });
     await fs.writeFile(paths.activePointerFile, 'has space\n');
     await expect(readActivePointer()).resolves.toBeNull();
+  });
+
+  it('re-throws non-ENOENT errors from readActivePointer', async () => {
+    const permErr = Object.assign(new Error('EACCES: permission denied'), {
+      code: 'EACCES',
+    });
+    const spy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(permErr);
+    await expect(readActivePointer()).rejects.toMatchObject({ code: 'EACCES' });
+    spy.mockRestore();
   });
 });

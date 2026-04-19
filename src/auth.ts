@@ -365,13 +365,21 @@ export async function runOAuthSetup(
           };
 
           await saveCredentials(creds, validatedProfile);
-          await upsertProfile({
-            name: validatedProfile,
-            tenant_id: tenantId,
-            company_name: companyName,
-            created_at: new Date().toISOString(),
-            schema_version: 2,
-          });
+          try {
+            await upsertProfile({
+              name: validatedProfile,
+              tenant_id: tenantId,
+              company_name: companyName,
+              created_at: new Date().toISOString(),
+              schema_version: 2,
+            });
+          } catch (indexErr) {
+            // Credentials already saved — treat index write as best-effort so a
+            // filesystem hiccup under ~/.fortnox-mcp doesn't abort `noxctl init`.
+            // Chunk D's `doctor` / `profile use` will surface a broken index.
+            const msg = indexErr instanceof Error ? indexErr.message : String(indexErr);
+            console.warn(`Warning: could not update profile index: ${msg}`);
+          }
 
           const tenantMsg = tenantId
             ? ' Client credentials flow enabled.'
