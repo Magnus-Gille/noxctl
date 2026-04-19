@@ -3,15 +3,30 @@ import fsSync from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  DEFAULT_PROFILE,
+  LEGACY_KEYCHAIN_ACCOUNT,
+  keychainAccount,
+  sanitizeForFilename,
+  validateProfileName,
+} from './profile-name.js';
 
 const CREDENTIALS_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || '~',
   '.fortnox-mcp',
 );
 const LEGACY_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
-const WINDOWS_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.dpapi');
+const LEGACY_WINDOWS_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.dpapi');
 const SERVICE_NAME = 'fortnox-mcp';
-const ACCOUNT_NAME = 'default';
+
+function normalizeProfile(profile: string): { normalized: string; isDefault: boolean } {
+  const validated = validateProfileName(profile).toLowerCase();
+  return { normalized: validated, isDefault: validated === DEFAULT_PROFILE };
+}
+
+function windowsCredentialsFile(profile: string): string {
+  return path.join(CREDENTIALS_DIR, `credentials.${sanitizeForFilename(profile)}.dpapi`);
+}
 
 function decodeHexIfNeeded(value: string): string {
   // macOS `security -w` returns hex-encoded output when the password
@@ -28,11 +43,11 @@ function decodeHexIfNeeded(value: string): string {
   return value;
 }
 
-function loadMacSecret(): string | null {
+function loadMacSecret(account: string): string | null {
   try {
     const raw = execFileSync(
       'security',
-      ['find-generic-password', '-a', ACCOUNT_NAME, '-s', SERVICE_NAME, '-w'],
+      ['find-generic-password', '-a', account, '-s', SERVICE_NAME, '-w'],
       { encoding: 'utf-8' },
     ).trim();
     return decodeHexIfNeeded(raw);
@@ -41,13 +56,15 @@ function loadMacSecret(): string | null {
   }
 }
 
-function saveMacSecret(secret: string): void {
+function saveMacSecret(account: string, secret: string): void {
   // macOS `security add-generic-password -w` requires the password as a CLI
   // argument, which is briefly visible via `ps`. Instead, use an inline Swift
   // script that reads the secret from stdin and writes to the Keychain via
   // the Security framework — the secret never appears in process arguments.
   const scriptPath = path.join(os.tmpdir(), `noxctl-keychain-${process.pid}.swift`);
 
+  // account is either LEGACY_KEYCHAIN_ACCOUNT ("default") or `profile:<validated>`.
+  // Validation in profile-name.ts restricts the character set so embedding is safe.
   const swiftScript = `
 import Foundation
 import Security
@@ -56,7 +73,7 @@ let data = FileHandle.standardInput.readDataToEndOfFile()
 guard let password = String(data: data, encoding: .utf8) else { exit(1) }
 
 let service = "${SERVICE_NAME}"
-let account = "${ACCOUNT_NAME}"
+let account = "${account}"
 
 let deleteQuery: [String: Any] = [
   kSecClass as String: kSecClassGenericPassword,
@@ -92,7 +109,7 @@ if status != errSecSuccess { exit(1) }
     execFileSync('security', [
       'add-generic-password',
       '-a',
-      ACCOUNT_NAME,
+      account,
       '-s',
       SERVICE_NAME,
       '-w',
@@ -108,27 +125,25 @@ if status != errSecSuccess { exit(1) }
   }
 }
 
-function loadLinuxSecret(): string | null {
+function loadLinuxSecret(account: string): string | null {
   try {
-    return execFileSync(
-      'secret-tool',
-      ['lookup', 'service', SERVICE_NAME, 'account', ACCOUNT_NAME],
-      { encoding: 'utf-8' },
-    ).trim();
+    return execFileSync('secret-tool', ['lookup', 'service', SERVICE_NAME, 'account', account], {
+      encoding: 'utf-8',
+    }).trim();
   } catch {
     return null;
   }
 }
 
-function saveLinuxSecret(secret: string): void {
+function saveLinuxSecret(account: string, secret: string): void {
   execFileSync(
     'secret-tool',
-    ['store', '--label=Fortnox MCP credentials', 'service', SERVICE_NAME, 'account', ACCOUNT_NAME],
+    ['store', '--label=Fortnox MCP credentials', 'service', SERVICE_NAME, 'account', account],
     { input: secret },
   );
 }
 
-function loadWindowsSecret(): string | null {
+function loadWindowsSecret(file: string): string | null {
   try {
     return execFileSync(
       'powershell',
@@ -137,8 +152,8 @@ function loadWindowsSecret(): string | null {
         '-NonInteractive',
         '-Command',
         [
-          `if (-not (Test-Path '${WINDOWS_CREDENTIALS_FILE}')) { exit 0 }`,
-          `$protected = [Convert]::FromBase64String([IO.File]::ReadAllText('${WINDOWS_CREDENTIALS_FILE}'))`,
+          `if (-not (Test-Path '${file}')) { exit 0 }`,
+          `$protected = [Convert]::FromBase64String([IO.File]::ReadAllText('${file}'))`,
           '$bytes = [System.Security.Cryptography.ProtectedData]::Unprotect($protected, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
           '[Text.Encoding]::UTF8.GetString($bytes)',
         ].join('; '),
@@ -150,7 +165,7 @@ function loadWindowsSecret(): string | null {
   }
 }
 
-function saveWindowsSecret(secret: string): void {
+function saveWindowsSecret(file: string, secret: string): void {
   // Read the secret from stdin instead of embedding it in the PowerShell
   // command string, which would be visible via `ps` / Task Manager.
   const result = spawnSync(
@@ -164,7 +179,7 @@ function saveWindowsSecret(secret: string): void {
         '$plain = [Console]::In.ReadToEnd()',
         '$bytes = [Text.Encoding]::UTF8.GetBytes($plain)',
         '$protected = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
-        `[IO.File]::WriteAllText('${WINDOWS_CREDENTIALS_FILE}', [Convert]::ToBase64String($protected), [Text.Encoding]::UTF8)`,
+        `[IO.File]::WriteAllText('${file}', [Convert]::ToBase64String($protected), [Text.Encoding]::UTF8)`,
       ].join('; '),
     ],
     { input: secret, encoding: 'utf-8' },
@@ -175,7 +190,7 @@ function saveWindowsSecret(secret: string): void {
   }
 }
 
-async function loadLegacySecret(): Promise<string | null> {
+async function loadLegacyPlaintextSecret(): Promise<string | null> {
   try {
     return await fs.readFile(LEGACY_CREDENTIALS_FILE, 'utf-8');
   } catch {
@@ -183,7 +198,7 @@ async function loadLegacySecret(): Promise<string | null> {
   }
 }
 
-async function removeLegacySecret(): Promise<void> {
+async function removeLegacyPlaintextSecret(): Promise<void> {
   try {
     await fs.rm(LEGACY_CREDENTIALS_FILE, { force: true });
   } catch {
@@ -191,60 +206,104 @@ async function removeLegacySecret(): Promise<void> {
   }
 }
 
-export async function loadCredentialBlob(): Promise<string | null> {
-  if (process.platform === 'darwin') return loadMacSecret() ?? (await loadLegacySecret());
-  if (process.platform === 'win32') return loadWindowsSecret() ?? (await loadLegacySecret());
-  return loadLinuxSecret() ?? (await loadLegacySecret());
+function loadFromBackend(account: string, windowsFile: string): string | null {
+  if (process.platform === 'darwin') return loadMacSecret(account);
+  if (process.platform === 'win32') return loadWindowsSecret(windowsFile);
+  return loadLinuxSecret(account);
 }
 
-export async function saveCredentialBlob(secret: string): Promise<void> {
+export async function loadCredentialBlob(
+  profile: string = DEFAULT_PROFILE,
+): Promise<string | null> {
+  const { normalized, isDefault } = normalizeProfile(profile);
+
+  if (isDefault) {
+    // Chunk A reads only the legacy default location so there is no
+    // asymmetric dual-read vs. the legacy-only default write. Chunk C adds
+    // dual-read and dual-write with schema_version + last_write_epoch
+    // tiebreaks to handle mixed-version binaries.
+    const legacyBlob = loadFromBackend(LEGACY_KEYCHAIN_ACCOUNT, LEGACY_WINDOWS_CREDENTIALS_FILE);
+    if (legacyBlob) return legacyBlob;
+    return loadLegacyPlaintextSecret();
+  }
+
+  return loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
+}
+
+export async function saveCredentialBlob(
+  secret: string,
+  profile: string = DEFAULT_PROFILE,
+): Promise<void> {
+  const { normalized, isDefault } = normalizeProfile(profile);
+
+  // Default writes stay at the legacy account so existing single-profile
+  // installs are unaffected. Chunk C will switch to write-new + dual-write-legacy.
+  const account = isDefault ? LEGACY_KEYCHAIN_ACCOUNT : keychainAccount(normalized);
+  const windowsFile = isDefault
+    ? LEGACY_WINDOWS_CREDENTIALS_FILE
+    : windowsCredentialsFile(normalized);
+
   if (process.platform === 'darwin') {
-    saveMacSecret(secret);
+    saveMacSecret(account, secret);
   } else if (process.platform === 'win32') {
-    saveWindowsSecret(secret);
+    saveWindowsSecret(windowsFile, secret);
   } else {
-    saveLinuxSecret(secret);
+    saveLinuxSecret(account, secret);
   }
 
-  await removeLegacySecret();
+  if (isDefault) {
+    await removeLegacyPlaintextSecret();
+  }
 }
 
-function deleteMacSecret(): boolean {
+function deleteMacSecret(account: string): boolean {
   try {
-    execFileSync('security', ['delete-generic-password', '-a', ACCOUNT_NAME, '-s', SERVICE_NAME]);
+    execFileSync('security', ['delete-generic-password', '-a', account, '-s', SERVICE_NAME]);
     return true;
   } catch {
     return false;
   }
 }
 
-function deleteLinuxSecret(): boolean {
+function deleteLinuxSecret(account: string): boolean {
   try {
-    execFileSync('secret-tool', ['clear', 'service', SERVICE_NAME, 'account', ACCOUNT_NAME]);
+    execFileSync('secret-tool', ['clear', 'service', SERVICE_NAME, 'account', account]);
     return true;
   } catch {
     return false;
   }
 }
 
-async function deleteWindowsSecret(): Promise<boolean> {
+async function deleteWindowsSecret(file: string): Promise<boolean> {
   try {
-    await fs.rm(WINDOWS_CREDENTIALS_FILE, { force: true });
+    await fs.rm(file, { force: true });
     return true;
   } catch {
     return false;
   }
 }
 
-export async function deleteCredentialBlob(): Promise<boolean> {
-  let deleted = false;
+async function deleteAtAccount(account: string, windowsFile: string): Promise<boolean> {
+  if (process.platform === 'darwin') return deleteMacSecret(account);
+  if (process.platform === 'win32') return deleteWindowsSecret(windowsFile);
+  return deleteLinuxSecret(account);
+}
 
-  if (process.platform === 'darwin') deleted = deleteMacSecret();
-  else if (process.platform === 'win32') deleted = await deleteWindowsSecret();
-  else deleted = deleteLinuxSecret();
+export async function deleteCredentialBlob(profile: string = DEFAULT_PROFILE): Promise<boolean> {
+  const { normalized, isDefault } = normalizeProfile(profile);
 
-  // Also clean up legacy file if it exists
-  await removeLegacySecret();
+  if (isDefault) {
+    const legacyDeleted = await deleteAtAccount(
+      LEGACY_KEYCHAIN_ACCOUNT,
+      LEGACY_WINDOWS_CREDENTIALS_FILE,
+    );
+    const newDeleted = await deleteAtAccount(
+      keychainAccount(normalized),
+      windowsCredentialsFile(normalized),
+    );
+    await removeLegacyPlaintextSecret();
+    return legacyDeleted || newDeleted;
+  }
 
-  return deleted;
+  return deleteAtAccount(keychainAccount(normalized), windowsCredentialsFile(normalized));
 }
