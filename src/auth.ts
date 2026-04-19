@@ -2,6 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { loadCredentialBlob, saveCredentialBlob } from './credentials-store.js';
+import { DEFAULT_PROFILE, validateProfileName } from './profile-name.js';
+import { upsertProfile } from './profiles.js';
 
 const FORTNOX_AUTH_URL = 'https://apps.fortnox.se/oauth-v1/auth';
 const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
@@ -10,6 +12,8 @@ const CALLBACK_HOST = '127.0.0.1';
 export const SCOPES =
   'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings';
 
+export const CREDENTIAL_SCHEMA_VERSION = 2;
+
 export interface FortnoxCredentials {
   client_id: string;
   client_secret: string;
@@ -17,6 +21,9 @@ export interface FortnoxCredentials {
   refresh_token: string;
   expires_at: number;
   tenant_id?: string;
+  company_name?: string;
+  schema_version?: number;
+  last_write_epoch?: number;
 }
 
 export interface FortnoxAppConfig {
@@ -25,9 +32,23 @@ export interface FortnoxAppConfig {
   serviceAccount?: boolean;
 }
 
-export async function loadCredentials(): Promise<FortnoxCredentials | null> {
+let resolvedProfile: string = DEFAULT_PROFILE;
+
+export function setResolvedProfile(name: string): void {
+  resolvedProfile = validateProfileName(name);
+}
+
+export function getResolvedProfile(): string {
+  return resolvedProfile;
+}
+
+function profileOrResolved(profile?: string): string {
+  return profile ?? resolvedProfile;
+}
+
+export async function loadCredentials(profile?: string): Promise<FortnoxCredentials | null> {
   try {
-    const data = await loadCredentialBlob();
+    const data = await loadCredentialBlob(profileOrResolved(profile));
     if (!data) return null;
     return JSON.parse(data) as FortnoxCredentials;
   } catch {
@@ -35,8 +56,13 @@ export async function loadCredentials(): Promise<FortnoxCredentials | null> {
   }
 }
 
-export async function saveCredentials(creds: FortnoxCredentials): Promise<void> {
-  await saveCredentialBlob(JSON.stringify(creds));
+export async function saveCredentials(creds: FortnoxCredentials, profile?: string): Promise<void> {
+  const stamped: FortnoxCredentials = {
+    ...creds,
+    schema_version: CREDENTIAL_SCHEMA_VERSION,
+    last_write_epoch: Date.now(),
+  };
+  await saveCredentialBlob(JSON.stringify(stamped), profileOrResolved(profile));
 }
 
 export async function exchangeCodeForTokens(
@@ -74,6 +100,7 @@ export async function exchangeCodeForTokens(
 
 export async function getTokenViaClientCredentials(
   creds: FortnoxCredentials,
+  profile?: string,
 ): Promise<FortnoxCredentials> {
   if (!creds.tenant_id) {
     throw new Error('No tenant_id available — cannot use client credentials flow');
@@ -111,11 +138,14 @@ export async function getTokenViaClientCredentials(
     expires_at: Date.now() + data.expires_in * 1000,
   };
 
-  await saveCredentials(updated);
+  await saveCredentials(updated, profile);
   return updated;
 }
 
-export async function refreshAccessToken(creds: FortnoxCredentials): Promise<FortnoxCredentials> {
+export async function refreshAccessToken(
+  creds: FortnoxCredentials,
+  profile?: string,
+): Promise<FortnoxCredentials> {
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: creds.refresh_token,
@@ -149,12 +179,13 @@ export async function refreshAccessToken(creds: FortnoxCredentials): Promise<For
     expires_at: Date.now() + data.expires_in * 1000,
   };
 
-  await saveCredentials(updated);
+  await saveCredentials(updated, profile);
   return updated;
 }
 
-export async function getValidToken(): Promise<string> {
-  const creds = await loadCredentials();
+export async function getValidToken(profile?: string): Promise<string> {
+  const target = profileOrResolved(profile);
+  const creds = await loadCredentials(target);
   if (!creds) {
     throw new Error('Not authenticated. Run `noxctl init` to connect your Fortnox account.');
   }
@@ -167,7 +198,7 @@ export async function getValidToken(): Promise<string> {
   // Prefer client credentials when tenant_id is available (no refresh token management needed)
   if (creds.tenant_id) {
     try {
-      const refreshed = await getTokenViaClientCredentials(creds);
+      const refreshed = await getTokenViaClientCredentials(creds, target);
       return refreshed.access_token;
     } catch {
       // Fall through to refresh_token flow
@@ -175,7 +206,7 @@ export async function getValidToken(): Promise<string> {
   }
 
   // Fallback: standard refresh token flow
-  const refreshed = await refreshAccessToken(creds);
+  const refreshed = await refreshAccessToken(creds, target);
   return refreshed.access_token;
 }
 
@@ -194,6 +225,24 @@ export async function fetchTenantId(accessToken: string): Promise<string | undef
   };
 
   return data.CompanyInformation?.DatabaseNumber;
+}
+
+export async function fetchCompanyNameSafe(accessToken: string): Promise<string | undefined> {
+  try {
+    const response = await fetch('https://api.fortnox.se/3/companyinformation', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) return undefined;
+    const data = (await response.json()) as {
+      CompanyInformation?: { CompanyName?: string };
+    };
+    return data.CompanyInformation?.CompanyName;
+  } catch {
+    return undefined;
+  }
 }
 
 function openBrowser(url: string): void {
@@ -240,7 +289,11 @@ export function buildAuthorizationUrl(
   return `${FORTNOX_AUTH_URL}?${params.toString()}`;
 }
 
-export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
+export async function runOAuthSetup(
+  config: FortnoxAppConfig,
+  profile: string = DEFAULT_PROFILE,
+): Promise<void> {
+  const validatedProfile = validateProfileName(profile);
   const PORT = 9876;
   const REDIRECT_URI = `http://localhost:${PORT}/callback`;
   const oauthState = randomBytes(24).toString('hex');
@@ -299,6 +352,7 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
           // Fetch tenant_id for client credentials flow
           console.log('Fetching tenant ID...');
           const tenantId = await fetchTenantId(tokens.access_token);
+          const companyName = await fetchCompanyNameSafe(tokens.access_token);
 
           const creds: FortnoxCredentials = {
             client_id: config.clientId,
@@ -307,9 +361,17 @@ export async function runOAuthSetup(config: FortnoxAppConfig): Promise<void> {
             refresh_token: tokens.refresh_token,
             expires_at: Date.now() + tokens.expires_in * 1000,
             tenant_id: tenantId,
+            company_name: companyName,
           };
 
-          await saveCredentials(creds);
+          await saveCredentials(creds, validatedProfile);
+          await upsertProfile({
+            name: validatedProfile,
+            tenant_id: tenantId,
+            company_name: companyName,
+            created_at: new Date().toISOString(),
+            schema_version: 2,
+          });
 
           const tenantMsg = tenantId
             ? ' Client credentials flow enabled.'

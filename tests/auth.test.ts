@@ -1,11 +1,16 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
 const credentialStore = vi.hoisted(() => ({
   loadCredentialBlob: vi.fn(),
   saveCredentialBlob: vi.fn(),
 }));
 
+const profilesModule = vi.hoisted(() => ({
+  upsertProfile: vi.fn(),
+}));
+
 vi.mock('../src/credentials-store.js', () => credentialStore);
+vi.mock('../src/profiles.js', () => profilesModule);
 
 import {
   loadCredentials,
@@ -15,8 +20,12 @@ import {
   getTokenViaClientCredentials,
   getValidToken,
   fetchTenantId,
+  fetchCompanyNameSafe,
   buildAuthorizationUrl,
   escapeHtml,
+  setResolvedProfile,
+  getResolvedProfile,
+  CREDENTIAL_SCHEMA_VERSION,
   type FortnoxCredentials,
 } from '../src/auth.js';
 
@@ -34,10 +43,16 @@ const mockCredentialsWithTenant: FortnoxCredentials = {
 };
 
 describe('auth', () => {
+  beforeEach(() => {
+    setResolvedProfile('default');
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     credentialStore.loadCredentialBlob.mockReset();
     credentialStore.saveCredentialBlob.mockReset();
+    profilesModule.upsertProfile.mockReset();
+    setResolvedProfile('default');
   });
 
   describe('loadCredentials', () => {
@@ -63,12 +78,63 @@ describe('auth', () => {
   });
 
   describe('saveCredentials', () => {
-    it('writes credentials to secure storage', async () => {
+    it('stamps schema_version and last_write_epoch', async () => {
+      const before = Date.now();
       await saveCredentials(mockCredentials);
+      const after = Date.now();
 
-      expect(credentialStore.saveCredentialBlob).toHaveBeenCalledWith(
-        JSON.stringify(mockCredentials),
-      );
+      expect(credentialStore.saveCredentialBlob).toHaveBeenCalledTimes(1);
+      const [payload, profile] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      const parsed = JSON.parse(payload as string) as FortnoxCredentials;
+      expect(parsed.schema_version).toBe(CREDENTIAL_SCHEMA_VERSION);
+      expect(parsed.last_write_epoch).toBeGreaterThanOrEqual(before);
+      expect(parsed.last_write_epoch).toBeLessThanOrEqual(after);
+      expect(parsed.access_token).toBe(mockCredentials.access_token);
+      expect(profile).toBe('default');
+    });
+
+    it('threads an explicit profile through to the store', async () => {
+      await saveCredentials(mockCredentials, 'demo');
+      const [, profile] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      expect(profile).toBe('demo');
+    });
+
+    it('uses the resolved profile when no profile argument is given', async () => {
+      setResolvedProfile('work');
+      await saveCredentials(mockCredentials);
+      const [, profile] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      expect(profile).toBe('work');
+    });
+  });
+
+  describe('profile resolution', () => {
+    it('defaults to "default"', () => {
+      expect(getResolvedProfile()).toBe('default');
+    });
+
+    it('setResolvedProfile rejects invalid names', () => {
+      expect(() => setResolvedProfile('not valid')).toThrow();
+      expect(getResolvedProfile()).toBe('default');
+    });
+
+    it('setResolvedProfile updates the module state', () => {
+      setResolvedProfile('demo');
+      expect(getResolvedProfile()).toBe('demo');
+    });
+  });
+
+  describe('loadCredentials with profile', () => {
+    it('threads explicit profile through to the store', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      await loadCredentials('demo');
+      expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('demo');
+    });
+
+    it('falls back to the resolved profile when no argument is given', async () => {
+      setResolvedProfile('work');
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      await loadCredentials();
+      expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('work');
     });
   });
 
@@ -293,6 +359,39 @@ describe('auth', () => {
 
       const token = await getValidToken();
       expect(token).toBe('fresh-token');
+    });
+
+    it('reads credentials under the explicit profile', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      await getValidToken('demo');
+      expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('demo');
+    });
+
+    it('reads credentials under the resolved profile when no arg', async () => {
+      setResolvedProfile('work');
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      await getValidToken();
+      expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('work');
+    });
+  });
+
+  describe('fetchCompanyNameSafe', () => {
+    it('returns CompanyName when present', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ CompanyInformation: { CompanyName: 'Acme AB' } }),
+      });
+      await expect(fetchCompanyNameSafe('tok')).resolves.toBe('Acme AB');
+    });
+
+    it('returns undefined on non-ok response', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 500 });
+      await expect(fetchCompanyNameSafe('tok')).resolves.toBeUndefined();
+    });
+
+    it('swallows thrown errors', async () => {
+      global.fetch = vi.fn().mockRejectedValueOnce(new Error('network down'));
+      await expect(fetchCompanyNameSafe('tok')).resolves.toBeUndefined();
     });
   });
 
