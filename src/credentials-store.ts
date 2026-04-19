@@ -8,6 +8,7 @@ import {
   LEGACY_KEYCHAIN_ACCOUNT,
   keychainAccount,
   sanitizeForFilename,
+  validateProfileName,
 } from './profile-name.js';
 
 const CREDENTIALS_DIR = path.join(
@@ -17,6 +18,11 @@ const CREDENTIALS_DIR = path.join(
 const LEGACY_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
 const LEGACY_WINDOWS_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.dpapi');
 const SERVICE_NAME = 'fortnox-mcp';
+
+function normalizeProfile(profile: string): { normalized: string; isDefault: boolean } {
+  const validated = validateProfileName(profile).toLowerCase();
+  return { normalized: validated, isDefault: validated === DEFAULT_PROFILE };
+}
 
 function windowsCredentialsFile(profile: string): string {
   return path.join(CREDENTIALS_DIR, `credentials.${sanitizeForFilename(profile)}.dpapi`);
@@ -200,93 +206,52 @@ async function removeLegacyPlaintextSecret(): Promise<void> {
   }
 }
 
-function loadPlatformSecret(account: string, legacyWindowsFile?: string): string | null {
+function loadFromBackend(account: string, windowsFile: string): string | null {
   if (process.platform === 'darwin') return loadMacSecret(account);
-  if (process.platform === 'win32') {
-    const file = legacyWindowsFile ?? windowsCredentialsFile(stripProfilePrefix(account));
-    return loadWindowsSecret(file);
-  }
+  if (process.platform === 'win32') return loadWindowsSecret(windowsFile);
   return loadLinuxSecret(account);
-}
-
-function stripProfilePrefix(account: string): string {
-  return account.startsWith('profile:') ? account.slice('profile:'.length) : account;
-}
-
-function parseSchemaVersion(blob: string): number {
-  try {
-    const parsed = JSON.parse(blob) as { schema_version?: unknown };
-    if (typeof parsed.schema_version === 'number' && Number.isFinite(parsed.schema_version)) {
-      return parsed.schema_version;
-    }
-  } catch {
-    // unparseable blob → treat as v1 so a newer peer wins
-  }
-  return 1;
-}
-
-function pickHigherSchema(newBlob: string | null, legacyBlob: string | null): string | null {
-  if (newBlob && legacyBlob) {
-    const newV = parseSchemaVersion(newBlob);
-    const legacyV = parseSchemaVersion(legacyBlob);
-    return newV >= legacyV ? newBlob : legacyBlob;
-  }
-  return newBlob ?? legacyBlob;
 }
 
 export async function loadCredentialBlob(
   profile: string = DEFAULT_PROFILE,
 ): Promise<string | null> {
-  const newAccount = keychainAccount(profile);
+  const { normalized, isDefault } = normalizeProfile(profile);
 
-  if (profile === DEFAULT_PROFILE) {
-    let newBlob: string | null;
-    let legacyBlob: string | null;
-
-    if (process.platform === 'win32') {
-      newBlob = loadWindowsSecret(windowsCredentialsFile(profile));
-      legacyBlob = loadWindowsSecret(LEGACY_WINDOWS_CREDENTIALS_FILE);
-    } else {
-      newBlob = loadPlatformSecret(newAccount);
-      legacyBlob = loadPlatformSecret(LEGACY_KEYCHAIN_ACCOUNT);
-    }
-
-    const picked = pickHigherSchema(newBlob, legacyBlob);
-    if (picked) return picked;
-
+  if (isDefault) {
+    // Chunk A reads only the legacy default location so there is no
+    // asymmetric dual-read vs. the legacy-only default write. Chunk C adds
+    // dual-read and dual-write with schema_version + last_write_epoch
+    // tiebreaks to handle mixed-version binaries.
+    const legacyBlob = loadFromBackend(LEGACY_KEYCHAIN_ACCOUNT, LEGACY_WINDOWS_CREDENTIALS_FILE);
+    if (legacyBlob) return legacyBlob;
     return loadLegacyPlaintextSecret();
   }
 
-  // Non-default profiles: no legacy fallback.
-  if (process.platform === 'win32') {
-    return loadWindowsSecret(windowsCredentialsFile(profile));
-  }
-  return loadPlatformSecret(newAccount);
+  return loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
 }
 
 export async function saveCredentialBlob(
   secret: string,
   profile: string = DEFAULT_PROFILE,
 ): Promise<void> {
-  // Chunk A preserves current write behavior for the default profile: we keep
-  // writing to the legacy account so existing single-profile installs continue
-  // to work unchanged. Chunk C will switch default writes to the new location
-  // with dual-write-to-legacy.
-  const useLegacyLocation = profile === DEFAULT_PROFILE;
-  const account = useLegacyLocation ? LEGACY_KEYCHAIN_ACCOUNT : keychainAccount(profile);
+  const { normalized, isDefault } = normalizeProfile(profile);
+
+  // Default writes stay at the legacy account so existing single-profile
+  // installs are unaffected. Chunk C will switch to write-new + dual-write-legacy.
+  const account = isDefault ? LEGACY_KEYCHAIN_ACCOUNT : keychainAccount(normalized);
+  const windowsFile = isDefault
+    ? LEGACY_WINDOWS_CREDENTIALS_FILE
+    : windowsCredentialsFile(normalized);
 
   if (process.platform === 'darwin') {
     saveMacSecret(account, secret);
   } else if (process.platform === 'win32') {
-    const file = useLegacyLocation
-      ? LEGACY_WINDOWS_CREDENTIALS_FILE
-      : windowsCredentialsFile(profile);
-    saveWindowsSecret(file, secret);
+    saveWindowsSecret(windowsFile, secret);
   } else {
     saveLinuxSecret(account, secret);
   }
 
-  if (useLegacyLocation) {
+  if (isDefault) {
     await removeLegacyPlaintextSecret();
   }
 }
@@ -325,22 +290,20 @@ async function deleteAtAccount(account: string, windowsFile: string): Promise<bo
 }
 
 export async function deleteCredentialBlob(profile: string = DEFAULT_PROFILE): Promise<boolean> {
-  let deleted = false;
+  const { normalized, isDefault } = normalizeProfile(profile);
 
-  if (profile === DEFAULT_PROFILE) {
+  if (isDefault) {
     const legacyDeleted = await deleteAtAccount(
       LEGACY_KEYCHAIN_ACCOUNT,
       LEGACY_WINDOWS_CREDENTIALS_FILE,
     );
     const newDeleted = await deleteAtAccount(
-      keychainAccount(profile),
-      windowsCredentialsFile(profile),
+      keychainAccount(normalized),
+      windowsCredentialsFile(normalized),
     );
-    deleted = legacyDeleted || newDeleted;
     await removeLegacyPlaintextSecret();
-  } else {
-    deleted = await deleteAtAccount(keychainAccount(profile), windowsCredentialsFile(profile));
+    return legacyDeleted || newDeleted;
   }
 
-  return deleted;
+  return deleteAtAccount(keychainAccount(normalized), windowsCredentialsFile(normalized));
 }

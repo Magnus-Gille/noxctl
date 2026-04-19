@@ -149,12 +149,11 @@ describe('loadCredentialBlob (darwin)', () => {
     setPlatform('darwin');
   });
 
-  it('default profile reads both legacy and new accounts via `security`', async () => {
+  it('default profile reads only the legacy `default` account (Chunk A)', async () => {
     childProcess.execFileSync.mockReturnValue('');
     await loadCredentialBlob('default');
 
-    const calls = childProcess.execFileSync.mock.calls;
-    const accounts = calls
+    const accounts = childProcess.execFileSync.mock.calls
       .filter(([cmd]) => cmd === 'security')
       .map((call) => {
         const args = call[1] as string[];
@@ -162,8 +161,8 @@ describe('loadCredentialBlob (darwin)', () => {
         return args[idx + 1];
       });
 
-    expect(accounts).toContain('profile:default');
-    expect(accounts).toContain('default');
+    expect(accounts).toEqual(['default']);
+    expect(accounts).not.toContain('profile:default');
   });
 
   it('non-default profile reads only the profile:<name> account', async () => {
@@ -181,6 +180,21 @@ describe('loadCredentialBlob (darwin)', () => {
     expect(accounts).toEqual(['profile:demo']);
   });
 
+  it('treats mixed-case "Default" as the default profile (case-insensitive)', async () => {
+    childProcess.execFileSync.mockReturnValue('');
+    await loadCredentialBlob('Default');
+
+    const accounts = childProcess.execFileSync.mock.calls
+      .filter(([cmd]) => cmd === 'security')
+      .map((call) => {
+        const args = call[1] as string[];
+        const idx = args.indexOf('-a');
+        return args[idx + 1];
+      });
+
+    expect(accounts).toEqual(['default']);
+  });
+
   it('returns null when no credentials exist anywhere', async () => {
     childProcess.execFileSync.mockImplementation(() => {
       throw new Error('no keychain item');
@@ -191,7 +205,7 @@ describe('loadCredentialBlob (darwin)', () => {
     expect(result).toBeNull();
   });
 
-  it('returns legacy blob when only legacy keychain entry exists', async () => {
+  it('returns legacy blob when legacy keychain entry exists', async () => {
     const legacyBlob = JSON.stringify({ client_id: 'legacy' });
     childProcess.execFileSync.mockImplementation((_cmd: string, args: readonly string[]) => {
       const idx = args.indexOf('-a');
@@ -204,52 +218,7 @@ describe('loadCredentialBlob (darwin)', () => {
     expect(result).toBe(legacyBlob);
   });
 
-  it('returns new blob when only new keychain entry exists', async () => {
-    const newBlob = JSON.stringify({ schema_version: 2, client_id: 'new' });
-    childProcess.execFileSync.mockImplementation((_cmd: string, args: readonly string[]) => {
-      const idx = args.indexOf('-a');
-      const account = args[idx + 1];
-      if (account === 'profile:default') return newBlob;
-      throw new Error('not found');
-    });
-
-    const result = await loadCredentialBlob('default');
-    expect(result).toBe(newBlob);
-  });
-
-  it('prefers higher schema_version when both legacy and new exist', async () => {
-    const legacyBlob = JSON.stringify({ client_id: 'legacy' }); // v1 (missing)
-    const newBlob = JSON.stringify({ schema_version: 2, client_id: 'new' });
-
-    childProcess.execFileSync.mockImplementation((_cmd: string, args: readonly string[]) => {
-      const idx = args.indexOf('-a');
-      const account = args[idx + 1];
-      if (account === 'default') return legacyBlob;
-      if (account === 'profile:default') return newBlob;
-      throw new Error('not found');
-    });
-
-    const result = await loadCredentialBlob('default');
-    expect(result).toBe(newBlob);
-  });
-
-  it('prefers new account on schema tie', async () => {
-    const legacyBlob = JSON.stringify({ schema_version: 2, client_id: 'legacy' });
-    const newBlob = JSON.stringify({ schema_version: 2, client_id: 'new' });
-
-    childProcess.execFileSync.mockImplementation((_cmd: string, args: readonly string[]) => {
-      const idx = args.indexOf('-a');
-      const account = args[idx + 1];
-      if (account === 'default') return legacyBlob;
-      if (account === 'profile:default') return newBlob;
-      throw new Error('not found');
-    });
-
-    const result = await loadCredentialBlob('default');
-    expect(result).toBe(newBlob);
-  });
-
-  it('falls back to legacy plaintext when no keychain entries exist', async () => {
+  it('falls back to legacy plaintext when no keychain entry exists', async () => {
     childProcess.execFileSync.mockImplementation(() => {
       throw new Error('no keychain item');
     });
@@ -302,6 +271,14 @@ describe('saveCredentialBlob (darwin)', () => {
     // filesystem/keychain-account keys.
     const scriptBody = fsSync.default.writeFileSync.mock.calls[0][1] as string;
     expect(scriptBody).toContain('let account = "profile:demo"');
+  });
+
+  it('treats mixed-case "Default" as the default profile (case-insensitive)', async () => {
+    await saveCredentialBlob('{"x":1}', 'Default');
+
+    const scriptBody = fsSync.default.writeFileSync.mock.calls[0][1] as string;
+    expect(scriptBody).toContain('let account = "default"');
+    expect(scriptBody).not.toContain('let account = "profile:default"');
   });
 
   it('rejects invalid profile names', async () => {
@@ -416,7 +393,7 @@ describe('Windows DPAPI backend', () => {
     expect(script).not.toContain('credentials.dpapi');
   });
 
-  it('reads legacy credentials.dpapi for default profile', async () => {
+  it('reads only legacy credentials.dpapi for default profile (Chunk A)', async () => {
     childProcess.execFileSync.mockReturnValue('');
     await loadCredentialBlob('default');
 
@@ -424,8 +401,8 @@ describe('Windows DPAPI backend', () => {
       .filter(([cmd]) => cmd === 'powershell')
       .map((call) => (call[1] as string[]).join(' '));
 
-    expect(commands.some((s) => s.includes('credentials.default.dpapi'))).toBe(true);
     expect(commands.some((s) => /credentials\.dpapi(?![.a-z])/.test(s))).toBe(true);
+    expect(commands.some((s) => s.includes('credentials.default.dpapi'))).toBe(false);
   });
 
   it('lowercases mixed-case names in the filename', async () => {
