@@ -109,22 +109,69 @@ export async function removeProfile(name: string): Promise<void> {
   }
 }
 
-export async function readActivePointer(): Promise<string | null> {
+export type PointerOutcome =
+  | { kind: 'missing' }
+  | { kind: 'valid'; name: string }
+  | { kind: 'invalid-content'; raw: string }
+  | { kind: 'read-error'; error: Error }
+  | { kind: 'timeout' };
+
+export interface ReadActivePointerOptions {
+  // Bounded wait on the underlying fs.readFile. An AbortSignal cancels the
+  // OS-level read so a wedged filesystem (NFS, FUSE) does not leak a pending
+  // handle past the timeout — crucial because the MCP direct-run path runs
+  // this before connecting stdio.
+  timeoutMs?: number;
+}
+
+export async function readActivePointerOutcome(
+  options: ReadActivePointerOptions = {},
+): Promise<PointerOutcome> {
+  const controller = new AbortController();
+  let timer: NodeJS.Timeout | undefined;
+  if (options.timeoutMs && options.timeoutMs > 0) {
+    timer = setTimeout(() => controller.abort(), options.timeoutMs);
+  }
   let raw: string;
   try {
-    raw = await fs.readFile(activePointerFile(), 'utf-8');
+    raw = await fs.readFile(activePointerFile(), {
+      encoding: 'utf-8',
+      signal: controller.signal,
+    });
   } catch (err) {
-    if (isMissingFileError(err)) return null;
-    throw err;
+    const e = err as NodeJS.ErrnoException;
+    if (isMissingFileError(err)) return { kind: 'missing' };
+    if (e.name === 'AbortError' || e.code === 'ABORT_ERR') return { kind: 'timeout' };
+    return { kind: 'read-error', error: err instanceof Error ? err : new Error(String(err)) };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   const trimmed = raw.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return { kind: 'missing' };
   try {
-    return validateProfileName(trimmed);
+    return { kind: 'valid', name: validateProfileName(trimmed) };
   } catch {
-    // Corrupt pointer contents — treat as absent so later resolution can
-    // fall through to the env var or default. Chunk D's `doctor` surfaces this.
-    return null;
+    return { kind: 'invalid-content', raw: trimmed };
+  }
+}
+
+export async function readActivePointer(): Promise<string | null> {
+  const outcome = await readActivePointerOutcome();
+  switch (outcome.kind) {
+    case 'valid':
+      return outcome.name;
+    case 'missing':
+    case 'invalid-content':
+      // Corrupt content is degraded to absent so callers that use this
+      // loose API (init, logout, doctor) continue to function. Strict
+      // callers should use readActivePointerOutcome directly.
+      return null;
+    case 'read-error':
+      throw outcome.error;
+    case 'timeout':
+      // The loose API has no timeout, so this branch is only reachable from
+      // callers who passed options — none today. Rethrow defensively.
+      throw Object.assign(new Error('Active pointer read timed out'), { code: 'ETIMEDOUT' });
   }
 }
 

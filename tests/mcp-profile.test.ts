@@ -22,6 +22,12 @@ describe('MCP startup profile binding', () => {
     process.env['HOME'] = tmpHome;
     process.env['USERPROFILE'] = tmpHome;
     delete process.env['NOXCTL_PROFILE'];
+
+    // Reset module cache so each test gets a fresh auth.ts with a clean
+    // `resolvedProfile` module-global. Without this, tests coincidentally
+    // pass only because of assertion narrowness, not because the binding
+    // is actually isolated.
+    vi.resetModules();
   });
 
   afterEach(async () => {
@@ -57,19 +63,35 @@ describe('MCP startup profile binding', () => {
       await expect(resolveStartupProfile()).resolves.toBe('pointed');
     });
 
-    it('falls back to default when pointer contains an invalid name', async () => {
+    it('fails closed when pointer contains an invalid name and no env override', async () => {
       await fs.mkdir(cfgDir, { recursive: true });
       await fs.writeFile(activePointerFile, 'has space\n');
-      const { resolveStartupProfile } = await import('../src/index.js');
-      await expect(resolveStartupProfile()).resolves.toBe('default');
+      const { resolveStartupProfile, StartupProfileError } = await import('../src/index.js');
+      await expect(resolveStartupProfile()).rejects.toBeInstanceOf(StartupProfileError);
+      await expect(resolveStartupProfile()).rejects.toMatchObject({
+        code: 'invalid-pointer-content',
+      });
     });
 
-    it('falls back to default when NOXCTL_PROFILE is invalid', async () => {
-      process.env['NOXCTL_PROFILE'] = 'bad name!';
-      const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    it('overrides a corrupt pointer with a valid NOXCTL_PROFILE and warns', async () => {
+      await fs.mkdir(cfgDir, { recursive: true });
+      await fs.writeFile(activePointerFile, 'has space\n');
+      process.env['NOXCTL_PROFILE'] = 'envwin';
+      const writes: string[] = [];
+      vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+        writes.push(String(chunk));
+        return true;
+      });
       const { resolveStartupProfile } = await import('../src/index.js');
-      await expect(resolveStartupProfile()).resolves.toBe('default');
-      expect(errSpy).toHaveBeenCalled();
+      await expect(resolveStartupProfile()).resolves.toBe('envwin');
+      expect(writes.some((w) => w.includes('[warning:'))).toBe(true);
+    });
+
+    it('fails closed when NOXCTL_PROFILE is invalid', async () => {
+      process.env['NOXCTL_PROFILE'] = 'bad name!';
+      const { resolveStartupProfile, StartupProfileError } = await import('../src/index.js');
+      await expect(resolveStartupProfile()).rejects.toBeInstanceOf(StartupProfileError);
+      await expect(resolveStartupProfile()).rejects.toMatchObject({ code: 'invalid-env' });
     });
   });
 

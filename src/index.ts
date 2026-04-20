@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { setResolvedProfile } from './auth.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
-import { readActivePointer, resolveProfile } from './profiles.js';
+import { readActivePointerOutcome, resolveProfile } from './profiles.js';
 import { registerCustomerTools } from './tools/customers.js';
 import { registerInvoiceTools } from './tools/invoices.js';
 import { registerBookkeepingTools } from './tools/bookkeeping.js';
@@ -59,24 +59,60 @@ export interface StartMcpServerOptions {
   profile?: string;
 }
 
-// Resolves the startup profile from env + active pointer when no explicit
-// profile is supplied. Mirrors the CLI preAction precedence minus the flag
-// (there's no Commander context at direct-run entry). An invalid name is
-// logged and falls back to the default rather than crashing the server.
+// Thrown by resolveStartupProfile when the profile cannot be resolved
+// unambiguously (corrupt/unreadable pointer with no env override, or an
+// invalid env var). startMcpServer translates this into a stderr-logged
+// non-zero exit so tests can observe it without terminating the test runner.
+export class StartupProfileError extends Error {
+  constructor(
+    public readonly code:
+      | 'invalid-pointer-content'
+      | 'pointer-read-error'
+      | 'pointer-timeout'
+      | 'invalid-env',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'StartupProfileError';
+  }
+}
+
+// Resolves the startup profile from env + active pointer. Mirrors the CLI
+// preAction precedence minus the flag (no Commander context at direct-run
+// entry). Pointer faults fail closed when no env override is present —
+// silently binding to `default` could route requests to the wrong tenant.
 export async function resolveStartupProfile(): Promise<string> {
   const env = process.env['NOXCTL_PROFILE'] ?? undefined;
-  let pointer: string | null = null;
-  try {
-    pointer = await readActivePointer();
-  } catch {
-    pointer = null;
+  const outcome = await readActivePointerOutcome({ timeoutMs: 2000 });
+
+  if (outcome.kind !== 'valid' && outcome.kind !== 'missing') {
+    const desc =
+      outcome.kind === 'invalid-content'
+        ? `contains an invalid profile name: "${outcome.raw}"`
+        : outcome.kind === 'read-error'
+          ? `could not be read (${outcome.error.message})`
+          : 'read timed out';
+    if (!env) {
+      throw new StartupProfileError(
+        outcome.kind === 'invalid-content'
+          ? 'invalid-pointer-content'
+          : outcome.kind === 'read-error'
+            ? 'pointer-read-error'
+            : 'pointer-timeout',
+        `Active profile pointer ${desc}. Refusing to start MCP server with ambiguous profile. Run \`noxctl doctor\` or set NOXCTL_PROFILE explicitly.`,
+      );
+    }
+    process.stderr.write(
+      `[warning: active-profile pointer ${desc}; using NOXCTL_PROFILE instead]\n`,
+    );
   }
+
+  const pointer = outcome.kind === 'valid' ? outcome.name : null;
   try {
     return resolveProfile({ env, pointer }).name;
   } catch (err) {
     if (err instanceof InvalidProfileNameError) {
-      process.stderr.write(`${err.message}\n`);
-      return DEFAULT_PROFILE;
+      throw new StartupProfileError('invalid-env', err.message);
     }
     throw err;
   }
@@ -94,7 +130,15 @@ export async function bindStartupProfile(options: StartMcpServerOptions = {}): P
 }
 
 export async function startMcpServer(options: StartMcpServerOptions = {}): Promise<void> {
-  await bindStartupProfile(options);
+  try {
+    await bindStartupProfile(options);
+  } catch (err) {
+    if (err instanceof StartupProfileError) {
+      process.stderr.write(`${err.message}\n`);
+      process.exit(2);
+    }
+    throw err;
+  }
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
