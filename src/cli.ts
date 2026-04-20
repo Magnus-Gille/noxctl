@@ -65,7 +65,7 @@ const program = new Command();
 program
   .name('noxctl')
   .description('CLI and MCP server for Fortnox accounting')
-  .version('0.1.0')
+  .version('0.2.0')
   .addOption(
     new Option('-o, --output <format>', 'Output format')
       .choices(['json', 'table'])
