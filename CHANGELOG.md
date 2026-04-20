@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Multi-profile support** — run noxctl against multiple Fortnox tenants from a single installation. Each profile has its own namespaced OAuth credentials in the OS keychain.
+- **Multi-profile support** — run noxctl against multiple Fortnox tenants from a single installation. Each profile has its own namespaced OAuth credentials in the OS secure store.
 - **Profile resolution precedence:** `--profile <name>` flag → `NOXCTL_PROFILE` env var → `~/.fortnox-mcp/active-profile` pointer → `default`.
 - **`noxctl profile` subcommands:** `use <name>`, `current`, `list`.
 - **`--profile <name>` flag** on all commands, including `init` and `serve`.
@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Fail-closed pointer semantics at MCP startup.** `noxctl serve` refuses to start when the active-profile pointer is corrupt, unreadable, or times out and no `--profile` flag or `NOXCTL_PROFILE` is set. Exits with code 2 and a stderr message pointing at `noxctl doctor`. The CLI's `doctor` and `profile use` commands remain usable against a broken pointer so it can be repaired.
 - **Pointer read uses `AbortController`** instead of `Promise.race`, so a timeout actually cancels the underlying `fs.readFile` rather than letting it run to completion in the background.
-- **Credential storage is now namespaced by profile.** A one-time migration on first run re-writes existing credentials under the `default` profile. The legacy entry is preserved for one release cycle to allow rollback to 0.1.x.
+- **Credential storage is now namespaced by profile.** Existing 0.1.x installs are dual-read transparently (legacy entry → `default` profile) and the profile index is seeded on first observation. The new namespaced entry is written lazily on the next credential save (token refresh or `noxctl init`); the legacy entry stays dual-written for one release cycle so rollback to 0.1.x continues to work.
 
 ### Security
 

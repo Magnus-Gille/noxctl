@@ -6,13 +6,13 @@
 
 ### What happens on upgrade
 
-On the first invocation after upgrading, noxctl performs a one-time credential migration:
+On the first invocation after upgrading, noxctl transparently dual-reads credentials:
 
-1. Reads the legacy keychain entry (the one 0.1.x wrote under fixed service names).
-2. Re-writes the same credentials under the `default` profile's namespaced keychain entry.
-3. Creates a `profiles.json` index entry for `default` under `~/.fortnox-mcp/`.
+1. **Reads the legacy credential entry** (the one 0.1.x wrote under fixed service names) and uses it as the `default` profile's credentials. No rewrite happens at read time — the legacy entry is the source of truth until something updates credentials.
+2. **Seeds the profile index** — on first observation of the legacy entry, noxctl writes a `default` row to `~/.fortnox-mcp/profiles.json` so `noxctl profile list` and `profile current` have something to show.
+3. **Migrates lazily on the next save.** The first time 0.2.0 writes credentials for the `default` profile (a token refresh, or running `noxctl init` again), it dual-writes to both the new namespaced entry and the legacy entry. From that point on the new entry exists and is preferred, while the legacy entry stays in sync so a downgrade still works.
 
-The legacy entry is left intact for one release cycle so a downgrade to 0.1.x still works. No data loss; no action required.
+No data loss; no action required.
 
 If you've never set up noxctl, there's nothing to migrate — `noxctl init` will create the `default` profile fresh.
 
@@ -63,8 +63,17 @@ noxctl profile use default              # repair the pointer
 
 ### Rollback to 0.1.x
 
+Global install:
+
 ```bash
 npm install -g noxctl@0.1.0
 ```
 
-0.1.x will read the legacy keychain entry that 0.2.0 left in place. Profiles other than `default` are invisible to 0.1.x — their credentials remain in the keychain but are not used.
+**If you registered the MCP server with Claude Desktop / claude.ai / Code**, that registration runs `npx noxctl serve`, which resolves `noxctl` dynamically and may still pick the latest published version regardless of your global pin. Re-register with an explicit version to actually pin the MCP server:
+
+```bash
+claude mcp remove fortnox
+claude mcp add fortnox -- npx noxctl@0.1.0 serve
+```
+
+0.1.x will read the legacy credential entry that 0.2.0 left in place. Profiles other than `default` are invisible to 0.1.x — their credentials remain in the secure store but are not used.

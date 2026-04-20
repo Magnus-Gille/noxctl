@@ -117,7 +117,7 @@ You should see your company name, organisation number, and address. If this work
 
 ## Profiles (multi-tenant)
 
-noxctl supports multiple Fortnox tenants from a single installation — useful if you bookkeep for several companies, or want to keep a sandbox tenant separate from production. Each profile has its own OAuth credentials in the OS keychain, keyed by profile name.
+noxctl supports multiple Fortnox tenants from a single installation — useful if you bookkeep for several companies, or want to keep a sandbox tenant separate from production. Each profile has its own OAuth credentials in the OS secure store (macOS Keychain / Linux Secret Service / Windows DPAPI), keyed by profile name.
 
 ### Running against a specific profile
 
