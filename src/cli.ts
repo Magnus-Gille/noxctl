@@ -188,6 +188,15 @@ program
       process.exit(2);
     }
 
+    // If `init --profile <name>` names a different profile than the preAction
+    // hook resolved, rebind the in-process resolved profile so downstream work
+    // (verification via getCompanyInfo, runOAuthSetup's internal saveCredentials
+    // call chain) targets the profile being initialized — not a stale pointer.
+    if (targetProfile.toLowerCase() !== resolvedProfileInfo.name.toLowerCase()) {
+      setResolvedProfile(targetProfile);
+      resolvedProfileInfo = { name: targetProfile, source: 'flag' };
+    }
+
     // Step 1: Check if already configured
     const existing = await loadCredentials(targetProfile);
     if (existing) {

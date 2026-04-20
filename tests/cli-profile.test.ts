@@ -208,3 +208,35 @@ describe('stderr profile indicator', () => {
     expect(res.stderr).not.toContain('[profile:');
   });
 });
+
+describe('logout --all', () => {
+  it('reports nothing to remove when no profiles are registered', () => {
+    const res = run(['logout', '--all', '--yes']);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('No credentials found');
+  });
+
+  it('clears the index and active pointer even when credentials are absent', async () => {
+    await fs.mkdir(cfgDir, { recursive: true });
+    await fs.writeFile(
+      profilesIndexFile,
+      JSON.stringify({
+        schema_version: 1,
+        profiles: [
+          { name: 'default', created_at: '2026-01-01T00:00:00.000Z', schema_version: 2 },
+          { name: 'work', created_at: '2026-01-02T00:00:00.000Z', schema_version: 2 },
+        ],
+      }),
+    );
+    await fs.writeFile(activePointerFile, 'work\n');
+
+    const res = run(['logout', '--all', '--yes']);
+    expect(res.status).toBe(0);
+
+    const idxAfter = JSON.parse(await fs.readFile(profilesIndexFile, 'utf-8')) as {
+      profiles: unknown[];
+    };
+    expect(idxAfter.profiles).toEqual([]);
+    await expect(fs.access(activePointerFile)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+});

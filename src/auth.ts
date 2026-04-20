@@ -406,28 +406,23 @@ export async function runOAuthSetup(
             company_name: companyName,
           };
 
+          // Preserve the original created_at when re-authenticating an existing
+          // profile so the index timestamp reflects first auth, not the most
+          // recent one. Upsert BEFORE saveCredentials so a filesystem failure
+          // here can't leave a credential blob without a matching index entry —
+          // `logout --all` enumerates via the index, so a silent orphan would
+          // mean creds in the keychain that bulk-logout can't see.
+          const existing = (await readProfileIndex()).profiles.find(
+            (p) => p.name.toLowerCase() === validatedProfile.toLowerCase(),
+          );
+          await upsertProfile({
+            name: validatedProfile,
+            tenant_id: tenantId,
+            company_name: companyName,
+            created_at: existing?.created_at ?? new Date().toISOString(),
+            schema_version: 2,
+          });
           await saveCredentials(creds, validatedProfile);
-          try {
-            // Preserve the original created_at when re-authenticating an
-            // existing profile so the index timestamp reflects first auth,
-            // not the most recent one.
-            const existing = (await readProfileIndex()).profiles.find(
-              (p) => p.name.toLowerCase() === validatedProfile.toLowerCase(),
-            );
-            await upsertProfile({
-              name: validatedProfile,
-              tenant_id: tenantId,
-              company_name: companyName,
-              created_at: existing?.created_at ?? new Date().toISOString(),
-              schema_version: 2,
-            });
-          } catch (indexErr) {
-            // Credentials already saved — treat index write as best-effort so a
-            // filesystem hiccup under ~/.fortnox-mcp doesn't abort `noxctl init`.
-            // Chunk D's `doctor` / `profile use` will surface a broken index.
-            const msg = indexErr instanceof Error ? indexErr.message : String(indexErr);
-            console.warn(`Warning: could not update profile index: ${msg}`);
-          }
 
           const tenantMsg = tenantId
             ? ' Client credentials flow enabled.'
