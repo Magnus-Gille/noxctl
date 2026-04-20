@@ -399,6 +399,25 @@ describe('auth', () => {
       await expect(getValidToken()).rejects.toThrow('Not authenticated');
     });
 
+    it('tags the not-authenticated error with profile when non-default', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+      await expect(getValidToken('staging')).rejects.toThrow(
+        /\[profile: staging\].*noxctl init --profile staging/,
+      );
+    });
+
+    it('omits the profile tag for the default profile', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+      try {
+        await getValidToken();
+        expect.unreachable();
+      } catch (err) {
+        const message = (err as Error).message;
+        expect(message).not.toContain('[profile:');
+        expect(message).toContain('noxctl init');
+      }
+    });
+
     it('returns existing token when not expired', async () => {
       credentialStore.loadCredentialBlob.mockResolvedValueOnce(
         blobResult(JSON.stringify(mockCredentials)),

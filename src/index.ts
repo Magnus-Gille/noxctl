@@ -1,5 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { setResolvedProfile } from './auth.js';
+import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
+import { readActivePointer, resolveProfile } from './profiles.js';
 import { registerCustomerTools } from './tools/customers.js';
 import { registerInvoiceTools } from './tools/invoices.js';
 import { registerBookkeepingTools } from './tools/bookkeeping.js';
@@ -47,7 +50,51 @@ export function createServer(): McpServer {
   return server;
 }
 
-export async function startMcpServer(): Promise<void> {
+export interface StartMcpServerOptions {
+  /**
+   * When provided, binds the MCP session to this profile directly (skipping
+   * env/pointer resolution). The CLI `serve` action passes the profile it
+   * already resolved via its preAction hook so a `--profile` flag isn't lost.
+   */
+  profile?: string;
+}
+
+// Resolves the startup profile from env + active pointer when no explicit
+// profile is supplied. Mirrors the CLI preAction precedence minus the flag
+// (there's no Commander context at direct-run entry). An invalid name is
+// logged and falls back to the default rather than crashing the server.
+export async function resolveStartupProfile(): Promise<string> {
+  const env = process.env['NOXCTL_PROFILE'] ?? undefined;
+  let pointer: string | null = null;
+  try {
+    pointer = await readActivePointer();
+  } catch {
+    pointer = null;
+  }
+  try {
+    return resolveProfile({ env, pointer }).name;
+  } catch (err) {
+    if (err instanceof InvalidProfileNameError) {
+      process.stderr.write(`${err.message}\n`);
+      return DEFAULT_PROFILE;
+    }
+    throw err;
+  }
+}
+
+// Extracted from startMcpServer so tests can exercise profile binding without
+// spinning up the stdio transport (which blocks on stdin).
+export async function bindStartupProfile(options: StartMcpServerOptions = {}): Promise<string> {
+  const profile = options.profile ?? (await resolveStartupProfile());
+  setResolvedProfile(profile);
+  if (profile.toLowerCase() !== DEFAULT_PROFILE) {
+    process.stderr.write(`[profile: ${profile}]\n`);
+  }
+  return profile;
+}
+
+export async function startMcpServer(options: StartMcpServerOptions = {}): Promise<void> {
+  await bindStartupProfile(options);
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);

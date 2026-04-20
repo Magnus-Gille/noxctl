@@ -1,4 +1,5 @@
-import { getValidToken } from './auth.js';
+import { getResolvedProfile, getValidToken } from './auth.js';
+import { DEFAULT_PROFILE } from './profile-name.js';
 
 const BASE_URL = 'https://api.fortnox.se/3';
 
@@ -39,7 +40,9 @@ export class FortnoxApiError extends Error {
     endpoint?: string,
   ) {
     const hint = getErrorHint(statusCode, fortnoxMessage, endpoint);
-    const parts = [`Fortnox API error (${statusCode}): ${fortnoxMessage}`];
+    const profile = getResolvedProfile();
+    const profileTag = profile.toLowerCase() !== DEFAULT_PROFILE ? `[profile: ${profile}] ` : '';
+    const parts = [`${profileTag}Fortnox API error (${statusCode}): ${fortnoxMessage}`];
     if (hint) parts.push(`Hint: ${hint}`);
     super(parts.join('\n'));
     this.name = 'FortnoxApiError';

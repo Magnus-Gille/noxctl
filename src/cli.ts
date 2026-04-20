@@ -770,7 +770,7 @@ program
   .description('Start the MCP server (stdio transport)')
   .action(async () => {
     const { startMcpServer } = await import('./index.js');
-    await startMcpServer();
+    await startMcpServer({ profile: resolvedProfileInfo.name });
   });
 
 // --- invoices ---

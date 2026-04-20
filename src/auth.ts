@@ -229,7 +229,11 @@ export async function getValidToken(profile?: string): Promise<string> {
   const target = profileOrResolved(profile);
   const creds = await loadCredentials(target);
   if (!creds) {
-    throw new Error('Not authenticated. Run `noxctl init` to connect your Fortnox account.');
+    const initCmd = isDefaultProfile(target)
+      ? '`noxctl init`'
+      : `\`noxctl init --profile ${target}\``;
+    const prefix = isDefaultProfile(target) ? '' : `[profile: ${target}] `;
+    throw new Error(`${prefix}Not authenticated. Run ${initCmd} to connect your Fortnox account.`);
   }
 
   // Token still valid — use it
