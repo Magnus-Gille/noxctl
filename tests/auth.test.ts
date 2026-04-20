@@ -325,6 +325,24 @@ describe('auth', () => {
         'Client credentials token request failed (403)',
       );
     });
+
+    it('tags the failed-request error with profile when non-default', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        text: () => Promise.resolve('Forbidden'),
+      });
+
+      await expect(
+        getTokenViaClientCredentials(mockCredentialsWithTenant, 'staging'),
+      ).rejects.toThrow(/\[profile: staging\].*Client credentials token request failed/);
+    });
+
+    it('tags the no-tenant_id error with profile when non-default', async () => {
+      await expect(getTokenViaClientCredentials(mockCredentials, 'staging')).rejects.toThrow(
+        /\[profile: staging\].*No tenant_id available/,
+      );
+    });
   });
 
   describe('refreshAccessToken', () => {
@@ -355,6 +373,33 @@ describe('auth', () => {
       await expect(refreshAccessToken(mockCredentials)).rejects.toThrow(
         'Token refresh failed (401)',
       );
+    });
+
+    it('tags the failed-refresh error with profile when non-default', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve('Unauthorized'),
+      });
+
+      await expect(refreshAccessToken(mockCredentials, 'staging')).rejects.toThrow(
+        /\[profile: staging\].*Token refresh failed/,
+      );
+    });
+
+    it('omits the profile tag for the default profile', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        text: () => Promise.resolve('Unauthorized'),
+      });
+
+      try {
+        await refreshAccessToken(mockCredentials);
+        expect.unreachable();
+      } catch (err) {
+        expect((err as Error).message).not.toContain('[profile:');
+      }
     });
   });
 
@@ -397,6 +442,25 @@ describe('auth', () => {
     it('throws when not authenticated', async () => {
       credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
       await expect(getValidToken()).rejects.toThrow('Not authenticated');
+    });
+
+    it('tags the not-authenticated error with profile when non-default', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+      await expect(getValidToken('staging')).rejects.toThrow(
+        /\[profile: staging\].*noxctl init --profile staging/,
+      );
+    });
+
+    it('omits the profile tag for the default profile', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+      try {
+        await getValidToken();
+        expect.unreachable();
+      } catch (err) {
+        const message = (err as Error).message;
+        expect(message).not.toContain('[profile:');
+        expect(message).toContain('noxctl init');
+      }
     });
 
     it('returns existing token when not expired', async () => {

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { fortnoxRequest, FortnoxApiError } from '../src/fortnox-client.js';
+import { getResolvedProfile } from '../src/auth.js';
 
 vi.mock('../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
+  getResolvedProfile: vi.fn().mockReturnValue('default'),
 }));
 
 describe('fortnox-client', () => {
@@ -200,6 +202,46 @@ describe('fortnox-client', () => {
       } catch (err) {
         const e = err as FortnoxApiError;
         expect(e.hint).toContain('server error');
+      }
+    });
+  });
+
+  describe('profile tagging', () => {
+    afterEach(() => {
+      vi.mocked(getResolvedProfile).mockReturnValue('default');
+    });
+
+    it('prefixes the error message with [profile: <name>] when non-default', async () => {
+      vi.mocked(getResolvedProfile).mockReturnValue('staging');
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Boom', code: 0 } }),
+      });
+
+      try {
+        await fortnoxRequest('customers');
+        expect.unreachable();
+      } catch (err) {
+        const e = err as FortnoxApiError;
+        expect(e.message.startsWith('[profile: staging]')).toBe(true);
+      }
+    });
+
+    it('omits the profile prefix for the default profile', async () => {
+      vi.mocked(getResolvedProfile).mockReturnValue('default');
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Boom', code: 0 } }),
+      });
+
+      try {
+        await fortnoxRequest('customers');
+        expect.unreachable();
+      } catch (err) {
+        const e = err as FortnoxApiError;
+        expect(e.message).not.toContain('[profile:');
       }
     });
   });

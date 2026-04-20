@@ -13,6 +13,7 @@ import {
 } from './formatter.js';
 import {
   readActivePointer,
+  readActivePointerOutcome,
   writeActivePointer,
   deleteActivePointer,
   readProfileIndex,
@@ -94,11 +95,28 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
 
   const flag = (program.opts().profile as string | undefined) ?? undefined;
   const env = process.env['NOXCTL_PROFILE'] ?? undefined;
+
+  // Typed pointer resolution so we can distinguish "no pointer" (silent
+  // default) from "pointer unreadable/corrupt" (must surface). 2s bound
+  // catches wedged filesystems; the AbortSignal cancels the underlying read.
+  const outcome = await readActivePointerOutcome({ timeoutMs: 2000 });
   let pointer: string | null = null;
-  try {
-    pointer = await readActivePointer();
-  } catch {
-    pointer = null;
+
+  if (outcome.kind === 'valid') {
+    pointer = outcome.name;
+  } else if (outcome.kind !== 'missing') {
+    const desc = describePointerFault(outcome);
+    // Only fail closed when the pointer is the winning source (no flag/env)
+    // AND we're about to start the MCP server. For any other command, warn
+    // loudly but continue so `doctor` / `profile use` can repair the state.
+    const wouldRelyOnPointer = !flag && !env;
+    if (wouldRelyOnPointer && name === 'serve') {
+      console.error(
+        `Active profile pointer ${desc}. Refusing to start MCP server with ambiguous profile. Run \`noxctl doctor\` or set NOXCTL_PROFILE explicitly.`,
+      );
+      process.exit(2);
+    }
+    process.stderr.write(`[warning: active-profile pointer ${desc}; ignoring]\n`);
   }
 
   try {
@@ -113,14 +131,34 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
 
   setResolvedProfile(resolvedProfileInfo.name);
 
+  // Banner ownership: MCP `serve` prints its own banner in bindStartupProfile
+  // so host logs (Claude Desktop) always see it. Suppress here to avoid a
+  // duplicate on TTY invocations like `noxctl --profile X serve`.
   if (
     resolvedProfileInfo.name.toLowerCase() !== DEFAULT_PROFILE &&
     process.stderr.isTTY &&
-    name !== 'current'
+    name !== 'current' &&
+    name !== 'serve'
   ) {
     process.stderr.write(`[profile: ${resolvedProfileInfo.name}]\n`);
   }
 });
+
+function describePointerFault(
+  outcome:
+    | { kind: 'invalid-content'; raw: string }
+    | { kind: 'read-error'; error: Error }
+    | { kind: 'timeout' },
+): string {
+  switch (outcome.kind) {
+    case 'invalid-content':
+      return `contains an invalid profile name: "${outcome.raw}"`;
+    case 'read-error':
+      return `could not be read (${outcome.error.message})`;
+    case 'timeout':
+      return 'read timed out';
+  }
+}
 
 async function fetchCompanyHint(): Promise<string | undefined> {
   try {
@@ -770,7 +808,7 @@ program
   .description('Start the MCP server (stdio transport)')
   .action(async () => {
     const { startMcpServer } = await import('./index.js');
-    await startMcpServer();
+    await startMcpServer({ profile: resolvedProfileInfo.name });
   });
 
 // --- invoices ---

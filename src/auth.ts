@@ -32,6 +32,11 @@ export interface FortnoxAppConfig {
   serviceAccount?: boolean;
 }
 
+// Module-global resolved profile. This assumes a single-tenant process model
+// (one CLI invocation or one MCP stdio connection per Node process). Hosting
+// multiple Fortnox MCP servers in the same process is not supported — every
+// instance would share this state. Revisit if the MCP SDK grows request-local
+// context that handlers can read.
 let resolvedProfile: string = DEFAULT_PROFILE;
 
 // Whether the legacy (pre-0.2) credential slot was observed on the most recent
@@ -58,6 +63,10 @@ function profileOrResolved(profile?: string): string {
 
 function isDefaultProfile(name: string): boolean {
   return name.toLowerCase() === DEFAULT_PROFILE;
+}
+
+function profileTag(name: string): string {
+  return isDefaultProfile(name) ? '' : `[profile: ${name}] `;
 }
 
 function legacySlotExists(source: LoadSource): boolean {
@@ -144,8 +153,9 @@ export async function getTokenViaClientCredentials(
   creds: FortnoxCredentials,
   profile?: string,
 ): Promise<FortnoxCredentials> {
+  const tag = profileTag(profileOrResolved(profile));
   if (!creds.tenant_id) {
-    throw new Error('No tenant_id available — cannot use client credentials flow');
+    throw new Error(`${tag}No tenant_id available — cannot use client credentials flow`);
   }
 
   const body = new URLSearchParams({
@@ -166,7 +176,7 @@ export async function getTokenViaClientCredentials(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Client credentials token request failed (${response.status}): ${text}`);
+    throw new Error(`${tag}Client credentials token request failed (${response.status}): ${text}`);
   }
 
   const data = (await response.json()) as {
@@ -188,6 +198,7 @@ export async function refreshAccessToken(
   creds: FortnoxCredentials,
   profile?: string,
 ): Promise<FortnoxCredentials> {
+  const tag = profileTag(profileOrResolved(profile));
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: creds.refresh_token,
@@ -205,7 +216,7 @@ export async function refreshAccessToken(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(`Token refresh failed (${response.status}): ${text}`);
+    throw new Error(`${tag}Token refresh failed (${response.status}): ${text}`);
   }
 
   const data = (await response.json()) as {
@@ -229,7 +240,12 @@ export async function getValidToken(profile?: string): Promise<string> {
   const target = profileOrResolved(profile);
   const creds = await loadCredentials(target);
   if (!creds) {
-    throw new Error('Not authenticated. Run `noxctl init` to connect your Fortnox account.');
+    const initCmd = isDefaultProfile(target)
+      ? '`noxctl init`'
+      : `\`noxctl init --profile ${target}\``;
+    throw new Error(
+      `${profileTag(target)}Not authenticated. Run ${initCmd} to connect your Fortnox account.`,
+    );
   }
 
   // Token still valid — use it
