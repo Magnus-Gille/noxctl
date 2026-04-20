@@ -71,7 +71,7 @@ function legacySlotExists(source: LoadSource): boolean {
 
 export async function loadCredentials(profile?: string): Promise<FortnoxCredentials | null> {
   const target = profileOrResolved(profile);
-  let result: { blob: string | null; source: LoadSource };
+  let result: { blob: string | null; source: LoadSource; legacyBlob: string | null };
   try {
     result = await loadCredentialBlob(target);
   } catch {
@@ -80,9 +80,11 @@ export async function loadCredentials(profile?: string): Promise<FortnoxCredenti
 
   if (isDefaultProfile(target) && legacySlotExists(result.source)) {
     legacyObservedForDefault = true;
-    // Best-effort seeding of the profile index for pre-0.2 installs. A
-    // failure here must not break auth — Chunk D's `doctor` will surface it.
-    await migrateLegacyIfNeeded(result.blob);
+    // Best-effort seeding of the profile index for pre-0.2 installs. Seed from
+    // the raw legacy blob — not result.blob, which may be the new slot if
+    // pickHigher preferred it and would lose legacy-only metadata on drift.
+    // A failure here must not break auth — Chunk D's `doctor` will surface it.
+    await migrateLegacyIfNeeded(result.legacyBlob);
   }
 
   if (!result.blob) return null;

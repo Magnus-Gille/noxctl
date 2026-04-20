@@ -46,6 +46,11 @@ export type LoadSource =
 export interface LoadCredentialBlobResult {
   blob: string | null;
   source: LoadSource;
+  // The raw legacy-slot blob when it was observed (including when the new slot
+  // was preferred by pickHigher). Callers driving migration of index metadata
+  // should seed from this rather than `blob`, since the two copies may have
+  // drifted. null when no legacy slot existed on this load.
+  legacyBlob: string | null;
 }
 
 export interface SaveCredentialOptions {
@@ -284,7 +289,7 @@ export async function loadCredentialBlob(
 
   if (!isDefault) {
     const blob = loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
-    return { blob, source: blob ? 'new' : null };
+    return { blob, source: blob ? 'new' : null, legacyBlob: null };
   }
 
   const newBlob = loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
@@ -295,14 +300,15 @@ export async function loadCredentialBlob(
     return {
       blob,
       source: picked === 'new' ? 'both-new-preferred' : 'both-legacy-preferred',
+      legacyBlob,
     };
   }
-  if (newBlob) return { blob: newBlob, source: 'new' };
-  if (legacyBlob) return { blob: legacyBlob, source: 'legacy' };
+  if (newBlob) return { blob: newBlob, source: 'new', legacyBlob: null };
+  if (legacyBlob) return { blob: legacyBlob, source: 'legacy', legacyBlob };
 
   const plaintext = await loadLegacyPlaintextSecret();
-  if (plaintext) return { blob: plaintext, source: 'legacy-plaintext' };
-  return { blob: null, source: null };
+  if (plaintext) return { blob: plaintext, source: 'legacy-plaintext', legacyBlob: plaintext };
+  return { blob: null, source: null, legacyBlob: null };
 }
 
 function writeToBackend(account: string, windowsFile: string, secret: string): void {
@@ -330,9 +336,16 @@ export async function saveCredentialBlob(
   // Compatibility dual-write: for the default profile only, and only when the
   // caller observed a legacy blob during load. This keeps an older 0.1 binary
   // functional during the 0.2.x window without silently creating a legacy slot
-  // for users who never had one. REMOVE IN 0.3.0.
+  // for users who never had one. Best-effort — a failure here must not break
+  // the auth flow, since the authoritative new-slot write already succeeded.
+  // REMOVE IN 0.3.0.
   if (LEGACY_DUAL_WRITE && isDefault && options.alsoWriteLegacy) {
-    writeToBackend(LEGACY_KEYCHAIN_ACCOUNT, legacyWindowsCredentialsFile(), secret);
+    try {
+      writeToBackend(LEGACY_KEYCHAIN_ACCOUNT, legacyWindowsCredentialsFile(), secret);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`Warning: could not mirror credentials to legacy slot: ${msg}`);
+    }
   }
 
   if (isDefault) {

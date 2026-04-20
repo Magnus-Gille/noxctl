@@ -201,7 +201,7 @@ describe('loadCredentialBlob (darwin)', () => {
     fsPromises.default.readFile.mockRejectedValue(new Error('ENOENT'));
 
     const result = await loadCredentialBlob('default');
-    expect(result).toEqual({ blob: null, source: null });
+    expect(result).toEqual({ blob: null, source: null, legacyBlob: null });
   });
 
   it('returns legacy blob with source=legacy when only legacy keychain entry exists', async () => {
@@ -214,10 +214,10 @@ describe('loadCredentialBlob (darwin)', () => {
     });
 
     const result = await loadCredentialBlob('default');
-    expect(result).toEqual({ blob: legacyBlob, source: 'legacy' });
+    expect(result).toEqual({ blob: legacyBlob, source: 'legacy', legacyBlob });
   });
 
-  it('returns new blob with source=new when only new keychain entry exists', async () => {
+  it('returns new blob with source=new and legacyBlob=null when only new keychain entry exists', async () => {
     const newBlob = JSON.stringify({ client_id: 'new' });
     childProcess.execFileSync.mockImplementation((_cmd: string, args: readonly string[]) => {
       const idx = args.indexOf('-a');
@@ -227,7 +227,28 @@ describe('loadCredentialBlob (darwin)', () => {
     });
 
     const result = await loadCredentialBlob('default');
-    expect(result).toEqual({ blob: newBlob, source: 'new' });
+    expect(result).toEqual({ blob: newBlob, source: 'new', legacyBlob: null });
+  });
+
+  it('exposes legacyBlob alongside the preferred new blob when both exist', async () => {
+    const newBlob = JSON.stringify({ schema_version: 3, last_write_epoch: 100, side: 'new' });
+    const legacyBlob = JSON.stringify({
+      schema_version: 2,
+      last_write_epoch: 999,
+      side: 'legacy',
+      tenant_id: 'only-in-legacy',
+    });
+    childProcess.execFileSync.mockImplementation((_cmd: string, args: readonly string[]) => {
+      const idx = args.indexOf('-a');
+      const account = args[idx + 1];
+      if (account === 'profile:default') return newBlob;
+      if (account === 'default') return legacyBlob;
+      throw new Error('not found');
+    });
+
+    const result = await loadCredentialBlob('default');
+    expect(result.blob).toBe(newBlob);
+    expect(result.legacyBlob).toBe(legacyBlob);
   });
 
   it('prefers new blob when both exist with equal metadata', async () => {
@@ -297,7 +318,11 @@ describe('loadCredentialBlob (darwin)', () => {
     fsPromises.default.readFile.mockResolvedValue('{"client_id":"plaintext"}');
 
     const result = await loadCredentialBlob('default');
-    expect(result).toEqual({ blob: '{"client_id":"plaintext"}', source: 'legacy-plaintext' });
+    expect(result).toEqual({
+      blob: '{"client_id":"plaintext"}',
+      source: 'legacy-plaintext',
+      legacyBlob: '{"client_id":"plaintext"}',
+    });
   });
 
   it('does not fall back to legacy plaintext for non-default profiles', async () => {
@@ -307,7 +332,7 @@ describe('loadCredentialBlob (darwin)', () => {
     fsPromises.default.readFile.mockResolvedValue('{"client_id":"plaintext"}');
 
     const result = await loadCredentialBlob('demo');
-    expect(result).toEqual({ blob: null, source: null });
+    expect(result).toEqual({ blob: null, source: null, legacyBlob: null });
   });
 });
 
@@ -336,6 +361,31 @@ describe('saveCredentialBlob (darwin)', () => {
     await saveCredentialBlob('{"x":1}', 'default', { alsoWriteLegacy: true });
     expect(writtenAccounts()).toEqual(expect.arrayContaining(['profile:default', 'default']));
     expect(writtenAccounts()).toHaveLength(2);
+  });
+
+  it('swallows a legacy-slot write failure when primary write succeeded', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // Primary (profile:default) write succeeds via the Swift helper; legacy
+    // (account=default) write fails at the security CLI fallback.
+    childProcess.spawnSync.mockImplementationOnce(() => ({
+      status: 0,
+      stderr: '',
+      stdout: '',
+    }));
+    childProcess.spawnSync.mockImplementationOnce(() => ({
+      status: 1,
+      stderr: 'legacy keychain unavailable',
+      stdout: '',
+    }));
+    childProcess.execFileSync.mockImplementation(() => {
+      throw new Error('security CLI also unavailable');
+    });
+
+    await expect(
+      saveCredentialBlob('{"x":1}', 'default', { alsoWriteLegacy: true }),
+    ).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/legacy slot/i));
+    warnSpy.mockRestore();
   });
 
   it('non-default profile ignores alsoWriteLegacy', async () => {

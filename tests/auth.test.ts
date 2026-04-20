@@ -41,8 +41,9 @@ function blobResult(
     | 'both-legacy-preferred'
     | 'legacy-plaintext'
     | null = blob ? 'new' : null,
+  legacyBlob: string | null = source === 'legacy' || source === 'legacy-plaintext' ? blob : null,
 ) {
-  return { blob, source };
+  return { blob, source, legacyBlob };
 }
 
 const mockCredentials: FortnoxCredentials = {
@@ -105,6 +106,18 @@ describe('auth', () => {
       credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(blob, 'legacy'));
       await loadCredentials();
       expect(profilesModule.migrateLegacyIfNeeded).toHaveBeenCalledWith(blob);
+    });
+
+    it('seeds migration from the legacy blob, not the selected new blob, on drift', async () => {
+      const newBlob = JSON.stringify({ ...mockCredentials, tenant_id: undefined });
+      const legacyBlob = JSON.stringify({ ...mockCredentials, tenant_id: '12345' });
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce({
+        blob: newBlob,
+        source: 'both-new-preferred',
+        legacyBlob,
+      });
+      await loadCredentials();
+      expect(profilesModule.migrateLegacyIfNeeded).toHaveBeenCalledWith(legacyBlob);
     });
 
     it('does not invoke migrateLegacyIfNeeded when only the new slot exists', async () => {
