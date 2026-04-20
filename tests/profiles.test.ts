@@ -12,6 +12,7 @@ import {
   writeActivePointer,
   deleteActivePointer,
   resolveProfile,
+  migrateLegacyIfNeeded,
   paths,
 } from '../src/profiles.js';
 
@@ -216,5 +217,61 @@ describe('active pointer I/O', () => {
     const spy = vi.spyOn(fs, 'readFile').mockRejectedValueOnce(permErr);
     await expect(readActivePointer()).rejects.toMatchObject({ code: 'EACCES' });
     spy.mockRestore();
+  });
+});
+
+describe('migrateLegacyIfNeeded', () => {
+  it('returns false and writes nothing when legacyBlob is null', async () => {
+    await expect(migrateLegacyIfNeeded(null)).resolves.toBe(false);
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toEqual([]);
+  });
+
+  it('seeds a default entry from a valid legacy blob', async () => {
+    const blob = JSON.stringify({
+      client_id: 'cid',
+      tenant_id: '54321',
+      company_name: 'Acme AB',
+    });
+    await expect(migrateLegacyIfNeeded(blob)).resolves.toBe(true);
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toHaveLength(1);
+    expect(idx.profiles[0]!.name).toBe('default');
+    expect(idx.profiles[0]!.tenant_id).toBe('54321');
+    expect(idx.profiles[0]!.company_name).toBe('Acme AB');
+  });
+
+  it('is idempotent — second call is a no-op when default already exists', async () => {
+    const blob = JSON.stringify({ tenant_id: '1' });
+    await migrateLegacyIfNeeded(blob);
+    const originalCreatedAt = (await readProfileIndex()).profiles[0]!.created_at;
+    await new Promise((r) => setTimeout(r, 5));
+    await expect(migrateLegacyIfNeeded(blob)).resolves.toBe(false);
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toHaveLength(1);
+    expect(idx.profiles[0]!.created_at).toBe(originalCreatedAt);
+  });
+
+  it('seeds a bare default entry when the blob is unparseable', async () => {
+    await expect(migrateLegacyIfNeeded('{not json')).resolves.toBe(true);
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toHaveLength(1);
+    expect(idx.profiles[0]!.name).toBe('default');
+    expect(idx.profiles[0]!.tenant_id).toBeUndefined();
+  });
+
+  it('does not overwrite an existing default entry', async () => {
+    await upsertProfile({
+      name: 'default',
+      tenant_id: 'existing',
+      company_name: 'Existing AB',
+      created_at: '2025-01-01T00:00:00.000Z',
+      schema_version: 2,
+    });
+    const blob = JSON.stringify({ tenant_id: 'legacy', company_name: 'Legacy AB' });
+    await expect(migrateLegacyIfNeeded(blob)).resolves.toBe(false);
+    const idx = await readProfileIndex();
+    expect(idx.profiles).toHaveLength(1);
+    expect(idx.profiles[0]!.tenant_id).toBe('existing');
   });
 });
