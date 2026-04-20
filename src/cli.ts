@@ -12,6 +12,16 @@ import {
   formatFinancialReport,
 } from './formatter.js';
 import {
+  readActivePointer,
+  writeActivePointer,
+  deleteActivePointer,
+  readProfileIndex,
+  resolveProfile,
+  type ResolvedProfile,
+} from './profiles.js';
+import { setResolvedProfile } from './auth.js';
+import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
+import {
   invoiceListColumns,
   invoiceDetailColumns,
   invoiceConfirmColumns,
@@ -59,10 +69,67 @@ program
     new Option('-o, --output <format>', 'Output format')
       .choices(['json', 'table'])
       .default(undefined),
+  )
+  .option(
+    '--profile <name>',
+    'Profile to operate on (overrides NOXCTL_PROFILE and active pointer)',
   );
 
 function json(): boolean {
   return isJsonMode(program.opts());
+}
+
+let resolvedProfileInfo: ResolvedProfile = { name: DEFAULT_PROFILE, source: 'default' };
+
+export function getResolvedProfileInfo(): ResolvedProfile {
+  return resolvedProfileInfo;
+}
+
+// Commands that don't need (and shouldn't require) a resolved profile.
+const PROFILE_RESOLUTION_SKIP = new Set(['help']);
+
+program.hook('preAction', async (thisCommand, actionCommand) => {
+  const name = actionCommand.name();
+  if (PROFILE_RESOLUTION_SKIP.has(name)) return;
+
+  const flag = (program.opts().profile as string | undefined) ?? undefined;
+  const env = process.env['NOXCTL_PROFILE'] ?? undefined;
+  let pointer: string | null = null;
+  try {
+    pointer = await readActivePointer();
+  } catch {
+    pointer = null;
+  }
+
+  try {
+    resolvedProfileInfo = resolveProfile({ flag, env, pointer });
+  } catch (err) {
+    if (err instanceof InvalidProfileNameError) {
+      console.error(err.message);
+      process.exit(2);
+    }
+    throw err;
+  }
+
+  setResolvedProfile(resolvedProfileInfo.name);
+
+  if (
+    resolvedProfileInfo.name.toLowerCase() !== DEFAULT_PROFILE &&
+    process.stderr.isTTY &&
+    name !== 'current'
+  ) {
+    process.stderr.write(`[profile: ${resolvedProfileInfo.name}]\n`);
+  }
+});
+
+async function fetchCompanyHint(): Promise<string | undefined> {
+  try {
+    const { loadCredentials } = await import('./auth.js');
+    const creds = await loadCredentials();
+    return creds?.company_name;
+  } catch {
+    return undefined;
+  }
 }
 
 async function confirmMutation(
@@ -85,13 +152,16 @@ async function confirmMutation(
     throw new Error(`Confirmation required to ${action}. Re-run with --yes, or --dry-run first.`);
   }
 
+  const company = await fetchCompanyHint();
+  const suffix = company ? ` (${company})` : '';
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
   });
 
   try {
-    const answer = await rl.question(`${action}. Continue? [y/N] `);
+    const answer = await rl.question(`${action}. Continue?${suffix} [y/N] `);
     return ['y', 'yes'].includes(answer.trim().toLowerCase());
   } finally {
     rl.close();
@@ -102,11 +172,24 @@ async function confirmMutation(
 program
   .command('init')
   .description('Interactive setup wizard — recommended onboarding path')
-  .action(async () => {
+  .option(
+    '--profile <name>',
+    'Profile to create/re-auth (defaults to resolved profile or "default")',
+  )
+  .action(async (initOpts: { profile?: string }) => {
     const { loadCredentials, runOAuthSetup } = await import('./auth.js');
+    const { validateProfileName } = await import('./profile-name.js');
+
+    let targetProfile: string;
+    try {
+      targetProfile = validateProfileName(initOpts.profile ?? resolvedProfileInfo.name);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(2);
+    }
 
     // Step 1: Check if already configured
-    const existing = await loadCredentials();
+    const existing = await loadCredentials(targetProfile);
     if (existing) {
       console.log('Existing credentials found.');
 
@@ -253,7 +336,20 @@ program
     }
 
     // Step 6: Run OAuth flow
-    await runOAuthSetup({ clientId, clientSecret, serviceAccount });
+    await runOAuthSetup({ clientId, clientSecret, serviceAccount }, targetProfile);
+
+    // Step 6b: Set the active pointer if this is the first profile or no pointer exists.
+    try {
+      const idx = await readProfileIndex();
+      const existingPointer = await readActivePointer();
+      const firstProfile = idx.profiles.length <= 1;
+      if (firstProfile || !existingPointer) {
+        await writeActivePointer(targetProfile);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`Warning: could not update active profile pointer: ${msg}`);
+    }
 
     // Step 7: Verify by fetching company info
     try {
@@ -346,28 +442,146 @@ program
 // --- logout ---
 program
   .command('logout')
-  .description('Remove stored Fortnox credentials')
+  .description('Remove stored Fortnox credentials for the resolved profile')
   .option('-y, --yes', 'Skip confirmation prompt')
-  .action(async (opts: { yes?: boolean }) => {
-    const { loadCredentials } = await import('./auth.js');
+  .option('--all', 'Remove credentials for every profile (and the legacy slot)')
+  .action(async (opts: { yes?: boolean; all?: boolean; dryRun?: boolean }) => {
     const { deleteCredentialBlob } = await import('./credentials-store.js');
+    const { removeProfile } = await import('./profiles.js');
 
-    const existing = await loadCredentials();
+    if (opts.all) {
+      if (!(await confirmMutation('Remove stored Fortnox credentials for ALL profiles', opts))) {
+        return;
+      }
+
+      const idx = await readProfileIndex();
+      const names = new Set<string>(idx.profiles.map((p) => p.name));
+      names.add(DEFAULT_PROFILE);
+
+      let removedAny = false;
+      for (const name of names) {
+        const deleted = await deleteCredentialBlob(name);
+        if (deleted) removedAny = true;
+        try {
+          await removeProfile(name);
+        } catch {
+          // best-effort — index cleanup must not abort logout
+        }
+      }
+      try {
+        await deleteActivePointer();
+      } catch {
+        // ignore
+      }
+
+      if (removedAny) {
+        console.log('Removed credentials for all profiles.');
+      } else {
+        console.log('No credentials found to remove.');
+      }
+      return;
+    }
+
+    const target = resolvedProfileInfo.name;
+    const { loadCredentials } = await import('./auth.js');
+
+    const existing = await loadCredentials(target);
     if (!existing) {
-      console.log('No credentials found. Nothing to remove.');
+      console.log(`No credentials found for profile "${target}". Nothing to remove.`);
       return;
     }
 
-    if (!(await confirmMutation('Remove stored Fortnox credentials', opts))) {
+    if (!(await confirmMutation(`Remove stored credentials for profile "${target}"`, opts))) {
       return;
     }
 
-    const deleted = await deleteCredentialBlob();
+    const deleted = await deleteCredentialBlob(target);
+
+    try {
+      await removeProfile(target);
+    } catch {
+      // best-effort
+    }
+
+    try {
+      const pointer = await readActivePointer();
+      if (pointer && pointer.toLowerCase() === target.toLowerCase()) {
+        await deleteActivePointer();
+      }
+    } catch {
+      // ignore
+    }
+
     if (deleted) {
-      console.log('Credentials removed.');
+      console.log(`Credentials for profile "${target}" removed.`);
     } else {
       console.log('Could not remove credentials from the system keychain.');
       console.log('They may have already been removed, or you may need to remove them manually.');
+    }
+  });
+
+// --- profile ---
+const profile = program.command('profile').description('Manage noxctl profiles');
+
+profile
+  .command('use <name>')
+  .description('Set the active profile (writes ~/.fortnox-mcp/active-profile)')
+  .action(async (name: string) => {
+    const { validateProfileName } = await import('./profile-name.js');
+    let validated: string;
+    try {
+      validated = validateProfileName(name);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(2);
+    }
+
+    const { loadCredentials } = await import('./auth.js');
+    const creds = await loadCredentials(validated);
+    if (!creds) {
+      console.error(
+        `No credentials found for profile "${validated}". Run \`noxctl init --profile ${validated}\` first.`,
+      );
+      process.exit(1);
+    }
+
+    await writeActivePointer(validated);
+    if (json()) {
+      console.log(JSON.stringify({ name: validated, source: 'pointer' }));
+    } else {
+      console.log(`Active profile set to "${validated}".`);
+    }
+  });
+
+profile
+  .command('current')
+  .description('Show the currently resolved profile and where it came from')
+  .action(() => {
+    if (json()) {
+      console.log(JSON.stringify(resolvedProfileInfo));
+    } else {
+      console.log(`${resolvedProfileInfo.name} (source: ${resolvedProfileInfo.source})`);
+    }
+  });
+
+profile
+  .command('list')
+  .description('List known profiles from the index')
+  .action(async () => {
+    const idx = await readProfileIndex();
+    if (json()) {
+      console.log(JSON.stringify(idx.profiles, null, 2));
+      return;
+    }
+    if (idx.profiles.length === 0) {
+      console.log('No profiles registered. Run `noxctl init` to create one.');
+      return;
+    }
+    for (const p of idx.profiles) {
+      const marker = p.name.toLowerCase() === resolvedProfileInfo.name.toLowerCase() ? '*' : ' ';
+      const company = p.company_name ? ` — ${p.company_name}` : '';
+      const tenant = p.tenant_id ? ` [tenant ${p.tenant_id}]` : '';
+      console.log(`${marker} ${p.name}${company}${tenant}`);
     }
   });
 
@@ -407,14 +621,58 @@ program
           : 'Linux Secret Service';
     pass('Credential store', storeBackend);
 
+    // 2b. Profile resolution
+    pass('Profile', `${resolvedProfileInfo.name} (source: ${resolvedProfileInfo.source})`);
+
+    // 2c. Active pointer health — surface a corrupt pointer file even though
+    // readActivePointer() degrades silently.
+    try {
+      const { paths } = await import('./profiles.js');
+      const fsp = await import('node:fs/promises');
+      const raw = await fsp.readFile(paths.activePointerFile, 'utf-8').catch(() => null);
+      if (raw !== null) {
+        const trimmed = raw.trim();
+        if (trimmed.length > 0) {
+          const { validateProfileName } = await import('./profile-name.js');
+          try {
+            validateProfileName(trimmed);
+            const idx = await readProfileIndex();
+            const known = idx.profiles.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
+            if (known) {
+              pass('Active pointer', trimmed);
+            } else {
+              fail(
+                'Active pointer',
+                `points to unknown profile "${trimmed}" — run \`noxctl profile use <name>\` to fix`,
+              );
+            }
+          } catch {
+            fail('Active pointer', 'contains an invalid name — delete to reset');
+          }
+        }
+      }
+    } catch {
+      // best-effort diagnostic — don't block doctor on filesystem issues
+    }
+
     // 3. Credentials exist
     const creds = await loadCredentials();
     if (!creds) {
-      fail('Credentials', 'not found — run `noxctl init` to set up');
+      fail(
+        'Credentials',
+        `not found for profile "${resolvedProfileInfo.name}" — run \`noxctl init${
+          resolvedProfileInfo.name === DEFAULT_PROFILE
+            ? ''
+            : ` --profile ${resolvedProfileInfo.name}`
+        }\` to set up`,
+      );
       console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
       return;
     }
     pass('Credentials', 'found');
+    if (creds.company_name) {
+      pass('Company (cached)', creds.company_name);
+    }
 
     // 4. Client ID present
     if (creds.client_id) {

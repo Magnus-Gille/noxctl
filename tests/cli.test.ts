@@ -84,15 +84,38 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('Check setup');
   });
 
-  it('noxctl logout --help shows --yes option', () => {
+  it('noxctl logout --help shows --yes and --all options', () => {
     const output = execFileSync('node', [CLI_PATH, 'logout', '--help'], execOpts) as string;
     expect(output).toContain('--yes');
+    expect(output).toContain('--all');
     expect(output).toContain('Remove stored');
   });
 
-  it('noxctl init --help exits 0', () => {
+  it('noxctl init --help shows --profile option', () => {
     const output = execFileSync('node', [CLI_PATH, 'init', '--help'], execOpts) as string;
     expect(output).toContain('Interactive setup');
+    expect(output).toContain('--profile');
+  });
+
+  it('noxctl --help mentions --profile global option', () => {
+    const output = execFileSync('node', [CLI_PATH, '--help'], execOpts) as string;
+    expect(output).toContain('--profile');
+  });
+
+  it('noxctl profile --help shows subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'profile', '--help'], execOpts) as string;
+    expect(output).toContain('use');
+    expect(output).toContain('current');
+    expect(output).toContain('list');
+  });
+
+  it('noxctl profile current --help exits 0', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'profile', 'current', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('resolved profile');
   });
 
   it('noxctl supplier-invoices --help shows subcommands', () => {
