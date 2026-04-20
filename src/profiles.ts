@@ -1,15 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { DEFAULT_PROFILE, validateProfileName } from './profile-name.js';
-
-function configDir(): string {
-  return path.join(
-    process.env.HOME || process.env.USERPROFILE || os.homedir() || '~',
-    '.fortnox-mcp',
-  );
-}
+import { configDir } from './config-paths.js';
 
 function profilesIndexFile(): string {
   return path.join(configDir(), 'profiles.json');
@@ -165,6 +158,44 @@ export function resolveProfile(inputs: ResolveInputs): ResolvedProfile {
     return { name: validateProfileName(inputs.pointer), source: 'pointer' };
   }
   return { name: DEFAULT_PROFILE, source: 'default' };
+}
+
+// Seeds the profile index with a `default` entry when a legacy (pre-0.2)
+// credential blob is observed for the default profile and no `default` entry
+// exists yet. Returns true when a new entry was written. Errors are swallowed
+// so a broken filesystem can't break the auth path — Chunk D's `doctor` will
+// surface the underlying issue.
+export async function migrateLegacyIfNeeded(legacyBlob: string | null): Promise<boolean> {
+  if (!legacyBlob) return false;
+  try {
+    const idx = await readProfileIndex();
+    if (idx.profiles.some((p) => p.name.toLowerCase() === DEFAULT_PROFILE)) {
+      return false;
+    }
+    let tenant_id: string | undefined;
+    let company_name: string | undefined;
+    try {
+      const parsed = JSON.parse(legacyBlob) as {
+        tenant_id?: unknown;
+        company_name?: unknown;
+      };
+      if (typeof parsed.tenant_id === 'string') tenant_id = parsed.tenant_id;
+      if (typeof parsed.company_name === 'string') company_name = parsed.company_name;
+    } catch {
+      // Unparseable blob — still seed a bare default entry so later mutations
+      // have something to attach to.
+    }
+    await upsertProfile({
+      name: DEFAULT_PROFILE,
+      tenant_id,
+      company_name,
+      created_at: new Date().toISOString(),
+      schema_version: 2,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export const paths = {

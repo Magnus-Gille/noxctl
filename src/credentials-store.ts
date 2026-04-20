@@ -10,13 +10,14 @@ import {
   sanitizeForFilename,
   validateProfileName,
 } from './profile-name.js';
+import { configDir } from './config-paths.js';
 
-const CREDENTIALS_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || '~',
-  '.fortnox-mcp',
-);
-const LEGACY_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.json');
-const LEGACY_WINDOWS_CREDENTIALS_FILE = path.join(CREDENTIALS_DIR, 'credentials.dpapi');
+function legacyCredentialsFile(): string {
+  return path.join(configDir(), 'credentials.json');
+}
+function legacyWindowsCredentialsFile(): string {
+  return path.join(configDir(), 'credentials.dpapi');
+}
 const SERVICE_NAME = 'fortnox-mcp';
 
 function normalizeProfile(profile: string): { normalized: string; isDefault: boolean } {
@@ -25,7 +26,71 @@ function normalizeProfile(profile: string): { normalized: string; isDefault: boo
 }
 
 function windowsCredentialsFile(profile: string): string {
-  return path.join(CREDENTIALS_DIR, `credentials.${sanitizeForFilename(profile)}.dpapi`);
+  return path.join(configDir(), `credentials.${sanitizeForFilename(profile)}.dpapi`);
+}
+
+// Dual-write to the legacy slot during the 0.2.x compatibility window so an
+// older 0.1 binary can still read credentials written by this one. Flip to
+// `false` in 0.3.0 and delete the legacy reader branch below.
+// REMOVE IN 0.3.0
+export const LEGACY_DUAL_WRITE = true;
+
+export type LoadSource =
+  | 'new'
+  | 'legacy'
+  | 'both-new-preferred'
+  | 'both-legacy-preferred'
+  | 'legacy-plaintext'
+  | null;
+
+export interface LoadCredentialBlobResult {
+  blob: string | null;
+  source: LoadSource;
+}
+
+export interface SaveCredentialOptions {
+  // When true AND LEGACY_DUAL_WRITE AND the profile resolves to `default`,
+  // the blob is also written to the legacy keychain account / credentials.dpapi
+  // file. Callers set this only when a legacy blob was observed during the most
+  // recent load, to avoid creating empty legacy slots for fresh installs.
+  alsoWriteLegacy?: boolean;
+}
+
+interface ParsedMeta {
+  schema: number;
+  epoch: number;
+}
+
+function parseBlobMeta(blob: string): ParsedMeta | null {
+  try {
+    const parsed = JSON.parse(blob) as {
+      schema_version?: unknown;
+      last_write_epoch?: unknown;
+    };
+    const schema = typeof parsed.schema_version === 'number' ? parsed.schema_version : 1;
+    const epoch = typeof parsed.last_write_epoch === 'number' ? parsed.last_write_epoch : 0;
+    return { schema, epoch };
+  } catch {
+    return null;
+  }
+}
+
+function pickHigher(
+  newBlob: string,
+  legacyBlob: string,
+): { blob: string; picked: 'new' | 'legacy' } {
+  const nMeta = parseBlobMeta(newBlob);
+  const lMeta = parseBlobMeta(legacyBlob);
+  if (nMeta && !lMeta) return { blob: newBlob, picked: 'new' };
+  if (!nMeta && lMeta) return { blob: legacyBlob, picked: 'legacy' };
+  if (!nMeta && !lMeta) return { blob: newBlob, picked: 'new' };
+  const n = nMeta!;
+  const l = lMeta!;
+  if (n.schema > l.schema) return { blob: newBlob, picked: 'new' };
+  if (l.schema > n.schema) return { blob: legacyBlob, picked: 'legacy' };
+  if (n.epoch > l.epoch) return { blob: newBlob, picked: 'new' };
+  if (l.epoch > n.epoch) return { blob: legacyBlob, picked: 'legacy' };
+  return { blob: newBlob, picked: 'new' };
 }
 
 function decodeHexIfNeeded(value: string): string {
@@ -175,7 +240,7 @@ function saveWindowsSecret(file: string, secret: string): void {
       '-NonInteractive',
       '-Command',
       [
-        `[IO.Directory]::CreateDirectory('${CREDENTIALS_DIR}') | Out-Null`,
+        `[IO.Directory]::CreateDirectory('${configDir()}') | Out-Null`,
         '$plain = [Console]::In.ReadToEnd()',
         '$bytes = [Text.Encoding]::UTF8.GetBytes($plain)',
         '$protected = [System.Security.Cryptography.ProtectedData]::Protect($bytes, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
@@ -192,7 +257,7 @@ function saveWindowsSecret(file: string, secret: string): void {
 
 async function loadLegacyPlaintextSecret(): Promise<string | null> {
   try {
-    return await fs.readFile(LEGACY_CREDENTIALS_FILE, 'utf-8');
+    return await fs.readFile(legacyCredentialsFile(), 'utf-8');
   } catch {
     return null;
   }
@@ -200,7 +265,7 @@ async function loadLegacyPlaintextSecret(): Promise<string | null> {
 
 async function removeLegacyPlaintextSecret(): Promise<void> {
   try {
-    await fs.rm(LEGACY_CREDENTIALS_FILE, { force: true });
+    await fs.rm(legacyCredentialsFile(), { force: true });
   } catch {
     // ignore cleanup failures
   }
@@ -214,41 +279,60 @@ function loadFromBackend(account: string, windowsFile: string): string | null {
 
 export async function loadCredentialBlob(
   profile: string = DEFAULT_PROFILE,
-): Promise<string | null> {
+): Promise<LoadCredentialBlobResult> {
   const { normalized, isDefault } = normalizeProfile(profile);
 
-  if (isDefault) {
-    // Chunk A reads only the legacy default location so there is no
-    // asymmetric dual-read vs. the legacy-only default write. Chunk C adds
-    // dual-read and dual-write with schema_version + last_write_epoch
-    // tiebreaks to handle mixed-version binaries.
-    const legacyBlob = loadFromBackend(LEGACY_KEYCHAIN_ACCOUNT, LEGACY_WINDOWS_CREDENTIALS_FILE);
-    if (legacyBlob) return legacyBlob;
-    return loadLegacyPlaintextSecret();
+  if (!isDefault) {
+    const blob = loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
+    return { blob, source: blob ? 'new' : null };
   }
 
-  return loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
+  const newBlob = loadFromBackend(keychainAccount(normalized), windowsCredentialsFile(normalized));
+  const legacyBlob = loadFromBackend(LEGACY_KEYCHAIN_ACCOUNT, legacyWindowsCredentialsFile());
+
+  if (newBlob && legacyBlob) {
+    const { blob, picked } = pickHigher(newBlob, legacyBlob);
+    return {
+      blob,
+      source: picked === 'new' ? 'both-new-preferred' : 'both-legacy-preferred',
+    };
+  }
+  if (newBlob) return { blob: newBlob, source: 'new' };
+  if (legacyBlob) return { blob: legacyBlob, source: 'legacy' };
+
+  const plaintext = await loadLegacyPlaintextSecret();
+  if (plaintext) return { blob: plaintext, source: 'legacy-plaintext' };
+  return { blob: null, source: null };
 }
 
-export async function saveCredentialBlob(
-  secret: string,
-  profile: string = DEFAULT_PROFILE,
-): Promise<void> {
-  const { normalized, isDefault } = normalizeProfile(profile);
-
-  // Default writes stay at the legacy account so existing single-profile
-  // installs are unaffected. Chunk C will switch to write-new + dual-write-legacy.
-  const account = isDefault ? LEGACY_KEYCHAIN_ACCOUNT : keychainAccount(normalized);
-  const windowsFile = isDefault
-    ? LEGACY_WINDOWS_CREDENTIALS_FILE
-    : windowsCredentialsFile(normalized);
-
+function writeToBackend(account: string, windowsFile: string, secret: string): void {
   if (process.platform === 'darwin') {
     saveMacSecret(account, secret);
   } else if (process.platform === 'win32') {
     saveWindowsSecret(windowsFile, secret);
   } else {
     saveLinuxSecret(account, secret);
+  }
+}
+
+export async function saveCredentialBlob(
+  secret: string,
+  profile: string = DEFAULT_PROFILE,
+  options: SaveCredentialOptions = {},
+): Promise<void> {
+  const { normalized, isDefault } = normalizeProfile(profile);
+
+  // Primary write: always the new per-profile slot (profile:<name> or
+  // credentials.<name>.dpapi). For default this is `profile:default` /
+  // `credentials.default.dpapi`.
+  writeToBackend(keychainAccount(normalized), windowsCredentialsFile(normalized), secret);
+
+  // Compatibility dual-write: for the default profile only, and only when the
+  // caller observed a legacy blob during load. This keeps an older 0.1 binary
+  // functional during the 0.2.x window without silently creating a legacy slot
+  // for users who never had one. REMOVE IN 0.3.0.
+  if (LEGACY_DUAL_WRITE && isDefault && options.alsoWriteLegacy) {
+    writeToBackend(LEGACY_KEYCHAIN_ACCOUNT, legacyWindowsCredentialsFile(), secret);
   }
 
   if (isDefault) {
@@ -295,7 +379,7 @@ export async function deleteCredentialBlob(profile: string = DEFAULT_PROFILE): P
   if (isDefault) {
     const legacyDeleted = await deleteAtAccount(
       LEGACY_KEYCHAIN_ACCOUNT,
-      LEGACY_WINDOWS_CREDENTIALS_FILE,
+      legacyWindowsCredentialsFile(),
     );
     const newDeleted = await deleteAtAccount(
       keychainAccount(normalized),

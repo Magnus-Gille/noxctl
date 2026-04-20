@@ -7,6 +7,8 @@ const credentialStore = vi.hoisted(() => ({
 
 const profilesModule = vi.hoisted(() => ({
   upsertProfile: vi.fn(),
+  migrateLegacyIfNeeded: vi.fn(),
+  readProfileIndex: vi.fn(),
 }));
 
 vi.mock('../src/credentials-store.js', () => credentialStore);
@@ -26,8 +28,22 @@ import {
   setResolvedProfile,
   getResolvedProfile,
   CREDENTIAL_SCHEMA_VERSION,
+  __resetLegacyObservedForDefault,
   type FortnoxCredentials,
 } from '../src/auth.js';
+
+function blobResult(
+  blob: string | null,
+  source:
+    | 'new'
+    | 'legacy'
+    | 'both-new-preferred'
+    | 'both-legacy-preferred'
+    | 'legacy-plaintext'
+    | null = blob ? 'new' : null,
+) {
+  return { blob, source };
+}
 
 const mockCredentials: FortnoxCredentials = {
   client_id: 'test-client-id',
@@ -45,6 +61,9 @@ const mockCredentialsWithTenant: FortnoxCredentials = {
 describe('auth', () => {
   beforeEach(() => {
     setResolvedProfile('default');
+    __resetLegacyObservedForDefault();
+    profilesModule.readProfileIndex.mockResolvedValue({ schema_version: 1, profiles: [] });
+    profilesModule.migrateLegacyIfNeeded.mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -52,28 +71,56 @@ describe('auth', () => {
     credentialStore.loadCredentialBlob.mockReset();
     credentialStore.saveCredentialBlob.mockReset();
     profilesModule.upsertProfile.mockReset();
+    profilesModule.migrateLegacyIfNeeded.mockReset();
+    profilesModule.readProfileIndex.mockReset();
     setResolvedProfile('default');
+    __resetLegacyObservedForDefault();
   });
 
   describe('loadCredentials', () => {
     it('returns null when no credentials are stored', async () => {
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(null);
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
       const creds = await loadCredentials();
       expect(creds).toBeNull();
     });
 
     it('returns parsed credentials from secure storage', async () => {
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
       const creds = await loadCredentials();
       expect(creds).toEqual(mockCredentials);
     });
 
     it('returns credentials with tenant_id when present', async () => {
       credentialStore.loadCredentialBlob.mockResolvedValueOnce(
-        JSON.stringify(mockCredentialsWithTenant),
+        blobResult(JSON.stringify(mockCredentialsWithTenant)),
       );
       const creds = await loadCredentials();
       expect(creds?.tenant_id).toBe('12345');
+    });
+
+    it('invokes migrateLegacyIfNeeded when legacy slot is observed for default', async () => {
+      const blob = JSON.stringify(mockCredentials);
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(blob, 'legacy'));
+      await loadCredentials();
+      expect(profilesModule.migrateLegacyIfNeeded).toHaveBeenCalledWith(blob);
+    });
+
+    it('does not invoke migrateLegacyIfNeeded when only the new slot exists', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials), 'new'),
+      );
+      await loadCredentials();
+      expect(profilesModule.migrateLegacyIfNeeded).not.toHaveBeenCalled();
+    });
+
+    it('does not invoke migrateLegacyIfNeeded for non-default profiles', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials), 'new'),
+      );
+      await loadCredentials('demo');
+      expect(profilesModule.migrateLegacyIfNeeded).not.toHaveBeenCalled();
     });
   });
 
@@ -105,6 +152,46 @@ describe('auth', () => {
       const [, profile] = credentialStore.saveCredentialBlob.mock.calls[0]!;
       expect(profile).toBe('work');
     });
+
+    it('does not set alsoWriteLegacy for fresh default-profile installs', async () => {
+      await saveCredentials(mockCredentials);
+      const [, , options] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      expect((options as { alsoWriteLegacy?: boolean } | undefined)?.alsoWriteLegacy).toBeFalsy();
+    });
+
+    it('sets alsoWriteLegacy=true for default after a legacy slot was observed', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials), 'legacy'),
+      );
+      await loadCredentials();
+      await saveCredentials(mockCredentials);
+
+      const [, , options] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      expect((options as { alsoWriteLegacy?: boolean }).alsoWriteLegacy).toBe(true);
+    });
+
+    it('never sets alsoWriteLegacy for non-default profiles', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials), 'legacy'),
+      );
+      await loadCredentials(); // observes legacy for default
+      await saveCredentials(mockCredentials, 'demo');
+
+      const [, profile, options] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      expect(profile).toBe('demo');
+      expect((options as { alsoWriteLegacy?: boolean }).alsoWriteLegacy).toBe(false);
+    });
+
+    it('sets alsoWriteLegacy after observing both-new-preferred', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials), 'both-new-preferred'),
+      );
+      await loadCredentials();
+      await saveCredentials(mockCredentials);
+
+      const [, , options] = credentialStore.saveCredentialBlob.mock.calls[0]!;
+      expect((options as { alsoWriteLegacy?: boolean }).alsoWriteLegacy).toBe(true);
+    });
   });
 
   describe('profile resolution', () => {
@@ -125,14 +212,18 @@ describe('auth', () => {
 
   describe('loadCredentials with profile', () => {
     it('threads explicit profile through to the store', async () => {
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
       await loadCredentials('demo');
       expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('demo');
     });
 
     it('falls back to the resolved profile when no argument is given', async () => {
       setResolvedProfile('work');
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
       await loadCredentials();
       expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('work');
     });
@@ -291,19 +382,23 @@ describe('auth', () => {
 
   describe('getValidToken', () => {
     it('throws when not authenticated', async () => {
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(null);
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
       await expect(getValidToken()).rejects.toThrow('Not authenticated');
     });
 
     it('returns existing token when not expired', async () => {
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
       const token = await getValidToken();
       expect(token).toBe('test-access-token');
     });
 
     it('uses client credentials when tenant_id is available and token expired', async () => {
       const expiring = { ...mockCredentialsWithTenant, expires_at: Date.now() + 60 * 1000 };
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(expiring));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(expiring)),
+      );
 
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -320,7 +415,9 @@ describe('auth', () => {
 
     it('falls back to refresh token when client credentials fails', async () => {
       const expiring = { ...mockCredentialsWithTenant, expires_at: Date.now() + 60 * 1000 };
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(expiring));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(expiring)),
+      );
 
       global.fetch = vi
         .fn()
@@ -345,7 +442,9 @@ describe('auth', () => {
 
     it('refreshes token when about to expire (no tenant_id)', async () => {
       const expiringSoon = { ...mockCredentials, expires_at: Date.now() + 60 * 1000 };
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(expiringSoon));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(expiringSoon)),
+      );
 
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
@@ -362,14 +461,18 @@ describe('auth', () => {
     });
 
     it('reads credentials under the explicit profile', async () => {
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
       await getValidToken('demo');
       expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('demo');
     });
 
     it('reads credentials under the resolved profile when no arg', async () => {
       setResolvedProfile('work');
-      credentialStore.loadCredentialBlob.mockResolvedValueOnce(JSON.stringify(mockCredentials));
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
       await getValidToken();
       expect(credentialStore.loadCredentialBlob).toHaveBeenCalledWith('work');
     });

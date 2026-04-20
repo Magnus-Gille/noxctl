@@ -1,9 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { loadCredentialBlob, saveCredentialBlob } from './credentials-store.js';
+import { loadCredentialBlob, saveCredentialBlob, type LoadSource } from './credentials-store.js';
 import { DEFAULT_PROFILE, validateProfileName } from './profile-name.js';
-import { upsertProfile } from './profiles.js';
+import { migrateLegacyIfNeeded, readProfileIndex, upsertProfile } from './profiles.js';
 
 const FORTNOX_AUTH_URL = 'https://apps.fortnox.se/oauth-v1/auth';
 const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
@@ -34,6 +34,11 @@ export interface FortnoxAppConfig {
 
 let resolvedProfile: string = DEFAULT_PROFILE;
 
+// Whether the legacy (pre-0.2) credential slot was observed on the most recent
+// successful load of the default profile. Set only by loadCredentials; read by
+// saveCredentials to decide whether to dual-write during the 0.2.x window.
+let legacyObservedForDefault = false;
+
 export function setResolvedProfile(name: string): void {
   resolvedProfile = validateProfileName(name);
 }
@@ -42,27 +47,62 @@ export function getResolvedProfile(): string {
   return resolvedProfile;
 }
 
+// Test-only: reset module-level observation state between cases.
+export function __resetLegacyObservedForDefault(): void {
+  legacyObservedForDefault = false;
+}
+
 function profileOrResolved(profile?: string): string {
   return profile ?? resolvedProfile;
 }
 
+function isDefaultProfile(name: string): boolean {
+  return name.toLowerCase() === DEFAULT_PROFILE;
+}
+
+function legacySlotExists(source: LoadSource): boolean {
+  return (
+    source === 'legacy' ||
+    source === 'both-new-preferred' ||
+    source === 'both-legacy-preferred' ||
+    source === 'legacy-plaintext'
+  );
+}
+
 export async function loadCredentials(profile?: string): Promise<FortnoxCredentials | null> {
+  const target = profileOrResolved(profile);
+  let result: { blob: string | null; source: LoadSource };
   try {
-    const data = await loadCredentialBlob(profileOrResolved(profile));
-    if (!data) return null;
-    return JSON.parse(data) as FortnoxCredentials;
+    result = await loadCredentialBlob(target);
+  } catch {
+    return null;
+  }
+
+  if (isDefaultProfile(target) && legacySlotExists(result.source)) {
+    legacyObservedForDefault = true;
+    // Best-effort seeding of the profile index for pre-0.2 installs. A
+    // failure here must not break auth — Chunk D's `doctor` will surface it.
+    await migrateLegacyIfNeeded(result.blob);
+  }
+
+  if (!result.blob) return null;
+  try {
+    return JSON.parse(result.blob) as FortnoxCredentials;
   } catch {
     return null;
   }
 }
 
 export async function saveCredentials(creds: FortnoxCredentials, profile?: string): Promise<void> {
+  const target = profileOrResolved(profile);
   const stamped: FortnoxCredentials = {
     ...creds,
     schema_version: CREDENTIAL_SCHEMA_VERSION,
     last_write_epoch: Date.now(),
   };
-  await saveCredentialBlob(JSON.stringify(stamped), profileOrResolved(profile));
+  await saveCredentialBlob(JSON.stringify(stamped), target, {
+    alsoWriteLegacy: isDefaultProfile(target) && legacyObservedForDefault,
+  });
 }
 
 export async function exchangeCodeForTokens(
@@ -366,11 +406,17 @@ export async function runOAuthSetup(
 
           await saveCredentials(creds, validatedProfile);
           try {
+            // Preserve the original created_at when re-authenticating an
+            // existing profile so the index timestamp reflects first auth,
+            // not the most recent one.
+            const existing = (await readProfileIndex()).profiles.find(
+              (p) => p.name.toLowerCase() === validatedProfile.toLowerCase(),
+            );
             await upsertProfile({
               name: validatedProfile,
               tenant_id: tenantId,
               company_name: companyName,
-              created_at: new Date().toISOString(),
+              created_at: existing?.created_at ?? new Date().toISOString(),
               schema_version: 2,
             });
           } catch (indexErr) {
