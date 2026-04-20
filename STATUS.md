@@ -1,7 +1,7 @@
 # Project Status
 
 **Last session:** 2026-04-20
-**Branch:** chunk-d-cli-surface
+**Branch:** main
 
 ## Completed This Session
 
@@ -26,7 +26,6 @@
 
 ## Next Steps (priority order)
 
-1. Commit + push Chunk D; open PR; run Codex review on it
-2. Chunk E — MCP server startup profile binding (`src/index.ts`)
-3. Docs: README updates, MIGRATION.md, CHANGELOG entry
-4. 0.2.0 release — bump `package.json`, `src/cli.ts` version, `src/index.ts` server version
+1. **Chunk E** — MCP server startup profile binding (`src/index.ts`): read resolved profile at startup, expose in `startMcpServer()`, surface profile context in tool errors
+2. **Docs** — README profile section, MIGRATION.md (0.1→0.2 upgrade path), CHANGELOG entry
+3. **0.2.0 release** — bump `package.json`, `src/cli.ts` version string, `src/index.ts` server version, publish
