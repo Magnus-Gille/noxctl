@@ -115,6 +115,46 @@ node dist/cli.js company info
 
 You should see your company name, organisation number, and address. If this works, you're all set.
 
+## Profiles (multi-tenant)
+
+noxctl supports multiple Fortnox tenants from a single installation — useful if you bookkeep for several companies, or want to keep a sandbox tenant separate from production. Each profile has its own OAuth credentials in the OS keychain, keyed by profile name.
+
+### Running against a specific profile
+
+Three ways to pick the profile, in precedence order (highest wins):
+
+1. **`--profile <name>` flag** — explicit, per-command
+2. **`NOXCTL_PROFILE` environment variable** — scoped to a shell session
+3. **Active pointer** — `~/.fortnox-mcp/active-profile`, set by `noxctl profile use`
+
+If none of these is set, noxctl uses the `default` profile (what existing users have been using all along — no opt-in required).
+
+```bash
+noxctl init --profile staging              # authorize a second tenant
+noxctl --profile staging invoices list     # one-off against staging
+NOXCTL_PROFILE=staging noxctl company info # shell-scoped
+noxctl profile use staging                 # sticky — persists to the pointer
+noxctl profile current                     # show resolved profile + source
+noxctl profile list                        # list known profiles
+```
+
+### MCP server
+
+When launched by Claude Desktop / claude.ai, the MCP server resolves the profile from `NOXCTL_PROFILE` and the active pointer at startup, and binds for the session. When launched via `noxctl --profile <name> serve`, the CLI forwards the flag.
+
+To run multiple MCP servers (one per tenant) in parallel, register them with distinct names and scoped environments:
+
+```bash
+claude mcp add fortnox-prod     -- npx noxctl serve
+claude mcp add fortnox-staging  -e NOXCTL_PROFILE=staging -- npx noxctl serve
+```
+
+Non-default sessions print a `[profile: <name>]` stderr banner on startup and prefix every Fortnox API error and token-refresh failure with the same tag so mis-bound sessions are diagnosable from a single error line.
+
+### Fail-closed pointer semantics
+
+If the active pointer becomes unreadable or corrupt and no explicit `--profile` flag or `NOXCTL_PROFILE` is set, `noxctl serve` **refuses to start** rather than silently falling back to `default`. This prevents a corrupted pointer from routing production MCP sessions to the wrong tenant. The CLI's `doctor` and `profile use` commands are exempt — they can still run against a broken pointer so you can repair it.
+
 ## Tools
 
 Every operation is available both as a CLI command and as an MCP tool. The CLI is the primary interface; the MCP server exposes the same operations to AI agents. All mutations — every row labeled `(mutation)` — prompt for confirmation on a TTY and require `--yes` (CLI) or `confirm: true` (MCP) when piped. See [Mutation safety](#mutation-safety).
@@ -281,6 +321,9 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl init` | — | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
 | `noxctl doctor` | `fortnox_status` | Validate setup: Node version, credentials, token status, API connectivity, and scopes |
 | `noxctl logout` | — | Remove stored credentials from the OS keychain |
+| `noxctl profile use <name>` | — | Set the active profile (writes `~/.fortnox-mcp/active-profile`) |
+| `noxctl profile current` | — | Show the currently resolved profile and where it came from |
+| `noxctl profile list` | — | List known profiles from the index |
 
 ## CLI output
 
