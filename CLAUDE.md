@@ -54,3 +54,4 @@ npm run format      # Prettier
 - CLI commands mirror MCP tools 1:1
 - Mutations prompt for confirmation on TTY; require `--yes` when piped (CLI) or `confirm: true` (MCP)
 - Both support `--dry-run` / `dryRun` to preview without executing
+- For substantive code changes, default to red/green TDD: write the failing test first, confirm it fails, then implement until it passes. Skip for refactors with no behavior change, config tweaks, and trivial fixes.
