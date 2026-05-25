@@ -155,6 +155,59 @@ Non-default sessions print a `[profile: <name>]` stderr banner on startup and pr
 
 If the active pointer becomes unreadable or corrupt and no explicit `--profile` flag or `NOXCTL_PROFILE` is set, `noxctl serve` **refuses to start** rather than silently falling back to `default`. This prevents a corrupted pointer from routing production MCP sessions to the wrong tenant. The CLI's `doctor` and `profile use` commands are exempt — they can still run against a broken pointer so you can repair it.
 
+## YubiKey-locked keychain (macOS)
+
+By default, credentials live in your macOS **login keychain**, which unlocks automatically when you log in. That's convenient, but it means an AI agent (or anything running as you) can read the tokens without a per-session gesture from you.
+
+The optional **dedicated keychain** moves credentials into a separate, lock-on-sleep keychain whose password is derived from your YubiKey via HMAC-SHA1 challenge-response. You unlock it once per session with a single tap; it re-locks when your Mac sleeps. The keychain password is never typed or stored — it only exists on the YubiKey.
+
+This is opt-in and macOS-only. It does not change how credentials are stored on Linux or Windows.
+
+### One-time YubiKey setup
+
+Program OTP slot 2 for challenge-response (requires touch). **This writes only the empty OTP slot 2** — FIDO2, PIV, OATH, OpenPGP, and slot 1 are untouched, and it is reversible with `ykman otp delete 2`.
+
+```bash
+brew install ykman                              # if not already installed
+ykman otp chalresp --generate --touch 2         # program slot 2
+```
+
+### Enable it
+
+```bash
+noxctl keychain init      # generate challenge, tap to derive the password,
+                          # create the locked keychain, copy existing creds in
+```
+
+`init` uses **copy-and-keep**: your existing login-keychain credentials are copied into the new keychain but left in place as a rollback. Once you've confirmed the new flow works, remove the originals:
+
+```bash
+noxctl keychain seal      # delete the login-keychain copies (irreversible)
+```
+
+Until you `seal`, the login copies remain readable without a tap — so the per-session protection isn't fully in effect.
+
+### Daily use
+
+```bash
+noxctl keychain unlock    # tap your YubiKey — open until the Mac next sleeps
+noxctl keychain status    # mode, lock state, ykman/YubiKey presence
+noxctl keychain lock      # lock immediately
+```
+
+When the keychain is locked, any command that needs credentials fails fast with a message telling you to run `noxctl keychain unlock` — it never pops a macOS password dialog (the challenge-response password can't be typed into one).
+
+### Recovery if you lose the YubiKey
+
+The keychain password lives only on the key, so a lost or re-programmed key means the dedicated keychain can't be unlocked. As long as you have **not** run `seal`, your credentials are still in the login keychain — delete the dedicated keychain and challenge file to fall back:
+
+```bash
+security delete-keychain ~/Library/Keychains/fortnox-mcp.keychain-db
+rm ~/.fortnox-mcp/keychain-challenge
+```
+
+If you *have* sealed, re-run `noxctl init` to re-authenticate from scratch.
+
 ## Tools
 
 Every operation is available both as a CLI command and as an MCP tool. The CLI is the primary interface; the MCP server exposes the same operations to AI agents. All mutations — every row labeled `(mutation)` — prompt for confirmation on a TTY and require `--yes` (CLI) or `confirm: true` (MCP) when piped. See [Mutation safety](#mutation-safety).

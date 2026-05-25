@@ -206,6 +206,28 @@ async function confirmMutation(
   }
 }
 
+function requireDarwin(): void {
+  if (process.platform !== 'darwin') {
+    console.error('The dedicated YubiKey-locked keychain is a macOS-only feature.');
+    process.exit(2);
+  }
+}
+
+// Confirmation for local, irreversible operations (not Fortnox mutations).
+async function localConfirm(question: string, yes?: boolean): Promise<boolean> {
+  if (yes) return true;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error('Confirmation required. Re-run with --yes.');
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await rl.question(`${question} [y/N] `);
+    return ['y', 'yes'].includes(answer.trim().toLowerCase());
+  } finally {
+    rl.close();
+  }
+}
+
 // --- init (interactive setup wizard) ---
 program
   .command('init')
@@ -668,6 +690,23 @@ program
           : 'Linux Secret Service';
     pass('Credential store', storeBackend);
 
+    // 2a. Dedicated YubiKey-locked keychain (macOS only)
+    if (process.platform === 'darwin') {
+      const kt = await import('./keychain-target.js');
+      const activePath = kt.activeKeychainPath();
+      if (activePath) {
+        const state = kt.keychainLockState(activePath);
+        if (state === 'locked') {
+          fail('Dedicated keychain', 'locked — run `noxctl keychain unlock` (tap your YubiKey)');
+        } else {
+          pass('Dedicated keychain', `active, ${state} (${activePath})`);
+        }
+        pass('ykman', kt.ykmanAvailable() ? 'installed' : 'not installed (brew install ykman)');
+      } else {
+        pass('Dedicated keychain', 'not enabled (using login keychain)');
+      }
+    }
+
     // 2b. Profile resolution
     pass('Profile', `${resolvedProfileInfo.name} (source: ${resolvedProfileInfo.source})`);
 
@@ -703,7 +742,18 @@ program
     }
 
     // 3. Credentials exist
-    const creds = await loadCredentials();
+    let creds: Awaited<ReturnType<typeof loadCredentials>>;
+    try {
+      creds = await loadCredentials();
+    } catch (err) {
+      const { KeychainLockedError } = await import('./keychain-target.js');
+      if (err instanceof KeychainLockedError) {
+        fail('Credentials', err.message);
+        console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+        return;
+      }
+      throw err;
+    }
     if (!creds) {
       fail(
         'Credentials',
@@ -800,6 +850,267 @@ program
     }
 
     console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+  });
+
+// --- keychain (dedicated YubiKey-locked credential store, macOS only) ---
+const keychain = program
+  .command('keychain')
+  .description('Manage the dedicated YubiKey-locked credential keychain (macOS)');
+
+keychain
+  .command('status')
+  .description('Show dedicated-keychain mode, lock state, and YubiKey availability')
+  .action(async () => {
+    const kt = await import('./keychain-target.js');
+    const onDarwin = process.platform === 'darwin';
+
+    console.log('Keychain status\n');
+    console.log(
+      `  Platform          ${process.platform}${onDarwin ? '' : ' (dedicated keychain is macOS-only)'}`,
+    );
+    if (!onDarwin) return;
+
+    const activePath = kt.activeKeychainPath();
+    const kcPath = activePath ?? kt.dedicatedKeychainPath();
+    const lockState = kt.keychainLockState(kcPath);
+
+    console.log(`  Dedicated mode    ${activePath ? 'active' : 'inactive (using login keychain)'}`);
+    console.log(`  Keychain file     ${kcPath} (${lockState})`);
+    console.log(
+      `  Challenge file    ${kt.readChallenge() ? kt.challengeFilePath() : 'not present'}`,
+    );
+    console.log(`  ykman installed   ${kt.ykmanAvailable() ? 'yes' : 'no (brew install ykman)'}`);
+    console.log(`  YubiKey present   ${kt.yubikeyPresent() ? 'yes' : 'no'}`);
+
+    if (activePath && lockState === 'locked') {
+      console.log('\n  Locked — run `noxctl keychain unlock` (tap your YubiKey).');
+    }
+  });
+
+keychain
+  .command('unlock')
+  .description('Unlock the dedicated keychain for this session (tap your YubiKey)')
+  .action(async () => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+
+    const state = kt.keychainLockState(kcPath);
+    if (state === 'missing') {
+      console.error('No dedicated keychain found. Run `noxctl keychain init` first.');
+      process.exit(1);
+    }
+    if (state === 'unlocked') {
+      console.log('Keychain is already unlocked.');
+      return;
+    }
+    const challenge = kt.readChallenge();
+    if (!challenge) {
+      console.error(
+        'Challenge file missing — cannot derive the unlock password. Re-run `noxctl keychain init`.',
+      );
+      process.exit(1);
+    }
+    console.log('Tap your YubiKey when it blinks...');
+    let password: string;
+    try {
+      password = kt.computeChallengeResponse(challenge);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    try {
+      kt.unlockDedicatedKeychain(kcPath, password);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    console.log('Keychain unlocked — open until your Mac sleeps.');
+  });
+
+keychain
+  .command('lock')
+  .description('Lock the dedicated keychain now')
+  .action(async () => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+    if (kt.keychainLockState(kcPath) === 'missing') {
+      console.error('No dedicated keychain found.');
+      process.exit(1);
+    }
+    kt.lockKeychain(kcPath);
+    console.log('Keychain locked.');
+  });
+
+keychain
+  .command('init')
+  .description('Create the YubiKey-locked keychain and copy in existing credentials')
+  .action(async () => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+
+    if (!kt.ykmanAvailable()) {
+      console.error('ykman not found — install it with `brew install ykman`, then re-run.');
+      process.exit(1);
+    }
+    if (!kt.yubikeyPresent()) {
+      console.error('No YubiKey detected — insert it and re-run.');
+      process.exit(1);
+    }
+
+    const kcPath = kt.dedicatedKeychainPath();
+    if (kt.readChallenge()) {
+      console.error(
+        'Already initialized. Use `noxctl keychain unlock` or `noxctl keychain status`.',
+      );
+      process.exit(1);
+    }
+    if (kt.keychainLockState(kcPath) !== 'missing') {
+      console.error(
+        `A keychain already exists at ${kcPath} but no challenge file is present.\n` +
+          `Remove the stale keychain (\`security delete-keychain "${kcPath}"\`) and re-run.`,
+      );
+      process.exit(1);
+    }
+
+    console.log('This creates a dedicated, lock-on-sleep keychain whose password is derived');
+    console.log('from your YubiKey (OTP slot 2 challenge-response). You unlock it once per');
+    console.log('session with a tap. Existing credentials are copied in; the login-keychain');
+    console.log('originals are left in place (run `noxctl keychain seal` to remove them later).');
+    console.log('');
+    console.log('Slot 2 must already be programmed: `ykman otp chalresp --generate --touch 2`.');
+    console.log('');
+
+    // Collect existing credentials from the LOGIN keychain BEFORE activating
+    // dedicated mode (challenge file absent -> activeKeychainPath() is null).
+    const { readProfileIndex } = await import('./profiles.js');
+    const { loadCredentialBlob, saveCredentialBlob } = await import('./credentials-store.js');
+
+    const idx = await readProfileIndex();
+    const names = new Set<string>([DEFAULT_PROFILE, ...idx.profiles.map((p) => p.name)]);
+    const blobs: { profile: string; blob: string }[] = [];
+    for (const name of names) {
+      const { blob } = await loadCredentialBlob(name);
+      if (blob) blobs.push({ profile: name, blob });
+    }
+    console.log(
+      `Found ${blobs.length} credential set(s) to copy: ${
+        blobs.map((b) => b.profile).join(', ') || '(none)'
+      }`,
+    );
+    console.log('');
+
+    // Derive the keychain password from the YubiKey (requires a tap). Done
+    // before creating the keychain so a missed tap leaves nothing behind.
+    const challenge = kt.generateChallenge();
+    console.log('Tap your YubiKey when it blinks...');
+    let password: string;
+    try {
+      password = kt.computeChallengeResponse(challenge);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+
+    const created = kt.createDedicatedKeychain(kcPath, password);
+    if (created === 'exists') {
+      console.error(`Unexpected: keychain already exists at ${kcPath}. Aborting.`);
+      process.exit(1);
+    }
+    kt.setLockOnSleep(kcPath);
+
+    // Activate dedicated mode: now activeKeychainPath() resolves to kcPath and
+    // saveCredentialBlob targets the new (still-unlocked) keychain.
+    kt.writeChallenge(challenge);
+
+    let copied = 0;
+    for (const { profile, blob } of blobs) {
+      try {
+        await saveCredentialBlob(blob, profile);
+        copied++;
+      } catch (err) {
+        console.error(
+          `  ! failed to copy "${profile}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    console.log('');
+    console.log(`Done. Created ${kcPath}, copied ${copied}/${blobs.length} credential set(s).`);
+    console.log('The keychain is unlocked now and will lock when your Mac sleeps.');
+    console.log('Next session: `noxctl keychain unlock` (one tap).');
+    console.log('When you trust it: `noxctl keychain seal` to delete the login-keychain copies.');
+  });
+
+keychain
+  .command('seal')
+  .description('Delete the login-keychain credential copies left by `init` (irreversible)')
+  .option('--yes', 'Skip the confirmation prompt')
+  .action(async (opts: { yes?: boolean }) => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+
+    const activePath = kt.activeKeychainPath();
+    if (!activePath) {
+      console.error(
+        'Dedicated keychain mode is not active — nothing to seal. Run `noxctl keychain init` first.',
+      );
+      process.exit(1);
+    }
+    if (kt.keychainLockState(activePath) === 'locked') {
+      console.error(
+        'Dedicated keychain is locked — run `noxctl keychain unlock` first so the copies can be verified before the originals are deleted.',
+      );
+      process.exit(1);
+    }
+
+    const { readProfileIndex } = await import('./profiles.js');
+    const { LEGACY_KEYCHAIN_ACCOUNT, keychainAccount } = await import('./profile-name.js');
+    const { loadCredentialBlob } = await import('./credentials-store.js');
+
+    const idx = await readProfileIndex();
+    const uniqueNames = [
+      ...new Set([DEFAULT_PROFILE, ...idx.profiles.map((p) => p.name)].map((n) => n.toLowerCase())),
+    ];
+
+    // Verify the dedicated keychain actually holds each profile's creds before
+    // deleting the login originals — never strand the user with no copy.
+    const verified: string[] = [];
+    for (const name of uniqueNames) {
+      const { blob } = await loadCredentialBlob(name);
+      if (blob) verified.push(name);
+    }
+    if (verified.length === 0) {
+      console.error(
+        'The dedicated keychain holds no credentials — refusing to delete the login copies.',
+      );
+      process.exit(1);
+    }
+
+    console.log(
+      `Verified ${verified.length} credential set(s) in the dedicated keychain: ${verified.join(', ')}`,
+    );
+    const confirmed = await localConfirm(
+      'Delete the login-keychain copies now? This cannot be undone.',
+      opts.yes,
+    );
+    if (!confirmed) {
+      console.log('Aborted. Login-keychain copies left in place.');
+      return;
+    }
+
+    // Accounts init may have written to the login keychain: the legacy
+    // "default" account plus profile:<name> for every known profile.
+    const accounts = new Set<string>([LEGACY_KEYCHAIN_ACCOUNT]);
+    for (const name of uniqueNames) accounts.add(keychainAccount(name));
+
+    let deleted = 0;
+    for (const account of accounts) {
+      if (kt.deleteLoginSecret(account)) deleted++;
+    }
+    console.log(`Deleted ${deleted} login-keychain entr${deleted === 1 ? 'y' : 'ies'}.`);
+    console.log('Credentials now live only in the YubiKey-locked keychain.');
   });
 
 // --- serve (default command) ---

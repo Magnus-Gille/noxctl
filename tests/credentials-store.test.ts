@@ -16,6 +16,9 @@ const fsSync = vi.hoisted(() => ({
   default: {
     writeFileSync: vi.fn(),
     unlinkSync: vi.fn(),
+    existsSync: vi.fn(() => false),
+    readFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
   },
 }));
 
@@ -34,6 +37,7 @@ import {
   keychainAccount,
   InvalidProfileNameError,
 } from '../src/profile-name.js';
+import { KeychainLockedError } from '../src/keychain-target.js';
 
 const SERVICE_NAME = 'fortnox-mcp';
 const ORIGINAL_PLATFORM = process.platform;
@@ -46,6 +50,8 @@ function restorePlatform(): void {
   Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM, configurable: true });
 }
 
+const ORIGINAL_KEYCHAIN_ENV = process.env.NOXCTL_KEYCHAIN_PATH;
+
 beforeEach(() => {
   childProcess.execFileSync.mockReset();
   childProcess.spawnSync.mockReset();
@@ -53,10 +59,18 @@ beforeEach(() => {
   fsPromises.default.rm.mockReset();
   fsSync.default.writeFileSync.mockReset();
   fsSync.default.unlinkSync.mockReset();
+  fsSync.default.existsSync.mockReset();
+  fsSync.default.existsSync.mockReturnValue(false);
+  fsSync.default.readFileSync.mockReset();
+  fsSync.default.mkdirSync.mockReset();
+  // Default: dedicated-keychain mode OFF so the legacy login-keychain paths run.
+  delete process.env.NOXCTL_KEYCHAIN_PATH;
 });
 
 afterEach(() => {
   restorePlatform();
+  if (ORIGINAL_KEYCHAIN_ENV === undefined) delete process.env.NOXCTL_KEYCHAIN_PATH;
+  else process.env.NOXCTL_KEYCHAIN_PATH = ORIGINAL_KEYCHAIN_ENV;
 });
 
 describe('validateProfileName', () => {
@@ -558,6 +572,70 @@ describe('Windows DPAPI backend', () => {
     expect(call).toBeDefined();
     const script = (call![1] as string[]).join(' ');
     expect(script).toContain('credentials.demo.dpapi');
+  });
+});
+
+describe('dedicated-keychain mode (darwin)', () => {
+  const KC = '/tmp/fortnox-mcp.keychain-db';
+
+  beforeEach(() => {
+    setPlatform('darwin');
+    // Env override activates dedicated mode without needing existsSync.
+    process.env.NOXCTL_KEYCHAIN_PATH = KC;
+  });
+
+  it('routes reads through the dedicated Swift reader, not the security CLI', async () => {
+    const newBlob = JSON.stringify({ client_id: 'dedicated' });
+    childProcess.spawnSync.mockImplementation((cmd: string, args: readonly string[]) => {
+      if (cmd === 'swift') {
+        const account = args[1];
+        return account === 'profile:default'
+          ? { status: 0, stdout: Buffer.from(newBlob).toString('base64'), stderr: '' }
+          : { status: 3, stdout: '', stderr: '' };
+      }
+      return { status: 0, stdout: '', stderr: '' };
+    });
+
+    const result = await loadCredentialBlob('default');
+    expect(result.blob).toBe(newBlob);
+
+    const findCalls = childProcess.execFileSync.mock.calls.filter(
+      ([cmd, a]) => cmd === 'security' && (a as string[]).includes('find-generic-password'),
+    );
+    expect(findCalls).toHaveLength(0);
+
+    const swiftCall = childProcess.spawnSync.mock.calls.find(([cmd]) => cmd === 'swift');
+    expect((swiftCall![1] as string[])[2]).toBe(KC);
+  });
+
+  it('throws KeychainLockedError when the dedicated keychain is locked', async () => {
+    childProcess.spawnSync.mockReturnValue({ status: 2, stdout: '', stderr: '' });
+    await expect(loadCredentialBlob('default')).rejects.toThrow(KeychainLockedError);
+  });
+
+  it('save targets the dedicated keychain via Swift argv and kSecUseKeychain', async () => {
+    childProcess.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+    await saveCredentialBlob('{"x":1}', 'default');
+
+    const swiftCall = childProcess.spawnSync.mock.calls.find(([cmd]) => cmd === 'swift');
+    expect(swiftCall).toBeDefined();
+    expect((swiftCall![1] as string[])[1]).toBe(KC);
+
+    const scriptBody = fsSync.default.writeFileSync.mock.calls
+      .map((c) => c[1] as string)
+      .join('\n');
+    expect(scriptBody).toContain('kSecUseKeychain');
+  });
+
+  it('delete appends the dedicated keychain as the trailing positional', async () => {
+    childProcess.execFileSync.mockReturnValue('');
+    await deleteCredentialBlob('demo');
+
+    const delArgs = childProcess.execFileSync.mock.calls
+      .map((c) => c[1] as string[])
+      .find((a) => a.includes('delete-generic-password'));
+    expect(delArgs).toBeDefined();
+    expect(delArgs![delArgs!.length - 1]).toBe(KC);
   });
 });
 
