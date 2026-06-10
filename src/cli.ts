@@ -65,6 +65,8 @@ import {
   lockedPeriodDetailColumns,
   contractListColumns,
   contractDetailColumns,
+  topCustomerColumns,
+  monthlyRevenueColumns,
 } from './views.js';
 
 const program = new Command();
@@ -3020,6 +3022,146 @@ financialYears
       return;
     }
     outputDetail(data, lockedPeriodDetailColumns, false);
+  });
+
+// --- analytics ---
+const analytics = program
+  .command('analytics')
+  .description('Precomputed analytics views (overdue, unpaid, top customers, VAT)');
+
+analytics
+  .command('overdue')
+  .description('Overdue invoices summary')
+  .action(async () => {
+    const { getOverdueSummary } = await import('./operations/analytics.js');
+    const summary = await getOverdueSummary();
+    if (json()) {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    }
+    if (summary.count === 0) {
+      console.log('No overdue invoices.');
+      return;
+    }
+    console.log(
+      `Overdue: ${summary.count} invoice(s), ${summary.totalBalance.toFixed(2)} outstanding. Oldest due ${summary.oldestDueDate}.\n`,
+    );
+    outputList(summary.invoices, invoiceListColumns, false, summary.invoices);
+  });
+
+analytics
+  .command('unpaid')
+  .description('Unpaid totals (outstanding receivables)')
+  .action(async () => {
+    const { getUnpaidTotals } = await import('./operations/analytics.js');
+    const s = await getUnpaidTotals();
+    if (json()) {
+      console.log(JSON.stringify(s, null, 2));
+      return;
+    }
+    console.log(`Unpaid:  ${s.count} invoice(s), ${s.totalBalance.toFixed(2)} outstanding.`);
+    console.log(`Overdue: ${s.overdueCount} invoice(s), ${s.overdueBalance.toFixed(2)}.`);
+  });
+
+analytics
+  .command('top-customers')
+  .description('Top customers by invoiced amount')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, last-quarter, ytd, ... Mutually exclusive with --from/--to.',
+  )
+  .option('--limit <number>', 'Number of customers (default 10)', parseInt)
+  .action(async (opts) => {
+    const { getTopCustomers } = await import('./operations/analytics.js');
+    const range = fromToParams(opts);
+    const result = await getTopCustomers({
+      fromDate: range.fromDate,
+      toDate: range.toDate,
+      limit: opts.limit,
+    });
+    if (json()) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    outputList(
+      result.customers.map((c) => ({ ...c })),
+      topCustomerColumns,
+      false,
+      result.customers,
+    );
+  });
+
+analytics
+  .command('vat')
+  .description('VAT summary for a period (net VAT position)')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, last-quarter, ytd, ... Mutually exclusive with --from/--to.',
+  )
+  .option('--year <number>', 'Financial year', parseInt)
+  .action(async (opts) => {
+    const { getVatSummary } = await import('./operations/analytics.js');
+    const range = fromToParams(opts);
+    if (!range.fromDate || !range.toDate) {
+      console.error('analytics vat requires a period: --from/--to or --period.');
+      process.exit(2);
+    }
+    const summary = await getVatSummary({
+      fromDate: range.fromDate,
+      toDate: range.toDate,
+      financialYear: opts.year,
+    });
+    if (json()) {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    }
+    console.log(formatTaxReport(summary));
+    console.log(
+      `\nNet VAT: ${(summary.netVat as number).toFixed(2)} (negative = owed to Skatteverket)`,
+    );
+  });
+
+// --- dashboard ---
+program
+  .command('dashboard')
+  .description('At-a-glance summary: recent invoices, outstanding, overdue, monthly revenue')
+  .option('--months <number>', 'Months of revenue history (default 6)', parseInt)
+  .action(async (opts: { months?: number }) => {
+    const { getDashboard } = await import('./operations/analytics.js');
+    const dash = await getDashboard({ months: opts.months });
+    if (json()) {
+      console.log(JSON.stringify(dash, null, 2));
+      return;
+    }
+
+    console.log('OUTSTANDING');
+    console.log(
+      `  Unpaid:  ${dash.unpaid.count} invoice(s), ${dash.unpaid.totalBalance.toFixed(2)}`,
+    );
+    console.log(
+      `  Overdue: ${dash.overdue.count} invoice(s), ${dash.overdue.totalBalance.toFixed(2)}` +
+        (dash.overdue.oldestDueDate ? ` (oldest due ${dash.overdue.oldestDueDate})` : ''),
+    );
+
+    if (dash.overdue.count > 0) {
+      console.log('\nOVERDUE INVOICES');
+      outputList(dash.overdue.invoices, invoiceListColumns, false, dash.overdue.invoices);
+    }
+
+    console.log('\nRECENT INVOICES');
+    outputList(dash.recentInvoices, invoiceListColumns, false, dash.recentInvoices);
+
+    console.log('\nMONTHLY INVOICED');
+    outputList(
+      dash.monthlyRevenue.map((m) => ({ ...m })),
+      monthlyRevenueColumns,
+      false,
+      dash.monthlyRevenue,
+    );
   });
 
 // --- completion ---

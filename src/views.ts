@@ -441,3 +441,18 @@ export const contractDetailColumns: Column[] = [
   { key: 'TotalVAT', header: 'VAT', width: 12, align: 'right', format: currency },
   { key: 'Comments', header: 'Comments', width: 40 },
 ];
+
+// --- Analytics views ---
+
+export const topCustomerColumns: Column[] = [
+  { key: 'CustomerNumber', header: 'Cust #', width: 8, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 30 },
+  { key: 'total', header: 'Invoiced', width: 14, align: 'right', format: currency },
+  { key: 'invoiceCount', header: 'Invoices', width: 8, align: 'right' },
+];
+
+export const monthlyRevenueColumns: Column[] = [
+  { key: 'month', header: 'Month', width: 7 },
+  { key: 'total', header: 'Invoiced', width: 14, align: 'right', format: currency },
+  { key: 'invoiceCount', header: 'Invoices', width: 8, align: 'right' },
+];

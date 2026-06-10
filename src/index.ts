@@ -23,6 +23,7 @@ import { registerTaxReductionTools } from './tools/taxreductions.js';
 import { registerPriceListTools } from './tools/pricelists.js';
 import { registerFinancialYearTools } from './tools/financial-years.js';
 import { registerContractTools } from './tools/contracts.js';
+import { registerAnalyticsTools } from './tools/analytics.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -50,6 +51,7 @@ export function createServer(): McpServer {
   registerPriceListTools(server);
   registerFinancialYearTools(server);
   registerContractTools(server);
+  registerAnalyticsTools(server);
 
   return server;
 }
