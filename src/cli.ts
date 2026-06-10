@@ -88,7 +88,7 @@ export function getResolvedProfileInfo(): ResolvedProfile {
 }
 
 // Commands that don't need (and shouldn't require) a resolved profile.
-const PROFILE_RESOLUTION_SKIP = new Set(['help']);
+const PROFILE_RESOLUTION_SKIP = new Set(['help', 'completion']);
 
 program.hook('preAction', async (thisCommand, actionCommand) => {
   const name = actionCommand.name();
@@ -2769,6 +2769,23 @@ prices
     }
     const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
     outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
+  });
+
+// --- completion ---
+program
+  .command('completion <shell>')
+  .description('Generate shell completion script (bash, zsh, fish)')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl completion bash > /usr/local/etc/bash_completion.d/noxctl
+  noxctl completion zsh > "\${fpath[1]}/_noxctl"
+  noxctl completion fish > ~/.config/fish/completions/noxctl.fish`,
+  )
+  .action(async (shell: string) => {
+    const { extractCommandTree, renderCompletion } = await import('./completions.js');
+    console.log(renderCompletion(shell, extractCommandTree(program)));
   });
 
 // Error handling
