@@ -1,21 +1,29 @@
 # Project Status
 
-**Last session:** 2026-05-25
-**Branch:** main (feature work uncommitted)
+**Last session:** 2026-06-10
+**Branch:** `fix/issue-batch-bugs-enhancements` — pushed, PR #35 open
 
 ## Completed This Session
 
-- **YubiKey-locked dedicated keychain (macOS) — feature complete, pending live verification + commit**
-  - `src/keychain-target.ts`: full module — challenge-response (`computeChallengeResponse`, OTP slot 2), dedicated-keychain create/unlock/lock/lock-state, prompt-free locked-read (`readDedicatedSecret` → `KeychainLockedError`, no GUI dialog), challenge file read/write, `activeKeychainPath()` precedence (env override → darwin files-exist → null), `deleteLoginSecret`/`loginKeychainPath` for seal.
-  - `src/credentials-store.ts`: reads/writes/deletes route to the dedicated keychain when active (Swift via stdin, path passed as argv).
-  - `src/auth.ts`: `loadCredentials` now re-throws `KeychainLockedError` (was swallowed) so a locked keychain surfaces instead of looking like "no creds".
-  - `src/cli.ts`: new `noxctl keychain` group — `init` (copy-and-keep migration), `unlock`, `lock`, `status`, `seal`; `doctor` reports dedicated-mode + lock state + ykman.
-  - Tests: new `tests/keychain-target.test.ts` (39 tests). Full suite 499 pass, lint clean.
-  - Swift plumbing validated end-to-end with a static password (no YubiKey) — 9/9 checks.
+Batch-fixed 11 GitHub issues (both open bugs + all tractable enhancements), one commit per issue, red/green TDD throughout. 552 unit tests (up from 499), lint clean.
+
+- **#31 (bug)** — `customers create/update` strip server-derived read-only fields (`Country`, `DeliveryCountry`, `VisitingCountry`) in the operations layer.
+- **#34 (bug)** — single-resource JSON output consistently wrapped under the singular key (`{"Invoice": {...}}`); `-o` help documents the TTY/piped default. **Breaking** for scripts consuming bare objects (CHANGELOG Unreleased → Changed).
+- **#32** — JSON-mode failures emit `{"error": {status?, message, hint?, source}}` to stderr (`errorEnvelope` in formatter.ts).
+- **#6** — confirmation prompt prints the request payload before y/N.
+- **#8** — `noxctl completion bash|zsh|fish` (src/completions.ts, generated from the Commander tree).
+- **#9** — `--period` natural dates (src/date-periods.ts): Q1/2025-Q3/month names (en+sv)/last-quarter/ytd/year. Calendar-year based; fiscal-year design still open.
+- **#33** — YubiKey serial enrollment diagnostics: init records serial to `~/.fortnox-mcp/keychain-serial`, unlock preflights `ykman list --serials`, ykman's "empty slot"/"Failed to write" errors translated.
+- **#11** — financial years + locked period (operations/tools/CLI).
+- **#10** — Contracts API: list/get/create/update/finish/create-invoice/increase-invoice-count.
+- **#7** — analytics ops (src/operations/analytics.ts): overdue summary, unpaid totals, top customers, VAT summary with netVat. Pure aggregation functions unit-tested.
+- **#12** — `noxctl dashboard` composing the analytics ops.
+
+Issue triage: closed #16 (multi-profile — shipped in 0.2.0); commented on #13 (still blocked on Fortnox API scope config).
 
 ## In Progress
 
-- **Live verification still needed (requires the user + a physical tap):** `noxctl keychain init` then `unlock` on the Mac. CI has no hardware. Then commit.
+- **PR #35 awaiting review/merge.** Merging auto-closes the 11 issues.
 
 ## Blockers
 
@@ -23,6 +31,7 @@ None.
 
 ## Next Steps
 
-- User runs `noxctl keychain init` / `unlock` to verify the tap flow, then commit the feature.
-- Consider a CHANGELOG entry + version bump when releasing.
-- See `TODO.md` for the rest of the backlog.
+- Review + merge PR #35.
+- Live-verify the new endpoints against the real API (`npm run test:live`); contracts/financial-years were only tested against mocks.
+- Consider version bump (0.3.0 given the #34 breaking envelope change) + CHANGELOG release entry.
+- Recurring `api-drift` spec-fetch failures (HTTP 429, issues #5–#30) are still unaddressed — the weekly fetch has failed since March; worth fixing the fetch script (retry/backoff or new URL) and closing the stale issues.
