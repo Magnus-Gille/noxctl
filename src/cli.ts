@@ -22,6 +22,7 @@ import {
   type ResolvedProfile,
 } from './profiles.js';
 import { setResolvedProfile } from './auth.js';
+import { applyPeriod } from './date-periods.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
 import {
   invoiceListColumns,
@@ -79,6 +80,14 @@ program
 
 function json(): boolean {
   return isJsonMode(program.opts());
+}
+
+function fromToParams(opts: { period?: string; from?: string; to?: string }): {
+  fromDate?: string;
+  toDate?: string;
+} {
+  const { from, to } = applyPeriod(opts);
+  return { fromDate: from, toDate: to };
 }
 
 let resolvedProfileInfo: ResolvedProfile = { name: DEFAULT_PROFILE, source: 'default' };
@@ -1140,6 +1149,10 @@ invoices
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -1148,8 +1161,7 @@ invoices
     const data = await listInvoices({
       filter: opts.filter,
       customerNumber: opts.customer,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -1322,14 +1334,23 @@ const tax = program.command('tax').description('Tax operations');
 tax
   .command('report')
   .description('Generate VAT tax report for a period')
-  .requiredOption('--from <date>', 'From date (YYYY-MM-DD)')
-  .requiredOption('--to <date>', 'To date (YYYY-MM-DD)')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--year <number>', 'Financial year', parseInt)
   .action(async (opts) => {
     const { generateTaxReport } = await import('./operations/tax.js');
+    const range = fromToParams(opts);
+    if (!range.fromDate || !range.toDate) {
+      console.error('tax report requires a period: --from/--to or --period.');
+      process.exit(2);
+    }
     const data = await generateTaxReport({
-      fromDate: opts.from,
-      toDate: opts.to,
+      fromDate: range.fromDate,
+      toDate: range.toDate,
       financialYear: opts.year,
     });
     if (json()) {
@@ -1351,12 +1372,15 @@ reports
   .option('--year <number>', 'Financial year', parseInt)
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .action(async (opts) => {
     const { getIncomeStatement } = await import('./operations/financial-reports.js');
     const data = await getIncomeStatement({
       financialYear: opts.year,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
     });
     if (json()) {
       console.log(JSON.stringify(data, null, 2));
@@ -1704,6 +1728,10 @@ supplierInvoices
   .option('--supplier <number>', 'Filter by supplier number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -1712,8 +1740,7 @@ supplierInvoices
     const data = await listSupplierInvoices({
       filter: opts.filter,
       supplierNumber: opts.supplier,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -1825,6 +1852,10 @@ vouchers
   .option('--series <series>', 'Voucher series (e.g. "A")')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--year <number>', 'Financial year', parseInt)
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
@@ -1833,8 +1864,7 @@ vouchers
     const { listVouchers } = await import('./operations/vouchers.js');
     const data = await listVouchers({
       series: opts.series,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       financialYear: opts.year,
       page: opts.page,
       limit: opts.limit,
@@ -2132,6 +2162,10 @@ offers
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -2140,8 +2174,7 @@ offers
     const data = await listOffers({
       filter: opts.filter,
       customerNumber: opts.customer,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -2260,6 +2293,10 @@ orders
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -2268,8 +2305,7 @@ orders
     const data = await listOrders({
       filter: opts.filter,
       customerNumber: opts.customer,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
