@@ -149,6 +149,53 @@ export function writeChallenge(challengeHex: string): void {
   fsSync.writeFileSync(challengeFilePath(), `${challengeHex}\n`, { mode: 0o600 });
 }
 
+export function enrolledSerialFilePath(): string {
+  return path.join(configDir(), 'keychain-serial');
+}
+
+// Serial of the YubiKey the keychain was enrolled against. Persisted at init
+// so unlock can tell "wrong/unenrolled key present" apart from "missed tap" —
+// the two failure modes produce indistinguishable ykman errors otherwise.
+export function readEnrolledSerial(): string | null {
+  try {
+    const raw = fsSync.readFileSync(enrolledSerialFilePath(), 'utf-8').trim();
+    return raw.length > 0 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeEnrolledSerial(serial: string): void {
+  fsSync.mkdirSync(configDir(), { recursive: true, mode: 0o700 });
+  fsSync.writeFileSync(enrolledSerialFilePath(), `${serial}\n`, { mode: 0o600 });
+}
+
+export function listYubikeySerials(): string[] {
+  const r = spawnSync('ykman', ['list', '--serials'], { encoding: 'utf-8' });
+  if (r.status !== 0) return [];
+  return (r.stdout || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+export function diagnoseSerialMismatch(
+  enrolledSerial: string | null,
+  presentSerials: string[],
+): string | null {
+  if (!enrolledSerial) return null;
+  if (presentSerials.includes(enrolledSerial)) return null;
+  if (presentSerials.length === 0) {
+    return `No YubiKey detected. The keychain was enrolled against YubiKey serial ${enrolledSerial} — insert that key and re-run.`;
+  }
+  return (
+    `Keychain was enrolled against YubiKey serial ${enrolledSerial}, but serial ` +
+    `${presentSerials.join(', ')} is currently present — this is a different key. ` +
+    `Insert the enrolled key, or re-enroll this one (program slot 2 with ` +
+    '`ykman otp chalresp --generate --touch 2`, then re-run `noxctl keychain init`).'
+  );
+}
+
 export function ykmanAvailable(): boolean {
   const r = spawnSync('ykman', ['--version'], { encoding: 'utf-8' });
   return r.status === 0;
@@ -166,14 +213,26 @@ export function yubikeyPresent(): boolean {
 export function computeChallengeResponse(challengeHex: string): string {
   const r = spawnSync('ykman', ['otp', 'calculate', CR_SLOT, challengeHex], {
     encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'inherit'],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
   if (r.error && (r.error as NodeJS.ErrnoException).code === 'ENOENT') {
     throw new ChallengeResponseError('ykman not found — install it with `brew install ykman`');
   }
   if (r.status !== 0) {
+    // ykman's own wording is misleading here: "Failed to write to the
+    // YubiKey... restricted access" is what a touch timeout produces, and
+    // "empty slot" means this key was never enrolled. Translate both.
+    const stderr = (r.stderr || '').toString();
+    if (/empty slot/i.test(stderr)) {
+      throw new ChallengeResponseError(
+        `Slot ${CR_SLOT} is not programmed on this YubiKey — it is not the enrolled key ` +
+          '(or its slot was wiped). Program it with `ykman otp chalresp --generate --touch 2` ' +
+          'or insert the enrolled key.',
+      );
+    }
     throw new ChallengeResponseError(
-      'Challenge-response failed. This is usually a missed touch — re-run and tap the key firmly when it blinks.',
+      'Challenge-response failed. This is usually a missed touch — re-run and tap the key firmly when it blinks.' +
+        (stderr.trim() ? `\n(ykman said: ${stderr.trim()})` : ''),
     );
   }
   const response = (r.stdout || '').trim();

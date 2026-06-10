@@ -324,3 +324,96 @@ describe('security CLI wrappers', () => {
     expect(deleteLoginSecret('profile:none')).toBe(false);
   });
 });
+
+describe('YubiKey serial enrollment (#33)', () => {
+  it('listYubikeySerials parses one serial per line', async () => {
+    const { listYubikeySerials } = await import('../src/keychain-target.js');
+    childProcess.spawnSync.mockReturnValue({ status: 0, stdout: '12345678\n36014135\n' });
+    expect(listYubikeySerials()).toEqual(['12345678', '36014135']);
+    expect(childProcess.spawnSync).toHaveBeenCalledWith(
+      'ykman',
+      ['list', '--serials'],
+      expect.anything(),
+    );
+  });
+
+  it('listYubikeySerials returns [] when ykman fails', async () => {
+    const { listYubikeySerials } = await import('../src/keychain-target.js');
+    childProcess.spawnSync.mockReturnValue({ status: 1, stdout: '' });
+    expect(listYubikeySerials()).toEqual([]);
+  });
+
+  it('enrolledSerialFilePath ends with keychain-serial', async () => {
+    const { enrolledSerialFilePath } = await import('../src/keychain-target.js');
+    expect(enrolledSerialFilePath()).toMatch(/keychain-serial$/);
+  });
+
+  it('readEnrolledSerial returns the trimmed file content or null', async () => {
+    const { readEnrolledSerial } = await import('../src/keychain-target.js');
+    fsSync.default.readFileSync.mockReturnValue(' 12345678\n');
+    expect(readEnrolledSerial()).toBe('12345678');
+    fsSync.default.readFileSync.mockImplementation(() => {
+      throw new Error('ENOENT');
+    });
+    expect(readEnrolledSerial()).toBeNull();
+  });
+
+  it('writeEnrolledSerial persists the serial under the config dir', async () => {
+    const { writeEnrolledSerial, enrolledSerialFilePath } =
+      await import('../src/keychain-target.js');
+    writeEnrolledSerial('12345678');
+    expect(fsSync.default.writeFileSync).toHaveBeenCalledWith(
+      enrolledSerialFilePath(),
+      '12345678\n',
+      expect.objectContaining({ mode: 0o600 }),
+    );
+  });
+});
+
+describe('diagnoseSerialMismatch (#33)', () => {
+  it('is silent when no serial was enrolled', async () => {
+    const { diagnoseSerialMismatch } = await import('../src/keychain-target.js');
+    expect(diagnoseSerialMismatch(null, ['12345678'])).toBeNull();
+  });
+
+  it('is silent when the enrolled key is present', async () => {
+    const { diagnoseSerialMismatch } = await import('../src/keychain-target.js');
+    expect(diagnoseSerialMismatch('12345678', ['12345678', '99999999'])).toBeNull();
+  });
+
+  it('names both serials when a different key is present', async () => {
+    const { diagnoseSerialMismatch } = await import('../src/keychain-target.js');
+    const msg = diagnoseSerialMismatch('12345678', ['36014135']);
+    expect(msg).toContain('12345678');
+    expect(msg).toContain('36014135');
+    expect(msg).toMatch(/different key/i);
+  });
+
+  it('reports when no key is present at all', async () => {
+    const { diagnoseSerialMismatch } = await import('../src/keychain-target.js');
+    const msg = diagnoseSerialMismatch('12345678', []);
+    expect(msg).toContain('12345678');
+    expect(msg).toMatch(/no yubikey/i);
+  });
+});
+
+describe('computeChallengeResponse error rephrasing (#33)', () => {
+  it('explains an unprogrammed slot instead of passing through ykman wording', () => {
+    childProcess.spawnSync.mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr: 'Error: Cannot perform challenge-response on an empty slot.\n',
+    });
+    expect(() => computeChallengeResponse('cafe')).toThrow(/slot 2 is not programmed/i);
+  });
+
+  it('rephrases the misleading "Failed to write" error as a missed touch', () => {
+    childProcess.spawnSync.mockReturnValue({
+      status: 1,
+      stdout: '',
+      stderr:
+        'ERROR: Failed to write to the YubiKey. Make sure the device does not have restricted access.\n',
+    });
+    expect(() => computeChallengeResponse('cafe')).toThrow(/missed touch/i);
+  });
+});

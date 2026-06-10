@@ -898,6 +898,12 @@ keychain
     );
     console.log(`  ykman installed   ${kt.ykmanAvailable() ? 'yes' : 'no (brew install ykman)'}`);
     console.log(`  YubiKey present   ${kt.yubikeyPresent() ? 'yes' : 'no'}`);
+    const enrolledSerial = kt.readEnrolledSerial();
+    console.log(`  Enrolled serial   ${enrolledSerial ?? 'not recorded'}`);
+    if (enrolledSerial) {
+      const mismatch = kt.diagnoseSerialMismatch(enrolledSerial, kt.listYubikeySerials());
+      if (mismatch) console.log(`\n  ${mismatch}`);
+    }
 
     if (activePath && lockState === 'locked') {
       console.log('\n  Locked — run `noxctl keychain unlock` (tap your YubiKey).');
@@ -926,6 +932,13 @@ keychain
       console.error(
         'Challenge file missing — cannot derive the unlock password. Re-run `noxctl keychain init`.',
       );
+      process.exit(1);
+    }
+    // Preflight: a wrong/absent key is diagnosable from serials alone, before
+    // burning a tap on a challenge that can only fail.
+    const mismatch = kt.diagnoseSerialMismatch(kt.readEnrolledSerial(), kt.listYubikeySerials());
+    if (mismatch) {
+      console.error(mismatch);
       process.exit(1);
     }
     console.log('Tap your YubiKey when it blinks...');
@@ -1040,6 +1053,18 @@ keychain
     // Activate dedicated mode: now activeKeychainPath() resolves to kcPath and
     // saveCredentialBlob targets the new (still-unlocked) keychain.
     kt.writeChallenge(challenge);
+
+    // Remember which physical key answered the enrollment challenge so unlock
+    // can distinguish "wrong key inserted" from "missed tap" later.
+    const serials = kt.listYubikeySerials();
+    if (serials.length === 1) {
+      kt.writeEnrolledSerial(serials[0]);
+      console.log(`Enrolled against YubiKey serial ${serials[0]}.`);
+    } else if (serials.length > 1) {
+      console.log(
+        `Multiple YubiKeys present (${serials.join(', ')}) — not recording an enrolled serial.`,
+      );
+    }
 
     let copied = 0;
     for (const { profile, blob } of blobs) {
