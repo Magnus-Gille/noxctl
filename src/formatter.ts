@@ -260,9 +260,11 @@ export function outputDetail(
   record: Record<string, unknown>,
   columns: Column[],
   json: boolean,
+  jsonEnvelopeKey?: string,
 ): void {
   if (json) {
-    console.log(JSON.stringify(record, null, 2));
+    const payload = jsonEnvelopeKey ? { [jsonEnvelopeKey]: record } : record;
+    console.log(JSON.stringify(payload, null, 2));
     return;
   }
   console.log(formatDetail(record, columns));
@@ -273,9 +275,11 @@ export function outputConfirmation(
   json: boolean,
   rawData: unknown,
   columns?: Column[],
+  jsonEnvelopeKey?: string,
 ): void {
   if (json) {
-    console.log(JSON.stringify(rawData, null, 2));
+    const payload = jsonEnvelopeKey ? { [jsonEnvelopeKey]: rawData } : rawData;
+    console.log(JSON.stringify(payload, null, 2));
     return;
   }
   console.log(message);

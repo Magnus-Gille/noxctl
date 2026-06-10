@@ -67,7 +67,7 @@ program
   .description('CLI and MCP server for Fortnox accounting')
   .version('0.2.0')
   .addOption(
-    new Option('-o, --output <format>', 'Output format')
+    new Option('-o, --output <format>', 'Output format (default: table on TTY, json when piped)')
       .choices(['json', 'table'])
       .default(undefined),
   )
@@ -1159,7 +1159,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { getInvoice } = await import('./operations/invoices.js');
     const data = await getInvoice(documentNumber);
-    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
   });
 
 invoices
@@ -1191,7 +1191,7 @@ Examples:
       return;
     }
     const data = await createInvoice(params);
-    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
   });
 
 invoices
@@ -1216,7 +1216,7 @@ Examples:
         return;
       }
       const data = await updateInvoice(documentNumber, fields);
-      outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
     },
   );
 
@@ -1263,6 +1263,7 @@ invoices
         json(),
         data,
         invoiceConfirmColumns,
+        'Invoice',
       );
     },
   );
@@ -1278,7 +1279,13 @@ invoices
       return;
     }
     const data = await bookkeepInvoice(documentNumber);
-    outputConfirmation(`Invoice ${documentNumber} bookkeept.`, json(), data, invoiceConfirmColumns);
+    outputConfirmation(
+      `Invoice ${documentNumber} bookkeept.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+      'Invoice',
+    );
   });
 
 invoices
@@ -1292,7 +1299,13 @@ invoices
       return;
     }
     const data = await creditInvoice(documentNumber);
-    outputConfirmation(`Invoice ${documentNumber} credited.`, json(), data, invoiceConfirmColumns);
+    outputConfirmation(
+      `Invoice ${documentNumber} credited.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+      'Invoice',
+    );
   });
 
 // --- tax ---
@@ -1420,7 +1433,7 @@ customers
   .action(async (customerNumber: string) => {
     const { getCustomer } = await import('./operations/customers.js');
     const data = await getCustomer(customerNumber);
-    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
   });
 
 customers
@@ -1449,7 +1462,7 @@ Examples:
       return;
     }
     const data = await createCustomer(params);
-    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
   });
 
 customers
@@ -1475,7 +1488,7 @@ Examples:
         return;
       }
       const data = await updateCustomer(customerNumber, fields);
-      outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
     },
   );
 
@@ -1510,7 +1523,7 @@ articles
   .action(async (articleNumber: string) => {
     const { getArticle } = await import('./operations/articles.js');
     const data = await getArticle(articleNumber);
-    outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
   });
 
 articles
@@ -1543,7 +1556,7 @@ Examples:
       return;
     }
     const data = await createArticle(params);
-    outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
   });
 
 articles
@@ -1567,7 +1580,7 @@ Examples:
         return;
       }
       const data = await updateArticle(articleNumber, fields);
-      outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
     },
   );
 
@@ -1608,7 +1621,7 @@ suppliers
   .action(async (supplierNumber: string) => {
     const { getSupplier } = await import('./operations/suppliers.js');
     const data = await getSupplier(supplierNumber);
-    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
   });
 
 suppliers
@@ -1637,7 +1650,7 @@ Examples:
       return;
     }
     const data = await createSupplier(params);
-    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
   });
 
 suppliers
@@ -1663,7 +1676,7 @@ Examples:
         return;
       }
       const data = await updateSupplier(supplierNumber, fields);
-      outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
     },
   );
 
@@ -1716,7 +1729,12 @@ supplierInvoices
   .action(async (givenNumber: string) => {
     const { getSupplierInvoice } = await import('./operations/supplier-invoices.js');
     const data = await getSupplierInvoice(givenNumber);
-    outputDetail(data as Record<string, unknown>, supplierInvoiceDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoiceDetailColumns,
+      json(),
+      'SupplierInvoice',
+    );
   });
 
 supplierInvoices
@@ -1745,7 +1763,12 @@ Examples:
       return;
     }
     const data = await createSupplierInvoice(params);
-    outputDetail(data as Record<string, unknown>, supplierInvoiceDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoiceDetailColumns,
+      json(),
+      'SupplierInvoice',
+    );
   });
 
 supplierInvoices
@@ -1764,6 +1787,7 @@ supplierInvoices
       json(),
       data,
       supplierInvoiceConfirmColumns,
+      'SupplierInvoice',
     );
   });
 
@@ -1776,7 +1800,12 @@ company
   .action(async () => {
     const { getCompanyInfo } = await import('./operations/company.js');
     const data = await getCompanyInfo();
-    outputDetail(data as Record<string, unknown>, companyDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      companyDetailColumns,
+      json(),
+      'CompanyInformation',
+    );
   });
 
 // --- vouchers ---
@@ -1818,7 +1847,7 @@ vouchers
     const { getVoucher } = await import('./operations/vouchers.js');
     const data = await getVoucher(series, voucherNumber, opts.year);
     if (json()) {
-      console.log(JSON.stringify(data, null, 2));
+      console.log(JSON.stringify({ Voucher: data }, null, 2));
     } else {
       outputDetail(data as Record<string, unknown>, voucherDetailColumns, false);
       const rows = (data as Record<string, unknown>).VoucherRows as Record<string, unknown>[];
@@ -1853,7 +1882,7 @@ Examples:
       return;
     }
     const data = await createVoucher(params);
-    outputDetail(data as Record<string, unknown>, voucherDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, voucherDetailColumns, json(), 'Voucher');
   });
 
 // --- invoice-payments ---
@@ -1896,7 +1925,12 @@ invoicePayments
   .action(async (paymentNumber: string) => {
     const { getInvoicePayment } = await import('./operations/invoice-payments.js');
     const data = await getInvoicePayment(paymentNumber);
-    outputDetail(data as Record<string, unknown>, invoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      invoicePaymentDetailColumns,
+      json(),
+      'InvoicePayment',
+    );
   });
 
 invoicePayments
@@ -1933,7 +1967,12 @@ Examples:
       return;
     }
     const data = await createInvoicePayment(params);
-    outputDetail(data as Record<string, unknown>, invoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      invoicePaymentDetailColumns,
+      json(),
+      'InvoicePayment',
+    );
   });
 
 invoicePayments
@@ -1961,7 +2000,13 @@ invoicePayments
       return;
     }
     const result = await bookkeepInvoicePayment(paymentNumber);
-    outputConfirmation(`Invoice payment ${paymentNumber} bookkeept.`, json(), result);
+    outputConfirmation(
+      `Invoice payment ${paymentNumber} bookkeept.`,
+      json(),
+      result,
+      undefined,
+      'InvoicePayment',
+    );
   });
 
 // --- supplier-invoice-payments ---
@@ -2005,7 +2050,12 @@ supplierInvoicePayments
   .action(async (paymentNumber: string) => {
     const { getSupplierInvoicePayment } = await import('./operations/supplier-invoice-payments.js');
     const data = await getSupplierInvoicePayment(paymentNumber);
-    outputDetail(data as Record<string, unknown>, supplierInvoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoicePaymentDetailColumns,
+      json(),
+      'SupplierInvoicePayment',
+    );
   });
 
 supplierInvoicePayments
@@ -2041,7 +2091,12 @@ Examples:
       return;
     }
     const data = await createSupplierInvoicePayment(params);
-    outputDetail(data as Record<string, unknown>, supplierInvoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoicePaymentDetailColumns,
+      json(),
+      'SupplierInvoicePayment',
+    );
   });
 
 supplierInvoicePayments
@@ -2096,7 +2151,7 @@ offers
   .action(async (documentNumber: string) => {
     const { getOffer } = await import('./operations/offers.js');
     const data = await getOffer(documentNumber);
-    outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
   });
 
 offers
@@ -2125,7 +2180,7 @@ Examples:
       return;
     }
     const data = await createOffer(params);
-    outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
   });
 
 offers
@@ -2143,7 +2198,7 @@ offers
         return;
       }
       const data = await updateOffer(documentNumber, fields);
-      outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
     },
   );
 
@@ -2163,6 +2218,7 @@ offers
       json(),
       data,
       invoiceConfirmColumns,
+      'Invoice',
     );
   });
 
@@ -2177,7 +2233,13 @@ offers
       return;
     }
     const data = await createOrderFromOffer(documentNumber);
-    outputConfirmation(`Order created from offer ${documentNumber}.`, json(), data);
+    outputConfirmation(
+      `Order created from offer ${documentNumber}.`,
+      json(),
+      data,
+      undefined,
+      'Order',
+    );
   });
 
 // --- orders ---
@@ -2217,7 +2279,7 @@ orders
   .action(async (documentNumber: string) => {
     const { getOrder } = await import('./operations/orders.js');
     const data = await getOrder(documentNumber);
-    outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
   });
 
 orders
@@ -2246,7 +2308,7 @@ Examples:
       return;
     }
     const data = await createOrder(params);
-    outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
   });
 
 orders
@@ -2264,7 +2326,7 @@ orders
         return;
       }
       const data = await updateOrder(documentNumber, fields);
-      outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
     },
   );
 
@@ -2284,6 +2346,7 @@ orders
       json(),
       data,
       invoiceConfirmColumns,
+      'Invoice',
     );
   });
 
@@ -2316,7 +2379,7 @@ projects
   .action(async (projectNumber: string) => {
     const { getProject } = await import('./operations/projects.js');
     const data = await getProject(projectNumber);
-    outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
   });
 
 projects
@@ -2344,7 +2407,7 @@ projects
       return;
     }
     const data = await createProject(params);
-    outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
   });
 
 projects
@@ -2362,7 +2425,7 @@ projects
         return;
       }
       const data = await updateProject(projectNumber, fields);
-      outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
     },
   );
 
@@ -2401,7 +2464,7 @@ costcenters
   .action(async (code: string) => {
     const { getCostCenter } = await import('./operations/costcenters.js');
     const data = await getCostCenter(code);
-    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
 
 costcenters
@@ -2430,7 +2493,7 @@ costcenters
       return;
     }
     const data = await createCostCenter(params);
-    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
 
 costcenters
@@ -2447,7 +2510,7 @@ costcenters
       return;
     }
     const data = await updateCostCenter(code, fields);
-    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
 
 costcenters
@@ -2503,7 +2566,12 @@ taxreductions
   .action(async (id: string) => {
     const { getTaxReduction } = await import('./operations/taxreductions.js');
     const data = await getTaxReduction(parseInt(id, 10));
-    outputDetail(data as Record<string, unknown>, taxReductionDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      taxReductionDetailColumns,
+      json(),
+      'TaxReduction',
+    );
   });
 
 taxreductions
@@ -2544,7 +2612,12 @@ taxreductions
       return;
     }
     const data = await createTaxReduction(params);
-    outputDetail(data as Record<string, unknown>, taxReductionDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      taxReductionDetailColumns,
+      json(),
+      'TaxReduction',
+    );
   });
 
 // --- price lists ---
@@ -2582,7 +2655,7 @@ pricelists
   .action(async (code: string) => {
     const { getPriceList } = await import('./operations/pricelists.js');
     const data = await getPriceList(code);
-    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
 
 pricelists
@@ -2609,7 +2682,7 @@ pricelists
       return;
     }
     const data = await createPriceList(params);
-    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
 
 pricelists
@@ -2626,7 +2699,7 @@ pricelists
       return;
     }
     const data = await updatePriceList(code, fields);
-    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
 
 // --- prices ---
@@ -2663,7 +2736,7 @@ prices
   .action(async (opts) => {
     const { getPrice } = await import('./operations/pricelists.js');
     const data = await getPrice(opts.pricelist, opts.article, opts.fromQuantity);
-    outputDetail(data as Record<string, unknown>, priceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
   });
 
 prices
@@ -2687,7 +2760,7 @@ prices
       return;
     }
     const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
-    outputDetail(data as Record<string, unknown>, priceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
   });
 
 // Error handling

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   formatTable,
   formatDetail,
@@ -312,5 +312,29 @@ describe('isJsonMode', () => {
   it('explicit flag overrides TTY detection', () => {
     const fakeStdout = { isTTY: true } as NodeJS.WriteStream;
     expect(isJsonMode({ output: 'json' }, fakeStdout)).toBe(true);
+  });
+});
+
+describe('outputDetail JSON envelope', () => {
+  it('wraps the record under the envelope key in JSON mode', async () => {
+    const { outputDetail } = await import('../src/formatter.js');
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => {
+      logs.push(msg);
+    });
+    outputDetail({ DocumentNumber: '28' }, [], true, 'Invoice');
+    spy.mockRestore();
+    expect(JSON.parse(logs.join(''))).toEqual({ Invoice: { DocumentNumber: '28' } });
+  });
+
+  it('prints the bare record when no envelope key is given', async () => {
+    const { outputDetail } = await import('../src/formatter.js');
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => {
+      logs.push(msg);
+    });
+    outputDetail({ DocumentNumber: '28' }, [], true);
+    spy.mockRestore();
+    expect(JSON.parse(logs.join(''))).toEqual({ DocumentNumber: '28' });
   });
 });
