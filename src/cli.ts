@@ -194,6 +194,13 @@ async function confirmMutation(
   const company = await fetchCompanyHint();
   const suffix = company ? ` (${company})` : '';
 
+  // Show what will actually be sent so the user can verify before confirming.
+  if (payload !== undefined) {
+    console.log('Request payload:');
+    console.log(JSON.stringify(payload, null, 2));
+    console.log();
+  }
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
