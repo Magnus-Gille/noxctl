@@ -395,3 +395,19 @@ export const companyDetailColumns: Column[] = [
   { key: 'Email', header: 'Email', width: 40 },
   { key: 'DatabaseNumber', header: 'Database #', width: 10 },
 ];
+
+// --- Financial year views ---
+
+export const financialYearListColumns: Column[] = [
+  { key: 'Id', header: 'Id', width: 4, align: 'right' },
+  { key: 'FromDate', header: 'From', width: 10 },
+  { key: 'ToDate', header: 'To', width: 10 },
+  { key: 'AccountingMethod', header: 'Method', width: 8 },
+  { key: 'AccountChartType', header: 'Account Chart', width: 30 },
+];
+
+export const financialYearDetailColumns: Column[] = financialYearListColumns;
+
+export const lockedPeriodDetailColumns: Column[] = [
+  { key: 'EndDate', header: 'Locked Through', width: 10 },
+];

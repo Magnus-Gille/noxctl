@@ -60,6 +60,9 @@ import {
   priceListDetailColumns,
   priceListColumns,
   priceDetailColumns,
+  financialYearListColumns,
+  financialYearDetailColumns,
+  lockedPeriodDetailColumns,
 } from './views.js';
 
 const program = new Command();
@@ -2830,6 +2833,53 @@ prices
     }
     const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
     outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
+  });
+
+// --- financial years ---
+const financialYears = program
+  .command('financial-years')
+  .description('Financial year and locked period operations');
+
+financialYears
+  .command('list')
+  .description('List financial years (räkenskapsår)')
+  .option('--date <date>', 'Find the financial year containing this date (YYYY-MM-DD)')
+  .action(async (opts: { date?: string }) => {
+    const { listFinancialYears } = await import('./operations/financial-years.js');
+    const data = await listFinancialYears({ date: opts.date });
+    outputList(
+      data.FinancialYears ?? [],
+      financialYearListColumns,
+      json(),
+      data,
+      data.MetaInformation,
+    );
+  });
+
+financialYears
+  .command('get <id>')
+  .description('Get a single financial year')
+  .action(async (id: string) => {
+    const { getFinancialYear } = await import('./operations/financial-years.js');
+    const data = await getFinancialYear(parseInt(id, 10));
+    outputDetail(data, financialYearDetailColumns, json(), 'FinancialYear');
+  });
+
+financialYears
+  .command('locked-period')
+  .description('Show the locked period (bokföring låst t.o.m.)')
+  .action(async () => {
+    const { getLockedPeriod } = await import('./operations/financial-years.js');
+    const data = await getLockedPeriod();
+    if (json()) {
+      console.log(JSON.stringify({ LockedPeriod: data }, null, 2));
+      return;
+    }
+    if (!data.EndDate) {
+      console.log('No period is locked.');
+      return;
+    }
+    outputDetail(data, lockedPeriodDetailColumns, false);
   });
 
 // --- completion ---
