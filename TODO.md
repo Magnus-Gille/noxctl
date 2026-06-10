@@ -15,23 +15,23 @@ Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spe
 
 ### Tier 2 — Usability
 
-1. Better confirmation preview (show payload before y/N prompt)
-2. Selective analytics MCP tools (overdue invoices, unpaid totals, top customers, VAT summary)
-3. Shell completions
-4. Natural date periods (`Q1`, `march`) — needs fiscal-year design first
+1. ~~Better confirmation preview (show payload before y/N prompt)~~ ✅ Done
+2. ~~Selective analytics MCP tools (overdue invoices, unpaid totals, top customers, VAT summary)~~ ✅ Done
+3. ~~Shell completions~~ ✅ Done
+4. ~~Natural date periods (`Q1`, `march`)~~ ✅ Done (calendar-year based; fiscal-year awareness still open)
 5. Claude Desktop auto-registration in `init`
 
 ### Tier 3 — More API Coverage
 
 6. ~~**Projects / Cost Centers**~~ ✅ Done
-7. **Contracts** — recurring invoicing automation
+7. ~~**Contracts** — recurring invoicing automation~~ ✅ Done
 8. ~~**Tax Reductions (ROT/RUT)**~~ ✅ Done
 9. ~~**Price Lists / Prices**~~ ✅ Done
-10. **Financial Years / Locked Period** — context for period-aware operations
+10. ~~**Financial Years / Locked Period**~~ ✅ Done
 
 ### Tier 4 — Backlog
 
-11. CLI `dashboard` command
+11. ~~CLI `dashboard` command~~ ✅ Done
 12. Bilingual MCP descriptions (Swedish primary + English keywords)
 13. MCP capability resource
 14. Bank transactions (requires enabling Bank API scope)

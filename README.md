@@ -361,6 +361,36 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl prices get --pricelist <code> --article <number>` | `fortnox_get_price` | Get a specific price |
 | `noxctl prices update --pricelist <code> --article <number> --input <file>` | `fortnox_update_price` | Update a price (mutation) |
 
+### Contracts (avtal — recurring invoicing)
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl contracts list [--filter active\|inactive\|finished]` | `fortnox_list_contracts` | List/filter contracts |
+| `noxctl contracts get <number>` | `fortnox_get_contract` | Get a single contract |
+| `noxctl contracts create --customer <number> --input <file>` | `fortnox_create_contract` | Create a contract (mutation) |
+| `noxctl contracts update <number> --input <file>` | `fortnox_update_contract` | Update a contract (mutation) |
+| `noxctl contracts finish <number>` | `fortnox_finish_contract` | Finish a contract (mutation) |
+| `noxctl contracts create-invoice <number>` | `fortnox_create_invoice_from_contract` | Create the next invoice now (mutation) |
+| `noxctl contracts increase-invoice-count <number>` | `fortnox_increase_contract_invoice_count` | Extend by one invoice (mutation) |
+
+### Financial years and locked period
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl financial-years list [--date <date>]` | `fortnox_list_financialyears` | List financial years (räkenskapsår) |
+| `noxctl financial-years get <id>` | `fortnox_get_financialyear` | Get a single financial year |
+| `noxctl financial-years locked-period` | `fortnox_get_lockedperiod` | Show through which date bookkeeping is locked |
+
+### Analytics and dashboard
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl analytics overdue` | `fortnox_overdue_invoices` | Overdue invoices summary |
+| `noxctl analytics unpaid` | `fortnox_unpaid_totals` | Outstanding receivables, with overdue split |
+| `noxctl analytics top-customers [--period <period>]` | `fortnox_top_customers` | Top customers by invoiced amount |
+| `noxctl analytics vat --period <period>` | `fortnox_vat_summary` | VAT summary with net VAT position |
+| `noxctl dashboard` | — | At-a-glance: outstanding, overdue, recent invoices, monthly revenue |
+
 ### Company
 
 | CLI | MCP tool | Description |
@@ -377,6 +407,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl profile use <name>` | — | Set the active profile (writes `~/.fortnox-mcp/active-profile`) |
 | `noxctl profile current` | — | Show the currently resolved profile and where it came from |
 | `noxctl profile list` | — | List known profiles from the index |
+| `noxctl completion <bash\|zsh\|fish>` | — | Generate a shell completion script |
 
 ## CLI output
 
@@ -388,6 +419,14 @@ noxctl -o json invoices list      # force JSON (JavaScript Object Notation)
 noxctl -o table invoices list     # force table
 noxctl invoices list | jq .       # auto-JSON (piped)
 ```
+
+JSON output has a stable envelope: list commands wrap under the plural resource key (`{"Invoices": [...], "MetaInformation": {...}}`) and single-resource commands under the singular key (`{"Invoice": {...}}`), so scripted callers can rely on a fixed accessor. Failures in JSON mode are emitted to stderr as a structured envelope:
+
+```json
+{ "error": { "status": 400, "message": "...", "source": "fortnox-api" } }
+```
+
+Natural date periods are accepted wherever `--from`/`--to` work, via `--period`: `Q1`, `2025-Q3`, `march`/`mars`, `this-quarter`, `last-quarter`, `this-month`, `last-month`, `ytd`, `this-year`, `last-year`, or a bare year. Periods are **calendar-year** based (broken fiscal years are not yet considered).
 
 When running from a local clone instead of an installed binary, replace `noxctl` with `node dist/cli.js`.
 

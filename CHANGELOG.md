@@ -4,6 +4,29 @@ All notable changes to noxctl are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Contracts API** (#10) — recurring invoicing: `noxctl contracts list|get|create|update|finish|create-invoice|increase-invoice-count` and matching MCP tools.
+- **Financial years / locked period** (#11) — `noxctl financial-years list|get|locked-period` and MCP tools; context for period-aware operations.
+- **Analytics views** (#7) — overdue summary, unpaid totals, top customers, VAT summary with net VAT position: `noxctl analytics ...` and MCP tools.
+- **`noxctl dashboard`** (#12) — at-a-glance outstanding/overdue/recent invoices/monthly revenue.
+- **Natural date periods** (#9) — `--period Q1|2025-Q3|march|mars|last-quarter|ytd|...` on list/report commands (calendar-year based; fiscal-year awareness deferred).
+- **Shell completions** (#8) — `noxctl completion bash|zsh|fish`.
+- **Confirmation payload preview** (#6) — the y/N prompt now shows the exact JSON payload that will be sent.
+- **JSON error envelope** (#32) — in JSON mode, failures are emitted to stderr as `{"error": {status?, message, hint?, source}}`.
+- **YubiKey serial diagnostics** (#33) — `keychain init` records the enrolled key's serial; `unlock` preflights it against `ykman list --serials` and names both serials on mismatch. ykman's misleading "empty slot"/"Failed to write" errors are translated.
+
+### Changed
+
+- **Stable JSON envelopes for single-resource output** (#34) — `get`/`create`/`update`/action commands now wrap their JSON output under the singular resource key (`{"Invoice": {...}}`), matching the list convention. Scripts that consumed the bare object should unwrap one level.
+- The `-o` help text documents the default output mode (table on TTY, JSON when piped) (#34).
+
+### Fixed
+
+- `customers create`/`update` strip the server-derived read-only fields `Country`, `DeliveryCountry`, `VisitingCountry`, so a `customers get` response can be fed back into create/update unchanged (#31).
+
 ## [0.2.0] - 2026-04-20
 
 ### Added
