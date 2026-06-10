@@ -270,6 +270,39 @@ export function outputDetail(
   console.log(formatDetail(record, columns));
 }
 
+export interface ErrorEnvelope {
+  error: {
+    status?: number;
+    message: string;
+    hint?: string;
+    source: 'fortnox-api' | 'noxctl';
+  };
+}
+
+// Duck-typed rather than instanceof so the formatter stays decoupled from
+// fortnox-client (and survives errors crossing module-instance boundaries).
+export function errorEnvelope(err: unknown): ErrorEnvelope {
+  if (
+    err instanceof Error &&
+    err.name === 'FortnoxApiError' &&
+    'statusCode' in err &&
+    'fortnoxMessage' in err
+  ) {
+    const apiErr = err as Error & { statusCode: number; fortnoxMessage: string; hint?: string };
+    return {
+      error: {
+        status: apiErr.statusCode,
+        message: apiErr.fortnoxMessage,
+        ...(apiErr.hint ? { hint: apiErr.hint } : {}),
+        source: 'fortnox-api',
+      },
+    };
+  }
+  return {
+    error: { message: err instanceof Error ? err.message : String(err), source: 'noxctl' },
+  };
+}
+
 export function outputConfirmation(
   message: string,
   json: boolean,

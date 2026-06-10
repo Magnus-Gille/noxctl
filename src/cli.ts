@@ -10,6 +10,7 @@ import {
   outputConfirmation,
   formatTaxReport,
   formatFinancialReport,
+  errorEnvelope,
 } from './formatter.js';
 import {
   readActivePointer,
@@ -2779,6 +2780,12 @@ try {
       process.exit(1);
     }
   }
-  console.error(err instanceof Error ? err.message : err);
+  if (json()) {
+    // Structured mode fails structured: scripted callers branch on .error
+    // instead of string-scraping stderr.
+    console.error(JSON.stringify(errorEnvelope(err), null, 2));
+  } else {
+    console.error(err instanceof Error ? err.message : err);
+  }
   process.exit(1);
 }
