@@ -411,3 +411,33 @@ export const financialYearDetailColumns: Column[] = financialYearListColumns;
 export const lockedPeriodDetailColumns: Column[] = [
   { key: 'EndDate', header: 'Locked Through', width: 10 },
 ];
+
+// --- Contract views ---
+
+export const contractListColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Doc #', width: 7, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 20 },
+  { key: 'PeriodStart', header: 'Start', width: 10 },
+  { key: 'PeriodEnd', header: 'End', width: 10 },
+  { key: 'InvoiceInterval', header: 'Interval', width: 8, align: 'right' },
+  { key: 'Continuous', header: 'Cont.', width: 5 },
+  { key: 'Total', header: 'Total', width: 10, align: 'right', format: currency },
+];
+
+export const contractDetailColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 10 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 10 },
+  { key: 'CustomerName', header: 'Customer', width: 30 },
+  { key: 'Active', header: 'Active', width: 5 },
+  { key: 'Continuous', header: 'Continuous', width: 5 },
+  { key: 'ContractDate', header: 'Contract Date', width: 10 },
+  { key: 'ContractLength', header: 'Length (months)', width: 6, align: 'right' },
+  { key: 'PeriodStart', header: 'Period Start', width: 10 },
+  { key: 'PeriodEnd', header: 'Period End', width: 10 },
+  { key: 'InvoiceInterval', header: 'Invoice Interval', width: 6, align: 'right' },
+  { key: 'InvoicesRemaining', header: 'Invoices Remaining', width: 6, align: 'right' },
+  { key: 'LastInvoiceDate', header: 'Last Invoice', width: 10 },
+  { key: 'Total', header: 'Total', width: 12, align: 'right', format: currency },
+  { key: 'TotalVAT', header: 'VAT', width: 12, align: 'right', format: currency },
+  { key: 'Comments', header: 'Comments', width: 40 },
+];

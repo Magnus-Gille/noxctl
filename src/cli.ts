@@ -63,6 +63,8 @@ import {
   financialYearListColumns,
   financialYearDetailColumns,
   lockedPeriodDetailColumns,
+  contractListColumns,
+  contractDetailColumns,
 } from './views.js';
 
 const program = new Command();
@@ -2833,6 +2835,144 @@ prices
     }
     const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
     outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
+  });
+
+// --- contracts ---
+const contracts = program
+  .command('contracts')
+  .description('Contract operations (avtal — recurring invoicing)');
+
+contracts
+  .command('list')
+  .description('List/filter contracts')
+  .option('--filter <filter>', 'Filter: active, inactive, finished')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listContracts } = await import('./operations/contracts.js');
+    const data = await listContracts({
+      filter: opts.filter,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    outputList(data.Contracts ?? [], contractListColumns, json(), data, data.MetaInformation);
+  });
+
+contracts
+  .command('get <documentNumber>')
+  .description('Get a single contract')
+  .action(async (documentNumber: string) => {
+    const { getContract } = await import('./operations/contracts.js');
+    const data = await getContract(documentNumber);
+    outputDetail(data, contractDetailColumns, json(), 'Contract');
+  });
+
+contracts
+  .command('create')
+  .description('Create a contract (recurring invoicing)')
+  .requiredOption('--customer <number>', 'Customer number')
+  .requiredOption('--input <file>', 'Contract data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"InvoiceRows":[{"Description":"Hosting","DeliveredQuantity":1,"Price":500,"AccountNumber":3001,"VAT":25}],"PeriodStart":"2026-07-01","PeriodEnd":"2027-06-30","InvoiceInterval":3,"ContractLength":12}' | noxctl contracts create --customer 25 --input - --dry-run`,
+  )
+  .action(async (opts) => {
+    const { createContract } = await import('./operations/contracts.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    const params = { CustomerNumber: opts.customer, ...input };
+    if (
+      !(await confirmMutation(`Create contract for customer ${opts.customer}`, opts, {
+        Contract: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createContract(params);
+    outputDetail(data, contractDetailColumns, json(), 'Contract');
+  });
+
+contracts
+  .command('update <documentNumber>')
+  .description('Update a contract')
+  .requiredOption('--input <file>', 'Fields to update as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (documentNumber: string, opts) => {
+    const { updateContract } = await import('./operations/contracts.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update contract ${documentNumber}`, opts, { Contract: fields }))) {
+      return;
+    }
+    const data = await updateContract(documentNumber, fields);
+    outputDetail(data, contractDetailColumns, json(), 'Contract');
+  });
+
+contracts
+  .command('finish <documentNumber>')
+  .description('Finish a contract — no further invoices will be created')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { finishContract } = await import('./operations/contracts.js');
+    if (!(await confirmMutation(`Finish contract ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await finishContract(documentNumber);
+    outputConfirmation(
+      `Contract ${documentNumber} finished.`,
+      json(),
+      data,
+      contractDetailColumns,
+      'Contract',
+    );
+  });
+
+contracts
+  .command('create-invoice <documentNumber>')
+  .description('Create the next invoice from a contract immediately')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { createInvoiceFromContract } = await import('./operations/contracts.js');
+    if (!(await confirmMutation(`Create invoice from contract ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await createInvoiceFromContract(documentNumber);
+    outputConfirmation(
+      `Invoice created from contract ${documentNumber}.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+      'Invoice',
+    );
+  });
+
+contracts
+  .command('increase-invoice-count <documentNumber>')
+  .description('Extend a non-continuous contract by one invoice')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { increaseInvoiceCount } = await import('./operations/contracts.js');
+    if (!(await confirmMutation(`Increase invoice count for contract ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await increaseInvoiceCount(documentNumber);
+    outputConfirmation(
+      `Invoice count increased for contract ${documentNumber}.`,
+      json(),
+      data,
+      contractDetailColumns,
+      'Contract',
+    );
   });
 
 // --- financial years ---
