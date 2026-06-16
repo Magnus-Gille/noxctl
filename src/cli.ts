@@ -89,6 +89,23 @@ function json(): boolean {
   return isJsonMode(program.opts());
 }
 
+// Suppress Commander's own plain-text usage errors (unknown command, missing
+// required option, ...) when in JSON mode, so the top-level catch can emit a
+// structured error envelope instead of leaving non-JSON on stderr. In table
+// mode, keep Commander's friendly usage message.
+//
+// Both configureOutput and exitOverride must be set HERE, before the command
+// tree is built: Commander only copies these settings into subcommands created
+// *after* they're configured on the parent. Set at the bottom, a subcommand's
+// parse error would call process.exit() directly and bypass the catch below
+// (leaving JSON-mode failures with no envelope).
+program.configureOutput({
+  outputError: (str, write) => {
+    if (!json()) write(str);
+  },
+});
+program.exitOverride();
+
 // Emit a fatal error honoring -o json mode (structured envelope to stderr) vs
 // plain text, then exit. Validation failures inside command actions must go
 // through this so they don't bypass the JSON error contract the way a bare
@@ -3211,27 +3228,27 @@ Examples:
     console.log(renderCompletion(shell, extractCommandTree(program)));
   });
 
-// Error handling
-program.exitOverride();
-
+// Error handling (configureOutput + exitOverride set above, before the command
+// tree, so subcommands inherit them).
 try {
   await program.parseAsync(process.argv);
 } catch (err) {
-  if (err instanceof Error && 'code' in err) {
-    const code = (err as { code: string }).code;
-    // Commander throws for --help and --version with exitCode 0
-    if (code === 'commander.helpDisplayed' || code === 'commander.version') {
-      process.exit(0);
-    }
-    if (code === 'commander.unknownCommand' || code === 'commander.missingMandatoryOptionValue') {
-      process.exit(1);
-    }
+  const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : undefined;
+  // Commander throws these for --help and --version after writing output; exit 0.
+  if (code === 'commander.helpDisplayed' || code === 'commander.version') {
+    process.exit(0);
   }
+  // Commander parse errors (unknownCommand, missingMandatoryOptionValue,
+  // excessArguments, ...) carry a `commander.*` code. configureOutput above
+  // already wrote their plain-text usage message in table mode, so we must not
+  // print it again here; in JSON mode that output was suppressed, so we emit
+  // the structured envelope below instead.
+  const isCommanderParseError = typeof code === 'string' && code.startsWith('commander.');
   if (json()) {
     // Structured mode fails structured: scripted callers branch on .error
     // instead of string-scraping stderr.
     console.error(JSON.stringify(errorEnvelope(err), null, 2));
-  } else {
+  } else if (!isCommanderParseError) {
     console.error(err instanceof Error ? err.message : err);
   }
   process.exit(1);

@@ -130,3 +130,23 @@ describe('CLI usage validation honors -o json (no period given)', () => {
     expect(parsed.error.message).toMatch(/requires a period/i);
   });
 });
+
+describe('Commander parse errors honor -o json', () => {
+  it('a missing required option emits a JSON envelope in json mode', () => {
+    const res = run(['-o', 'json', 'customers', 'create']);
+    expect(res.status).toBe(1);
+    const parsed = JSON.parse(res.stderr.trim()) as { error: { message: string; source: string } };
+    expect(parsed.error.source).toBe('noxctl');
+    expect(parsed.error.message).toMatch(/required option/i);
+  });
+
+  it('a missing required option stays plain text in table mode, printed once', () => {
+    const res = run(['-o', 'table', 'customers', 'create']);
+    expect(res.status).toBe(1);
+    expect(res.stderr).toMatch(/required option '--name/);
+    expect(() => JSON.parse(res.stderr.trim())).toThrow();
+    // Commander prints its usage error exactly once (no double-print from the
+    // top-level handler).
+    expect(res.stderr.split('required option').length - 1).toBe(1);
+  });
+});
