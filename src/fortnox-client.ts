@@ -95,6 +95,9 @@ function endpointToScope(endpoint: string): string | undefined {
     taxreductions: 'invoice',
     pricelists: 'price',
     prices: 'price',
+    inbox: 'archive',
+    archive: 'archive',
+    voucherfileconnections: 'archive',
   };
   for (const [prefix, scope] of Object.entries(mapping)) {
     if (path.startsWith(prefix)) return scope;
@@ -136,6 +139,7 @@ async function retryWithBackoff<T>(
 export interface RequestOptions {
   method?: string;
   body?: unknown;
+  rawBody?: BodyInit;
   params?: Record<string, string | number | undefined>;
 }
 
@@ -162,7 +166,6 @@ export async function fortnoxRequest<T>(
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
       Accept: 'application/json',
     };
 
@@ -171,8 +174,16 @@ export async function fortnoxRequest<T>(
       headers,
     };
 
-    if (options.body) {
-      fetchOptions.body = JSON.stringify(options.body);
+    if (options.rawBody !== undefined) {
+      // A raw body (e.g. FormData for a multipart file upload): do NOT set
+      // Content-Type — fetch/undici derives it (and the multipart boundary)
+      // from the body itself.
+      fetchOptions.body = options.rawBody;
+    } else {
+      headers['Content-Type'] = 'application/json';
+      if (options.body) {
+        fetchOptions.body = JSON.stringify(options.body);
+      }
     }
 
     const response = await fetch(url.toString(), fetchOptions);

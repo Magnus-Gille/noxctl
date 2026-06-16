@@ -456,3 +456,11 @@ export const monthlyRevenueColumns: Column[] = [
   { key: 'total', header: 'Invoiced', width: 14, align: 'right', format: currency },
   { key: 'invoiceCount', header: 'Invoices', width: 8, align: 'right' },
 ];
+
+// --- Voucher file attachment views ---
+
+export const voucherAttachmentColumns: Column[] = [
+  { key: 'fileName', header: 'File', width: 40 },
+  { key: 'fileId', header: 'File ID', width: 36 },
+  { key: 'voucherYear', header: 'Year', width: 5, align: 'right' },
+];

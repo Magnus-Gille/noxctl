@@ -67,6 +67,7 @@ import {
   contractDetailColumns,
   topCustomerColumns,
   monthlyRevenueColumns,
+  voucherAttachmentColumns,
 } from './views.js';
 
 const program = new Command();
@@ -1982,6 +1983,55 @@ Examples:
     const data = await createVoucher(params);
     outputDetail(data as Record<string, unknown>, voucherDetailColumns, json(), 'Voucher');
   });
+
+vouchers
+  .command('attach <series> <number> <files...>')
+  .description('Upload receipt/underlag files and link them to a voucher')
+  .option('--year <number>', 'Financial year (resolved from the voucher date if omitted)', parseInt)
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without uploading')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl vouchers attach A 60 receipt.pdf
+  noxctl vouchers attach A 61 ica.pdf lunch.jpg --year 4`,
+  )
+  .action(
+    async (
+      series: string,
+      voucherNumber: string,
+      files: string[],
+      opts: { year?: number; yes?: boolean; dryRun?: boolean },
+    ) => {
+      const { attachVoucherFiles } = await import('./operations/vouchers.js');
+      if (
+        !(await confirmMutation(
+          `Attach ${files.length} file(s) to voucher ${series}/${voucherNumber}`,
+          opts,
+          { files, year: opts.year },
+        ))
+      ) {
+        return;
+      }
+      const results = await attachVoucherFiles({
+        series,
+        voucherNumber,
+        filePaths: files,
+        financialYear: opts.year,
+      });
+      if (json()) {
+        console.log(JSON.stringify({ Attachments: results }, null, 2));
+      } else {
+        outputList(
+          results as unknown as Record<string, unknown>[],
+          voucherAttachmentColumns,
+          false,
+          results,
+        );
+      }
+    },
+  );
 
 // --- invoice-payments ---
 const invoicePayments = program

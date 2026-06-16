@@ -245,4 +245,23 @@ describe('fortnox-client', () => {
       }
     });
   });
+
+  it('sends a raw (FormData) body without a JSON Content-Type so fetch sets the multipart boundary', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      text: () => Promise.resolve(JSON.stringify({ File: { Id: 'x' } })),
+    });
+    const form = new FormData();
+    form.append('file', new Blob([Buffer.from('data')]), 'r.pdf');
+
+    await fortnoxRequest('inbox', { method: 'POST', rawBody: form });
+
+    const init = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(form);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBeUndefined();
+    expect(headers.Authorization).toBe('Bearer mock-token');
+  });
 });

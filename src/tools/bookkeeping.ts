@@ -1,7 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { listAccounts } from '../operations/accounts.js';
-import { listVouchers, getVoucher, createVoucher } from '../operations/vouchers.js';
+import {
+  listVouchers,
+  getVoucher,
+  createVoucher,
+  attachVoucherFiles,
+} from '../operations/vouchers.js';
 import {
   accountListColumns,
   voucherDetailColumns,
@@ -13,6 +18,7 @@ import {
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
 
 const VoucherRowSchema = z.object({
@@ -124,6 +130,53 @@ export function registerBookkeepingTools(server: McpServer): void {
         data,
         data.MetaInformation,
         includeRaw,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_attach_voucher_files',
+    'Ladda upp kvitto/underlagsfiler och koppla dem till en verifikation i Fortnox',
+    {
+      series: z.string().describe('Verifikationsserie (t.ex. "A")'),
+      voucherNumber: z.string().describe('Verifikationsnummer'),
+      files: z.array(z.string()).describe('Sökvägar till filer som ska laddas upp och kopplas'),
+      year: z
+        .number()
+        .optional()
+        .describe('Räkenskapsår (härleds från verifikationsdatum om utelämnat)'),
+      confirm: z.boolean().optional().describe('Bekräfta att filerna ska kopplas'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle skickas utan att ladda upp filerna'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ series, voucherNumber, files, year, confirm, dryRun, includeRaw }) => {
+      if (dryRun) {
+        return dryRunResponse(
+          `attach ${files.length} file(s) to voucher ${series}/${voucherNumber}`,
+          {
+            series,
+            voucherNumber,
+            files,
+            year,
+          },
+        );
+      }
+      if (!confirm) {
+        requireConfirmation(`attach ${files.length} file(s) to voucher ${series}/${voucherNumber}`);
+      }
+      const results = await attachVoucherFiles({
+        series,
+        voucherNumber,
+        filePaths: files,
+        financialYear: year,
+      });
+      const ids = results.map((r) => r.fileId).join(', ');
+      const summary = `Kopplade ${results.length} fil(er) till verifikation ${series}/${voucherNumber}. Fil-ID: ${ids}`;
+      return textResponse(
+        includeRaw ? `${summary}\n\n${JSON.stringify(results, null, 2)}` : summary,
       );
     },
   );

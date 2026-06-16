@@ -307,6 +307,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl vouchers list [--series <s>] [--from <date>] [--to <date>]` | `fortnox_list_vouchers` | List vouchers, optionally filtered by series and date range |
 | `noxctl vouchers get <series> <number>` | `fortnox_get_voucher` | Get a single voucher with rows |
 | `noxctl vouchers create --input <file>` | `fortnox_create_voucher` | Create a voucher with debit/credit rows (mutation) |
+| `noxctl vouchers attach <series> <number> <file...> [--year]` | `fortnox_attach_voucher_files` | Upload receipt/underlag files and link them to a voucher (mutation; needs the Fortnox archive scope) |
 | `noxctl accounts list [--search <term>]` | `fortnox_list_accounts` | View chart of accounts, search by name or number |
 
 ### Financial reports
