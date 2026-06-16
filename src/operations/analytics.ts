@@ -124,6 +124,16 @@ function todayIso(): string {
   return localIsoDate(new Date());
 }
 
+// Start of the dashboard revenue window: the 1st of the month (months - 1)
+// months before `today`, in local time. Built via the Date(year, monthIndex, 1)
+// overload so a negative/overflowing month index rolls the year correctly, and
+// pinning the day to 1 avoids end-of-month overflow — e.g. mutating a Jul-31
+// Date with setMonth(1) would land on "Feb 31" → March, silently dropping a
+// whole month from the window.
+export function dashboardWindowStart(today: Date, months: number): string {
+  return localIsoDate(new Date(today.getFullYear(), today.getMonth() - (months - 1), 1));
+}
+
 export async function getOverdueSummary(): Promise<OverdueSummary> {
   const data = await listInvoices({ filter: 'unpaidoverdue', all: true });
   return summarizeOverdue(data.Invoices ?? [], todayIso());
@@ -187,12 +197,9 @@ export interface Dashboard {
 // filtered fetch would be redundant — overdue/unpaid are derived locally).
 export async function getDashboard(options: { months?: number } = {}): Promise<Dashboard> {
   const months = options.months ?? 6;
-  const today = todayIso();
-
-  const fromDate = new Date();
-  fromDate.setMonth(fromDate.getMonth() - (months - 1));
-  fromDate.setDate(1);
-  const from = localIsoDate(fromDate);
+  const now = new Date();
+  const today = localIsoDate(now);
+  const from = dashboardWindowStart(now, months);
 
   // Two fetches: the windowed one for revenue/recent, and the unpaid filter
   // (which is date-independent — an old unpaid invoice may predate the window).

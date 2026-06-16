@@ -6,6 +6,7 @@ import {
   monthlyRevenueFrom,
   localIsoDate,
   netVatFromVatAccounts,
+  dashboardWindowStart,
 } from '../../src/operations/analytics.js';
 
 const today = '2026-06-10';
@@ -160,5 +161,28 @@ describe('netVatFromVatAccounts', () => {
   it('treats undefined/empty account maps as zero', () => {
     expect(netVatFromVatAccounts(undefined)).toBe(0);
     expect(netVatFromVatAccounts({})).toBe(0);
+  });
+});
+
+describe('dashboardWindowStart', () => {
+  it('is the 1st of the month (months-1) months back, in local time', () => {
+    // 6-month window ending in June -> starts Jan 1.
+    expect(dashboardWindowStart(new Date(2026, 5, 16), 6)).toBe('2026-01-01');
+  });
+
+  it('does not overflow on end-of-month dates (Jul 31, 6mo -> Feb 1, not Mar 1)', () => {
+    // The previous setMonth()/setDate(1) approach normalised "Feb 31" to March,
+    // silently dropping February from the window. Constructing the date pins the
+    // day to 1 first, so the month is exact.
+    expect(dashboardWindowStart(new Date(2026, 6, 31), 6)).toBe('2026-02-01');
+  });
+
+  it('rolls the year back when the window crosses January', () => {
+    // Jan 2026, 6-month window -> Aug 1 2025.
+    expect(dashboardWindowStart(new Date(2026, 0, 15), 6)).toBe('2025-08-01');
+  });
+
+  it('handles a 1-month window (current month start)', () => {
+    expect(dashboardWindowStart(new Date(2026, 6, 31), 1)).toBe('2026-07-01');
   });
 });
