@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 import { voucherSeriesSegment } from '../identifiers.js';
+import { listFinancialYears } from './financial-years.js';
 
 interface VoucherResponse {
   Voucher: Record<string, unknown>;
@@ -73,4 +76,87 @@ export async function createVoucher(
     },
   });
   return data.Voucher;
+}
+
+interface InboxFileResponse {
+  File: Record<string, unknown>;
+}
+interface VoucherFileConnectionResponse {
+  VoucherFileConnection: Record<string, unknown>;
+}
+
+// Upload a single file to the Fortnox inbox; returns the archived File object (has .Id).
+export async function uploadInboxFile(filePath: string): Promise<Record<string, unknown>> {
+  const buf = readFileSync(filePath);
+  const form = new FormData();
+  form.append('file', new Blob([buf]), basename(filePath));
+  const data = await fortnoxRequest<InboxFileResponse>('inbox', { method: 'POST', rawBody: form });
+  return data.File;
+}
+
+// Link an already-uploaded file (by id) to a voucher.
+export async function createVoucherFileConnection(
+  series: string,
+  voucherNumber: string,
+  fileId: string,
+  financialYear?: number,
+): Promise<Record<string, unknown>> {
+  const connection: Record<string, unknown> = {
+    FileId: fileId,
+    VoucherSeries: series,
+    VoucherNumber: voucherNumber,
+  };
+  if (financialYear !== undefined) connection.VoucherYear = financialYear;
+  const data = await fortnoxRequest<VoucherFileConnectionResponse>('voucherfileconnections', {
+    method: 'POST',
+    body: { VoucherFileConnection: connection },
+  });
+  return data.VoucherFileConnection;
+}
+
+export interface AttachVoucherFilesParams {
+  series: string;
+  voucherNumber: string;
+  filePaths: string[];
+  financialYear?: number;
+}
+export interface VoucherFileAttachment {
+  fileName: string;
+  fileId: string;
+  connection: Record<string, unknown>;
+}
+
+// Resolve the financial year from the voucher's transaction date when not given.
+async function resolveVoucherFinancialYear(
+  series: string,
+  voucherNumber: string,
+): Promise<number | undefined> {
+  const voucher = await getVoucher(series, voucherNumber);
+  const date = (voucher as Record<string, unknown>).TransactionDate as string | undefined;
+  if (!date) return undefined;
+  const fy = await listFinancialYears({ date });
+  const list = (fy.FinancialYears ?? []) as Record<string, unknown>[];
+  return list.length ? Number(list[0]!.Id) : undefined;
+}
+
+// Orchestrate: resolve year if omitted, then upload+connect each file in order.
+export async function attachVoucherFiles(
+  params: AttachVoucherFilesParams,
+): Promise<VoucherFileAttachment[]> {
+  const year =
+    params.financialYear ??
+    (await resolveVoucherFinancialYear(params.series, params.voucherNumber));
+  const results: VoucherFileAttachment[] = [];
+  for (const filePath of params.filePaths) {
+    const file = await uploadInboxFile(filePath);
+    const fileId = String((file as Record<string, unknown>).Id);
+    const connection = await createVoucherFileConnection(
+      params.series,
+      params.voucherNumber,
+      fileId,
+      year,
+    );
+    results.push({ fileName: basename(filePath), fileId, connection });
+  }
+  return results;
 }

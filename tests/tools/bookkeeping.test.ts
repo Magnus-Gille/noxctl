@@ -129,6 +129,45 @@ describe('bookkeeping tools', () => {
     });
   });
 
+  describe('fortnox_attach_voucher_files', () => {
+    it('returns isError when confirm is missing', async () => {
+      mockFetch({});
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_attach_voucher_files',
+        arguments: {
+          series: 'A',
+          voucherNumber: '60',
+          files: ['/tmp/receipt.pdf'],
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('returns dryRun preview without uploading', async () => {
+      mockFetch({});
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_attach_voucher_files',
+        arguments: {
+          series: 'A',
+          voucherNumber: '61',
+          files: ['/tmp/ica.pdf'],
+          dryRun: true,
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Dry run');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+  });
+
   describe('fortnox_list_accounts', () => {
     it('lists all accounts', async () => {
       mockFetch({

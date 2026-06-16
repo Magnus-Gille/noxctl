@@ -95,6 +95,9 @@ function endpointToScope(endpoint: string): string | undefined {
     taxreductions: 'invoice',
     pricelists: 'price',
     prices: 'price',
+    inbox: 'archive',
+    archive: 'archive',
+    voucherfileconnections: 'archive',
   };
   for (const [prefix, scope] of Object.entries(mapping)) {
     if (path.startsWith(prefix)) return scope;
@@ -136,6 +139,7 @@ async function retryWithBackoff<T>(
 export interface RequestOptions {
   method?: string;
   body?: unknown;
+  rawBody?: BodyInit;
   params?: Record<string, string | number | undefined>;
 }
 
@@ -171,7 +175,11 @@ export async function fortnoxRequest<T>(
       headers,
     };
 
-    if (options.body) {
+    if (options.rawBody !== undefined) {
+      fetchOptions.body = options.rawBody;
+      // Let fetch/undici set the multipart boundary itself.
+      delete (headers as Record<string, string>)['Content-Type'];
+    } else if (options.body) {
       fetchOptions.body = JSON.stringify(options.body);
     }
 

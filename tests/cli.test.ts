@@ -50,6 +50,17 @@ describe('CLI smoke tests', () => {
     const output = execFileSync('node', [CLI_PATH, 'vouchers', '--help'], execOpts) as string;
     expect(output).toContain('list');
     expect(output).toContain('create');
+    expect(output).toContain('attach');
+  });
+
+  it('noxctl vouchers attach --help shows file and year options', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'vouchers', 'attach', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('--year');
+    expect(output).toContain('--dry-run');
   });
 
   it('noxctl reports --help shows report subcommands', () => {
