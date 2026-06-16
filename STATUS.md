@@ -1,34 +1,40 @@
 # Project Status
 
 **Last session:** 2026-06-16
-**Branch:** `main` (all session work merged)
+**Branch:** `main` — **0.3.0 shipped**
 
-## Completed This Session
+## 0.3.0 — SHIPPED ✅
 
-Worked through a full PR + review + merge pipeline autonomously (cross-model Codex review loops).
+- Published to **npm** (`noxctl@0.3.0`, latest) + public **GitHub release v0.3.0**.
+- Features: voucher file attachments (#37), Contracts API (#10), financial years / locked period (#11), analytics views + `dashboard` (#7/#12), natural date periods (#9), shell completions (#8), confirmation payload preview (#6), YubiKey serial diagnostics (#33), customer read-only field stripping (#31). **BREAKING (#34):** single-resource JSON output wrapped under the singular resource key.
+- Earlier PR #35 went through 5 Codex review rounds + 9 fixes; PR #38 added #37.
 
-- **PR #35 merged** — the 11-issue batch (bugs + enhancements). Before merging, ran 5 rounds of Codex review and fixed 9 findings across 4 commits:
-  - credentials-store: fail closed instead of leaking the secret to `security -w` argv.
-  - analytics: local-calendar `localIsoDate` (UTC off-by-one) + extracted/tested `netVatFromVatAccounts`.
-  - analytics: `dashboardWindowStart` avoids end-of-month overflow (Jul 31 → Feb 1, not Mar 1).
-  - keychain-target: `setLockOnSleep`/`lockKeychain` throw on non-zero `security` exit.
-  - cli: JSON error envelope now also covers Commander parse errors and the `--profile`/`serve`/`requireDarwin` direct-exit paths (via a `fail()` helper + moving `configureOutput`/`exitOverride` above the command tree). Interactive keychain/init wizards intentionally stay plain-text.
-  - Auto-closed #6,#7,#8,#9,#10,#11,#12,#31,#32,#33,#34.
-- **PR #38 merged (#37)** — voucher file attachments: `noxctl vouchers attach <series> <number> <file...> [--year]` + `fortnox_attach_voucher_files` MCP tool. Two-step inbox upload → voucherfileconnection; `fortnox-client` gained `rawBody`/multipart support (`archive` scope). 2 Codex rounds + fixes (pre-flight file/dir validation, throwing year resolution, mid-batch error surfacing, MIME types, includeRaw). Verified against Fortnox docs that the upload `Id` (not ArchiveFileId) is the connection FileId.
-- **#13 split & documented** — file-attachments half delivered by #37; bank-transactions half stays open & blocked (no `/3/bank` in the OpenAPI spec; separate Bank/Finans product/scope).
-- **api-drift triaged & fixed** — the 12 weekly "fetch failed" issues were one persistent **HTTP 429** from the `openapi.json` endpoint (since 2026-03-30). Closed all 12, consolidated into tracker **#39**; **PR #40** added a dedup guard. **#39 RESOLVED — PR #42:** restored the drift check by fetching the ReDoc docs page (browser UA) and extracting the spec from its inlined `__redoc_state` (`scripts/extract-redoc-spec.py`), since the JSON endpoint is hard-429'd. Verified green in CI (workflow_dispatch). Rejected a community mirror (rsystem-se/fortnox_openapi is archived/partial/unlicensed). Snapshot refreshed (baseline reset); caught real drift (asset `{GivenNumber}`→`{Id}`, noxfinansinvoices param rename).
+## Live verification (demo company)
+
+#37 was live-verified against the Fortnox demo company (**MagnusGilleConsultingDEMO**, tenant 1818238) — which caught **3 bugs every mock test passed** (PR #45):
+
+1. noxctl never requested the `inbox` / `connectfile` OAuth scopes → added to `SCOPES` (+ `doctor`/`status` now test them and detect the 400 scope-error form).
+2. `VoucherYear` is read-only on the voucherfileconnections POST → moved to the `?financialyear=` query param.
+3. `/3/financialyears` rejects a `?Date=` filter (error 2000588) → date→FY resolution now filters locally.
+
+CHANGELOG corrected (PR #46); `v0.3.0` tag re-pointed to include all fixes.
+
+## Setup added
+
+- Reusable **`demo` profile** → MagnusGilleConsultingDEMO, authorized via the `noxctl` app with `inbox`+`connectfile` scopes. Use `--profile demo` for live write-testing. (Sandbox test data left there: voucher A/1 + a few inbox files — ignorable.)
+- **api-drift check restored** (#39, PR #42): extracts the spec from the ReDoc docs page (openapi.json endpoint is hard-429'd). Verified green in CI.
 
 ## Open Issues
 
-- **#13** — bank transactions only (blocked: not in the spec; needs Fortnox Bank/Finans API). Note: the refreshed spec now exposes `/3/noxfinansinvoices` (Fortnox Finans) — worth checking whether it covers part of this.
+- **#13** — bank transactions only (attachments half shipped via #37). The refreshed spec exposes `/3/noxfinansinvoices` (Fortnox Finans) — worth checking whether it covers part of this.
 
 ## Next Steps
 
-- Live-verify the new endpoints against the real API (`npm run test:live`): attachments need the **archive** scope enabled on the Fortnox app; contracts/financial-years were only mock-tested.
-- Consider 0.3.0 + CHANGELOG release entry (the #34 JSON-envelope change is breaking).
-- Review the ~3 months of real API drift now captured in the refreshed snapshot for any endpoints worth adopting.
+- (Optional) re-auth the `default` (real-company) profile with `inbox`+`connectfile` if you want attachments there too; live-verify the other new endpoints against real data.
+- `LEGACY_DUAL_WRITE` ("REMOVE IN 0.3.0"): recommend removing the legacy *reader* in 0.4.0 (avoids stranding 0.1.x→0.3.0 direct upgraders).
+- Investigate `/3/noxfinansinvoices` for #13.
 
 ## Notes
 
-- Test count: 588 unit tests, lint clean, build green on `main`.
-- Codex CLI ran out of credits during the last #37 review round; that round was a Claude fallback (clean).
+- 590 unit tests, lint + build green.
+- Lesson reinforced: mock tests can't validate Fortnox scope / read-only / query-param semantics — **live-verify write features against the demo company before publishing.**
