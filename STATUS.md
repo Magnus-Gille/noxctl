@@ -16,18 +16,17 @@ Worked through a full PR + review + merge pipeline autonomously (cross-model Cod
   - Auto-closed #6,#7,#8,#9,#10,#11,#12,#31,#32,#33,#34.
 - **PR #38 merged (#37)** — voucher file attachments: `noxctl vouchers attach <series> <number> <file...> [--year]` + `fortnox_attach_voucher_files` MCP tool. Two-step inbox upload → voucherfileconnection; `fortnox-client` gained `rawBody`/multipart support (`archive` scope). 2 Codex rounds + fixes (pre-flight file/dir validation, throwing year resolution, mid-batch error surfacing, MIME types, includeRaw). Verified against Fortnox docs that the upload `Id` (not ArchiveFileId) is the connection FileId.
 - **#13 split & documented** — file-attachments half delivered by #37; bank-transactions half stays open & blocked (no `/3/bank` in the OpenAPI spec; separate Bank/Finans product/scope).
-- **api-drift triage** — all 12 weekly "fetch failed" issues were one persistent **HTTP 429** from `apps.fortnox.se/apidocs/openapi.json` (since 2026-03-30). Closed all 12, opened consolidated tracker **#39**. **PR #40 merged** adds a dedup guard so the workflow appends to the tracker instead of spawning weekly dups. Investigated authenticated fetch → ruled out (docs host 429s regardless of bearer token).
+- **api-drift triaged & fixed** — the 12 weekly "fetch failed" issues were one persistent **HTTP 429** from the `openapi.json` endpoint (since 2026-03-30). Closed all 12, consolidated into tracker **#39**; **PR #40** added a dedup guard. **#39 RESOLVED — PR #42:** restored the drift check by fetching the ReDoc docs page (browser UA) and extracting the spec from its inlined `__redoc_state` (`scripts/extract-redoc-spec.py`), since the JSON endpoint is hard-429'd. Verified green in CI (workflow_dispatch). Rejected a community mirror (rsystem-se/fortnox_openapi is archived/partial/unlicensed). Snapshot refreshed (baseline reset); caught real drift (asset `{GivenNumber}`→`{Id}`, noxfinansinvoices param rename).
 
 ## Open Issues
 
-- **#39** — api-drift check broken (apidocs 429). Drift detection blind since ~March; snapshot stale. Fix options: community mirror, soft-fail, experimental-portal spec URL, or contact Fortnox support.
-- **#13** — bank transactions only (blocked: not in the spec; needs Bank/Finans API).
+- **#13** — bank transactions only (blocked: not in the spec; needs Fortnox Bank/Finans API). Note: the refreshed spec now exposes `/3/noxfinansinvoices` (Fortnox Finans) — worth checking whether it covers part of this.
 
 ## Next Steps
 
-- Decide the api-drift fetch fix (#39) — community mirror is the quickest path to working drift detection.
 - Live-verify the new endpoints against the real API (`npm run test:live`): attachments need the **archive** scope enabled on the Fortnox app; contracts/financial-years were only mock-tested.
 - Consider 0.3.0 + CHANGELOG release entry (the #34 JSON-envelope change is breaking).
+- Review the ~3 months of real API drift now captured in the refreshed snapshot for any endpoints worth adopting.
 
 ## Notes
 
