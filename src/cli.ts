@@ -89,6 +89,20 @@ function json(): boolean {
   return isJsonMode(program.opts());
 }
 
+// Emit a fatal error honoring -o json mode (structured envelope to stderr) vs
+// plain text, then exit. Validation failures inside command actions must go
+// through this so they don't bypass the JSON error contract the way a bare
+// console.error would. The top-level catch handles thrown errors the same way;
+// this is for the cases where we want a specific non-1 exit code.
+function fail(message: string, exitCode = 1): never {
+  if (json()) {
+    console.error(JSON.stringify(errorEnvelope(new Error(message)), null, 2));
+  } else {
+    console.error(message);
+  }
+  process.exit(exitCode);
+}
+
 function fromToParams(opts: { period?: string; from?: string; to?: string }): {
   fromDate?: string;
   toDate?: string;
@@ -1377,8 +1391,7 @@ tax
     const { generateTaxReport } = await import('./operations/tax.js');
     const range = fromToParams(opts);
     if (!range.fromDate || !range.toDate) {
-      console.error('tax report requires a period: --from/--to or --period.');
-      process.exit(2);
+      fail('tax report requires a period: --from/--to or --period.', 2);
     }
     const data = await generateTaxReport({
       fromDate: range.fromDate,
@@ -2056,7 +2069,13 @@ invoicePayments
       return;
     }
     await deleteInvoicePayment(paymentNumber);
-    outputConfirmation(`Invoice payment ${paymentNumber} deleted.`, json(), {});
+    outputConfirmation(
+      `Invoice payment ${paymentNumber} deleted.`,
+      json(),
+      { Number: paymentNumber, deleted: true },
+      undefined,
+      'InvoicePayment',
+    );
   });
 
 invoicePayments
@@ -2181,7 +2200,13 @@ supplierInvoicePayments
       return;
     }
     await deleteSupplierInvoicePayment(paymentNumber);
-    outputConfirmation(`Supplier invoice payment ${paymentNumber} deleted.`, json(), {});
+    outputConfirmation(
+      `Supplier invoice payment ${paymentNumber} deleted.`,
+      json(),
+      { Number: paymentNumber, deleted: true },
+      undefined,
+      'SupplierInvoicePayment',
+    );
   });
 
 // --- offers ---
@@ -2600,7 +2625,13 @@ costcenters
       return;
     }
     await deleteCostCenter(code);
-    console.log(`Cost center ${code} deleted.`);
+    outputConfirmation(
+      `Cost center ${code} deleted.`,
+      json(),
+      { Code: code, deleted: true },
+      undefined,
+      'CostCenter',
+    );
   });
 
 // --- tax reductions (ROT/RUT) ---
@@ -3107,8 +3138,7 @@ analytics
     const { getVatSummary } = await import('./operations/analytics.js');
     const range = fromToParams(opts);
     if (!range.fromDate || !range.toDate) {
-      console.error('analytics vat requires a period: --from/--to or --period.');
-      process.exit(2);
+      fail('analytics vat requires a period: --from/--to or --period.', 2);
     }
     const summary = await getVatSummary({
       fromDate: range.fromDate,

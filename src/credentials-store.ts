@@ -196,20 +196,20 @@ if status != errSecSuccess { exit(1) }
     if (result.status !== 0) {
       throw new Error(result.stderr || 'Swift keychain helper failed');
     }
-  } catch {
-    // Fallback to security CLI if Swift is unavailable or fails. The optional
-    // trailing keychain positional targets the dedicated keychain when set.
-    execFileSync('security', [
-      'add-generic-password',
-      '-a',
-      account,
-      '-s',
-      SERVICE_NAME,
-      '-w',
-      secret,
-      '-U',
-      ...(keychainPath ? [keychainPath] : []),
-    ]);
+  } catch (err) {
+    // Fail closed rather than fall back to `security add-generic-password -w
+    // <secret>`: that CLI only accepts the password via the argv `-w` slot
+    // (briefly visible to other processes via `ps`) or an interactive prompt,
+    // so a fallback would leak the credential into process arguments — exactly
+    // what the stdin-based Swift writer above exists to avoid. `swift` ships
+    // with the Xcode Command Line Tools, so guide the user to install them.
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Could not store credentials securely: the Swift Keychain helper failed (${detail}). ` +
+        `The 'swift' toolchain is required to write credentials without exposing them in ` +
+        `process arguments — install the Xcode Command Line Tools with 'xcode-select --install' ` +
+        `and try again.`,
+    );
   } finally {
     try {
       fsSync.unlinkSync(scriptPath);

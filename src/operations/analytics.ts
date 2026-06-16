@@ -109,8 +109,19 @@ export function monthlyRevenueFrom(invoices: InvoiceRow[]): MonthlyRevenue[] {
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
+// Format a Date as YYYY-MM-DD using LOCAL calendar fields. Using toISOString()
+// here would format in UTC, so between local midnight and the UTC offset (e.g.
+// 00:00–02:00 in Sweden, UTC+1/+2) "today" would resolve to yesterday — skewing
+// overdue classification and the dashboard window by a day.
+export function localIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return localIsoDate(new Date());
 }
 
 export async function getOverdueSummary(): Promise<OverdueSummary> {
@@ -146,15 +157,23 @@ export interface VatSummaryParams {
   financialYear?: number;
 }
 
+// Net VAT position across the report's VAT accounts: sum of (debit - credit).
+// Negative = net VAT owed to Skatteverket; positive = a refund is due.
+export function netVatFromVatAccounts(
+  vatAccounts: Record<number, { debit?: number; credit?: number }> | undefined,
+): number {
+  let netVat = 0;
+  for (const acct of Object.values(vatAccounts ?? {})) {
+    netVat += (acct.debit ?? 0) - (acct.credit ?? 0);
+  }
+  return netVat;
+}
+
 // Thin wrapper over the tax report adding the bottom line scripted callers
 // usually want: net VAT position (negative = owed to Skatteverket).
 export async function getVatSummary(params: VatSummaryParams) {
   const report = await generateTaxReport(params);
-  let netVat = 0;
-  for (const acct of Object.values(report.vatAccounts ?? {})) {
-    netVat += (acct.debit ?? 0) - (acct.credit ?? 0);
-  }
-  return { ...report, netVat };
+  return { ...report, netVat: netVatFromVatAccounts(report.vatAccounts) };
 }
 
 export interface Dashboard {
@@ -173,7 +192,7 @@ export async function getDashboard(options: { months?: number } = {}): Promise<D
   const fromDate = new Date();
   fromDate.setMonth(fromDate.getMonth() - (months - 1));
   fromDate.setDate(1);
-  const from = fromDate.toISOString().slice(0, 10);
+  const from = localIsoDate(fromDate);
 
   // Two fetches: the windowed one for revenue/recent, and the unpaid filter
   // (which is date-independent — an old unpaid invoice may predate the window).

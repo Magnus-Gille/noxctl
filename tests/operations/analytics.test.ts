@@ -4,6 +4,8 @@ import {
   summarizeUnpaid,
   topCustomersFrom,
   monthlyRevenueFrom,
+  localIsoDate,
+  netVatFromVatAccounts,
 } from '../../src/operations/analytics.js';
 
 const today = '2026-06-10';
@@ -111,5 +113,52 @@ describe('monthlyRevenueFrom', () => {
       { month: '2026-04', total: 3000, invoiceCount: 1 },
       { month: '2026-06', total: 2000, invoiceCount: 1 },
     ]);
+  });
+});
+
+describe('localIsoDate', () => {
+  it('formats local Y-M-D with zero padding', () => {
+    expect(localIsoDate(new Date(2026, 0, 5, 12, 0, 0))).toBe('2026-01-05');
+    expect(localIsoDate(new Date(2026, 8, 9, 0, 0, 0))).toBe('2026-09-09');
+    expect(localIsoDate(new Date(2026, 11, 31, 23, 59, 0))).toBe('2026-12-31');
+  });
+
+  it('uses the LOCAL date near midnight, not the UTC date (off-by-one guard)', () => {
+    const origTz = process.env.TZ;
+    process.env.TZ = 'Europe/Stockholm';
+    try {
+      // 23:30 UTC on 2026-06-16 is 01:30 on 2026-06-17 in Stockholm (UTC+2).
+      // The previous toISOString()-based implementation would wrongly yield
+      // 2026-06-16; localIsoDate must report the local date.
+      const d = new Date('2026-06-16T23:30:00Z');
+      expect(localIsoDate(d)).toBe('2026-06-17');
+    } finally {
+      if (origTz === undefined) delete process.env.TZ;
+      else process.env.TZ = origTz;
+    }
+  });
+});
+
+describe('netVatFromVatAccounts', () => {
+  it('sums debit - credit across accounts (negative = owed to Skatteverket)', () => {
+    // 5000 output VAT (credit) and 1200.50 input VAT (debit) => net 1200.50 - 5000.
+    const net = netVatFromVatAccounts({
+      2610: { debit: 0, credit: 5000 },
+      2640: { debit: 1200.5, credit: 0 },
+    });
+    expect(net).toBeCloseTo(-3799.5, 2);
+  });
+
+  it('returns a positive figure when input VAT exceeds output VAT (refund due)', () => {
+    const net = netVatFromVatAccounts({
+      2610: { debit: 0, credit: 1000 },
+      2640: { debit: 2500, credit: 0 },
+    });
+    expect(net).toBeCloseTo(1500, 2);
+  });
+
+  it('treats undefined/empty account maps as zero', () => {
+    expect(netVatFromVatAccounts(undefined)).toBe(0);
+    expect(netVatFromVatAccounts({})).toBe(0);
   });
 });

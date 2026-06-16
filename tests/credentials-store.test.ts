@@ -431,6 +431,27 @@ describe('saveCredentialBlob (darwin)', () => {
     await saveCredentialBlob('{"x":1}', 'default');
     expect(fsPromises.default.rm).toHaveBeenCalled();
   });
+
+  it('fails closed when the Swift helper fails — never leaks the secret to `security` argv', async () => {
+    // Swift helper fails for every invocation.
+    childProcess.spawnSync.mockReturnValue({ status: 1, stderr: 'swift exploded', stdout: '' });
+    // If a fallback ran it would call execFileSync; make that observable.
+    childProcess.execFileSync.mockReturnValue('');
+
+    await expect(saveCredentialBlob('{"secret":"super-token"}', 'default')).rejects.toThrow(
+      /swift/i,
+    );
+
+    // The credential must never reach `security add-generic-password -w <secret>`,
+    // where it would be visible to other processes via `ps`.
+    const leaked = childProcess.execFileSync.mock.calls.some(
+      ([cmd, args]) =>
+        cmd === 'security' &&
+        Array.isArray(args) &&
+        (args as string[]).includes('add-generic-password'),
+    );
+    expect(leaked).toBe(false);
+  });
 });
 
 describe('deleteCredentialBlob (darwin)', () => {

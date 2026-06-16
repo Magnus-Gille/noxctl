@@ -338,3 +338,42 @@ describe('outputDetail JSON envelope', () => {
     expect(JSON.parse(logs.join(''))).toEqual({ DocumentNumber: '28' });
   });
 });
+
+describe('outputConfirmation JSON envelope', () => {
+  it('wraps action results under the singular resource key in JSON mode', async () => {
+    const { outputConfirmation } = await import('../src/formatter.js');
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => {
+      logs.push(msg);
+    });
+    // Shape emitted by `invoice-payments delete -o json` after the fix: a
+    // singular-key envelope, not a bare {}.
+    outputConfirmation(
+      'deleted',
+      true,
+      { Number: '5', deleted: true },
+      undefined,
+      'InvoicePayment',
+    );
+    spy.mockRestore();
+    expect(JSON.parse(logs.join(''))).toEqual({ InvoicePayment: { Number: '5', deleted: true } });
+  });
+
+  it('prints the human message (not JSON) in table mode', async () => {
+    const { outputConfirmation } = await import('../src/formatter.js');
+    const logs: string[] = [];
+    const spy = vi.spyOn(console, 'log').mockImplementation((msg: string) => {
+      logs.push(msg);
+    });
+    outputConfirmation(
+      'Cost center X deleted.',
+      false,
+      { Code: 'X', deleted: true },
+      undefined,
+      'CostCenter',
+    );
+    spy.mockRestore();
+    expect(logs.join('\n')).toContain('Cost center X deleted.');
+    expect(() => JSON.parse(logs.join(''))).toThrow();
+  });
+});

@@ -294,6 +294,16 @@ describe('security CLI wrappers', () => {
     );
   });
 
+  it('setLockOnSleep throws when `security` exits non-zero (no silent success)', () => {
+    childProcess.spawnSync.mockReturnValue({ status: 1, stderr: 'SecKeychainSetSettings failed' });
+    expect(() => setLockOnSleep('/tmp/k.keychain-db')).toThrow(/set-keychain-settings failed/i);
+  });
+
+  it('setLockOnSleep throws when `security` cannot be spawned', () => {
+    childProcess.spawnSync.mockReturnValue({ error: new Error('ENOENT'), status: null });
+    expect(() => setLockOnSleep('/tmp/k.keychain-db')).toThrow(/ENOENT/);
+  });
+
   it('lockKeychain calls `security lock-keychain <path>`', () => {
     childProcess.spawnSync.mockReturnValue({ status: 0 });
     lockKeychain('/tmp/k.keychain-db');
@@ -302,6 +312,11 @@ describe('security CLI wrappers', () => {
       ['lock-keychain', '/tmp/k.keychain-db'],
       expect.anything(),
     );
+  });
+
+  it('lockKeychain throws when `security` exits non-zero (no false "locked" report)', () => {
+    childProcess.spawnSync.mockReturnValue({ status: 1, stderr: 'could not lock' });
+    expect(() => lockKeychain('/tmp/k.keychain-db')).toThrow(/lock-keychain failed/i);
   });
 
   it('deleteLoginSecret targets the login keychain explicitly and reports success via exit 0', () => {

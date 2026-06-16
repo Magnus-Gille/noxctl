@@ -348,11 +348,25 @@ if (st & SecKeychainStatus(kSecUnlockStateStatus)) != 0 { print("unlocked") } el
 // Lock when the system sleeps, no idle timeout. This is the per-session secret:
 // one tap on wake, open until next sleep.
 export function setLockOnSleep(keychainPath: string): void {
-  spawnSync('security', ['set-keychain-settings', '-l', keychainPath], { encoding: 'utf-8' });
+  const r = spawnSync('security', ['set-keychain-settings', '-l', keychainPath], {
+    encoding: 'utf-8',
+  });
+  if (r.error) throw r.error;
+  if (r.status !== 0) {
+    throw new Error(
+      `security set-keychain-settings failed: ${(r.stderr || '').trim() || `exit ${r.status}`}`,
+    );
+  }
 }
 
 export function lockKeychain(keychainPath: string): void {
-  spawnSync('security', ['lock-keychain', keychainPath], { encoding: 'utf-8' });
+  const r = spawnSync('security', ['lock-keychain', keychainPath], { encoding: 'utf-8' });
+  if (r.error) throw r.error;
+  if (r.status !== 0) {
+    throw new Error(
+      `security lock-keychain failed: ${(r.stderr || '').trim() || `exit ${r.status}`}`,
+    );
+  }
 }
 
 // Delete a generic-password from the LOGIN keychain specifically. The login

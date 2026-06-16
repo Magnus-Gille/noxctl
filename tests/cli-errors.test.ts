@@ -103,3 +103,30 @@ describe('CLI -o json error envelope', () => {
     expect(() => JSON.parse(res.stderr.trim())).toThrow();
   });
 });
+
+describe('CLI usage validation honors -o json (no period given)', () => {
+  // These fire before any API call, so they exercise the JSON error contract
+  // for direct-exit validation paths without needing credentials.
+  it('tax report emits a JSON envelope (exit 2) in json mode', () => {
+    const res = run(['tax', 'report', '-o', 'json']);
+    expect(res.status).toBe(2);
+    const parsed = JSON.parse(res.stderr.trim()) as { error: { message: string; source: string } };
+    expect(parsed.error.source).toBe('noxctl');
+    expect(parsed.error.message).toMatch(/requires a period/i);
+  });
+
+  it('tax report stays plain text (exit 2) in table mode', () => {
+    const res = run(['tax', 'report', '-o', 'table']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toMatch(/requires a period/i);
+    expect(() => JSON.parse(res.stderr.trim())).toThrow();
+  });
+
+  it('analytics vat emits a JSON envelope (exit 2) in json mode', () => {
+    const res = run(['analytics', 'vat', '-o', 'json']);
+    expect(res.status).toBe(2);
+    const parsed = JSON.parse(res.stderr.trim()) as { error: { message: string; source: string } };
+    expect(parsed.error.source).toBe('noxctl');
+    expect(parsed.error.message).toMatch(/requires a period/i);
+  });
+});
