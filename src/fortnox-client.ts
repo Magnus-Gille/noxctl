@@ -98,6 +98,11 @@ function endpointToScope(endpoint: string): string | undefined {
     inbox: 'inbox',
     archive: 'archive',
     voucherfileconnections: 'connectfile',
+    employees: 'salary',
+    salarytransactions: 'salary',
+    attendancetransactions: 'salary',
+    absencetransactions: 'salary',
+    scheduletimes: 'salary',
   };
   for (const [prefix, scope] of Object.entries(mapping)) {
     if (path.startsWith(prefix)) return scope;

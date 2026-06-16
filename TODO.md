@@ -3,9 +3,10 @@
 ## Current State
 
 - Published to npm as `noxctl@0.1.0`
-- 18 operations modules: invoices, customers, suppliers, articles, vouchers, accounts, financial reports, tax, company, invoice payments, supplier invoice payments, offers, orders, projects, cost centers, tax reductions (ROT/RUT), price lists, prices
+- 23 operations modules: invoices, customers, suppliers, articles, vouchers, accounts, financial reports, tax, company, invoice payments, supplier invoice payments, offers, orders, projects, cost centers, tax reductions (ROT/RUT), price lists, prices, employees, salary transactions, attendance transactions, absence transactions, schedule times
 - Full sales pipeline: offer → order → invoice → payment
-- 323 unit tests across 39 files
+- Payroll (Lön): employees + salary/attendance/absence transactions + schedule times (opt-in `salary` scope via `init --with-salary`)
+- 677 unit tests
 
 ## API Drift Detection
 
@@ -28,6 +29,7 @@ Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spe
 8. ~~**Tax Reductions (ROT/RUT)**~~ ✅ Done
 9. ~~**Price Lists / Prices**~~ ✅ Done
 10. ~~**Financial Years / Locked Period**~~ ✅ Done
+17. ~~**Payroll / Lön** — employees, salary/attendance/absence transactions, schedule times (opt-in `salary` scope)~~ ✅ Done
 
 ### Tier 4 — Backlog
 

@@ -68,6 +68,15 @@ import {
   topCustomerColumns,
   monthlyRevenueColumns,
   voucherAttachmentColumns,
+  employeeListColumns,
+  employeeDetailColumns,
+  salaryTransactionListColumns,
+  salaryTransactionDetailColumns,
+  attendanceTransactionListColumns,
+  attendanceTransactionDetailColumns,
+  absenceTransactionListColumns,
+  absenceTransactionDetailColumns,
+  scheduleTimeDetailColumns,
 } from './views.js';
 
 const program = new Command();
@@ -290,9 +299,17 @@ program
     '--profile <name>',
     'Profile to create/re-auth (defaults to resolved profile or "default")',
   )
-  .action(async (initOpts: { profile?: string }) => {
-    const { loadCredentials, runOAuthSetup } = await import('./auth.js');
+  .option(
+    '--with-salary',
+    'Also request the Lön (salary/payroll) scope — requires the Lön permission enabled on your Fortnox app',
+  )
+  .action(async (initOpts: { profile?: string; withSalary?: boolean }) => {
+    const { loadCredentials, runOAuthSetup, SCOPES, SALARY_SCOPE } = await import('./auth.js');
     const { validateProfileName } = await import('./profile-name.js');
+
+    // Opt-in salary scope: flag for TTY, env var for non-interactive/CI runs.
+    const withSalary = Boolean(initOpts.withSalary) || process.env.FORTNOX_WITH_SALARY === '1';
+    const scopes = withSalary ? `${SCOPES} ${SALARY_SCOPE}` : SCOPES;
 
     let targetProfile: string;
     try {
@@ -350,6 +367,9 @@ program
     console.log(
       '  - Scopes (Behörigheter): Artikel, Bokföring, Faktura, Företagsinformation, Inställningar, Kund, Leverantör, Leverantörsfaktura',
     );
+    if (withSalary) {
+      console.log('  - Lön (krävs eftersom du kör med --with-salary)');
+    }
     console.log('  - Service account enabled (recommended)');
     console.log('');
     console.log('See the README for detailed portal instructions.');
@@ -459,7 +479,7 @@ program
     }
 
     // Step 6: Run OAuth flow
-    await runOAuthSetup({ clientId, clientSecret, serviceAccount }, targetProfile);
+    await runOAuthSetup({ clientId, clientSecret, serviceAccount }, targetProfile, scopes);
 
     // Step 6b: Set the active pointer if this is the first profile or no pointer exists.
     try {
@@ -863,7 +883,7 @@ program
     }
 
     // 8. Scope validation — probe each scope with a lightweight GET
-    const { SCOPES } = await import('./auth.js');
+    const { effectiveScopes } = await import('./auth.js');
     const { fortnoxRequest, FortnoxApiError } = await import('./fortnox-client.js');
 
     const scopeEndpoints: Record<string, string> = {
@@ -878,9 +898,10 @@ program
       settings: 'settings/company',
       inbox: 'inbox',
       connectfile: 'voucherfileconnections?limit=1',
+      salary: 'employees?limit=1',
     };
 
-    const required = SCOPES.split(' ');
+    const required = effectiveScopes(creds).split(' ');
     const missing: string[] = [];
 
     for (const scope of required) {
@@ -2705,6 +2726,508 @@ costcenters
       'CostCenter',
     );
   });
+
+// --- employees (payroll / Lön) ---
+const employees = program
+  .command('employees')
+  .description('Employee operations (requires the Lön scope — see `noxctl init --with-salary`)');
+
+employees
+  .command('list')
+  .description('List employees')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listEmployees } = await import('./operations/employees.js');
+    const data = await listEmployees({
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      Employees: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.Employees ?? [],
+      employeeListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+employees
+  .command('get <employeeId>')
+  .description('Get a single employee')
+  .action(async (employeeId: string) => {
+    const { getEmployee } = await import('./operations/employees.js');
+    const data = await getEmployee(employeeId);
+    outputDetail(data as Record<string, unknown>, employeeDetailColumns, json(), 'Employee');
+  });
+
+employees
+  .command('create')
+  .description('Create an employee')
+  .requiredOption('--first-name <name>', 'First name')
+  .requiredOption('--last-name <name>', 'Last name')
+  .requiredOption('--email <email>', 'Email address')
+  .option('--input <file>', 'Additional employee data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createEmployee } = await import('./operations/employees.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      FirstName: opts.firstName,
+      LastName: opts.lastName,
+      Email: opts.email,
+    };
+    if (
+      !(await confirmMutation(`Create employee "${opts.firstName} ${opts.lastName}"`, opts, {
+        Employee: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createEmployee(params);
+    outputDetail(data as Record<string, unknown>, employeeDetailColumns, json(), 'Employee');
+  });
+
+employees
+  .command('update <employeeId>')
+  .description('Update an employee')
+  .requiredOption('--input <file>', 'Employee data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (employeeId: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateEmployee } = await import('./operations/employees.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update employee ${employeeId}`, opts, { Employee: fields }))) {
+      return;
+    }
+    const data = await updateEmployee(employeeId, fields);
+    outputDetail(data as Record<string, unknown>, employeeDetailColumns, json(), 'Employee');
+  });
+
+// --- salary transactions (Lön) ---
+const salarytransactions = program
+  .command('salary-transactions')
+  .description('Salary transaction operations (requires the Lön scope)');
+
+salarytransactions
+  .command('list')
+  .description('List salary transactions')
+  .option('--employee <id>', 'Filter by employee ID')
+  .option('--date <date>', 'Filter by date (YYYY-MM-DD)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listSalaryTransactions } = await import('./operations/salarytransactions.js');
+    const data = await listSalaryTransactions({
+      employeeId: opts.employee,
+      date: opts.date,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      SalaryTransactions: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.SalaryTransactions ?? [],
+      salaryTransactionListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+salarytransactions
+  .command('get <salaryRow>')
+  .description('Get a single salary transaction')
+  .action(async (salaryRow: string) => {
+    const { getSalaryTransaction } = await import('./operations/salarytransactions.js');
+    const data = await getSalaryTransaction(salaryRow);
+    outputDetail(
+      data as Record<string, unknown>,
+      salaryTransactionDetailColumns,
+      json(),
+      'SalaryTransaction',
+    );
+  });
+
+salarytransactions
+  .command('create')
+  .description('Create a salary transaction')
+  .requiredOption('--employee <id>', 'Employee ID')
+  .requiredOption('--salary-code <code>', 'Salary code')
+  .requiredOption('--date <date>', 'Date (YYYY-MM-DD)')
+  .option('--amount <amount>', 'Amount')
+  .option('--input <file>', 'Additional data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createSalaryTransaction } = await import('./operations/salarytransactions.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      EmployeeId: opts.employee,
+      SalaryCode: opts.salaryCode,
+      Date: opts.date,
+    };
+    if (opts.amount !== undefined) params.Amount = opts.amount;
+    if (
+      !(await confirmMutation(`Create salary transaction for employee ${opts.employee}`, opts, {
+        SalaryTransaction: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createSalaryTransaction(params);
+    outputDetail(
+      data as Record<string, unknown>,
+      salaryTransactionDetailColumns,
+      json(),
+      'SalaryTransaction',
+    );
+  });
+
+salarytransactions
+  .command('delete <salaryRow>')
+  .description('Delete a salary transaction')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (salaryRow: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteSalaryTransaction } = await import('./operations/salarytransactions.js');
+    if (!(await confirmMutation(`Delete salary transaction ${salaryRow}`, opts))) {
+      return;
+    }
+    await deleteSalaryTransaction(salaryRow);
+    outputConfirmation(
+      `Salary transaction ${salaryRow} deleted.`,
+      json(),
+      { SalaryRow: salaryRow, deleted: true },
+      undefined,
+      'SalaryTransaction',
+    );
+  });
+
+// --- attendance transactions (närvaro / Lön) ---
+const attendancetransactions = program
+  .command('attendance-transactions')
+  .description('Attendance transaction operations (requires the Lön scope)');
+
+attendancetransactions
+  .command('list')
+  .description('List attendance transactions')
+  .option('--employee <id>', 'Filter by employee ID')
+  .option('--date <date>', 'Filter by date (YYYY-MM-DD)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listAttendanceTransactions } = await import('./operations/attendancetransactions.js');
+    const data = await listAttendanceTransactions({
+      employeeId: opts.employee,
+      date: opts.date,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      AttendanceTransactions: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.AttendanceTransactions ?? [],
+      attendanceTransactionListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+attendancetransactions
+  .command('get <id>')
+  .description('Get a single attendance transaction')
+  .action(async (id: string) => {
+    const { getAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    const data = await getAttendanceTransaction(id);
+    outputDetail(
+      data as Record<string, unknown>,
+      attendanceTransactionDetailColumns,
+      json(),
+      'AttendanceTransaction',
+    );
+  });
+
+attendancetransactions
+  .command('create')
+  .description('Create an attendance transaction')
+  .requiredOption('--employee <id>', 'Employee ID')
+  .requiredOption('--cause-code <code>', 'Cause code (e.g. ARB, FLX, OT1)')
+  .requiredOption('--date <date>', 'Date (YYYY-MM-DD)')
+  .option('--hours <hours>', 'Hours')
+  .option('--input <file>', 'Additional data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      EmployeeId: opts.employee,
+      CauseCode: opts.causeCode,
+      Date: opts.date,
+    };
+    if (opts.hours !== undefined) params.Hours = opts.hours;
+    if (
+      !(await confirmMutation(`Create attendance transaction for employee ${opts.employee}`, opts, {
+        AttendanceTransaction: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createAttendanceTransaction(params);
+    outputDetail(
+      data as Record<string, unknown>,
+      attendanceTransactionDetailColumns,
+      json(),
+      'AttendanceTransaction',
+    );
+  });
+
+attendancetransactions
+  .command('delete <id>')
+  .description('Delete an attendance transaction')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (id: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    if (!(await confirmMutation(`Delete attendance transaction ${id}`, opts))) {
+      return;
+    }
+    await deleteAttendanceTransaction(id);
+    outputConfirmation(
+      `Attendance transaction ${id} deleted.`,
+      json(),
+      { id, deleted: true },
+      undefined,
+      'AttendanceTransaction',
+    );
+  });
+
+// --- absence transactions (frånvaro / Lön) ---
+const absencetransactions = program
+  .command('absence-transactions')
+  .description('Absence transaction operations (requires the Lön scope)');
+
+absencetransactions
+  .command('list')
+  .description('List absence transactions')
+  .option('--employee <id>', 'Filter by employee ID')
+  .option('--date <date>', 'Filter by date (YYYY-MM-DD)')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listAbsenceTransactions } = await import('./operations/absencetransactions.js');
+    const data = await listAbsenceTransactions({
+      employeeId: opts.employee,
+      date: opts.date,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    const envelope = data as unknown as {
+      AbsenceTransactions: Record<string, unknown>[];
+      MetaInformation?: Record<string, unknown>;
+    };
+    outputList(
+      envelope.AbsenceTransactions ?? [],
+      absenceTransactionListColumns,
+      json(),
+      data,
+      envelope.MetaInformation,
+    );
+  });
+
+absencetransactions
+  .command('get <id>')
+  .description('Get a single absence transaction')
+  .action(async (id: string) => {
+    const { getAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    const data = await getAbsenceTransaction(id);
+    outputDetail(
+      data as Record<string, unknown>,
+      absenceTransactionDetailColumns,
+      json(),
+      'AbsenceTransaction',
+    );
+  });
+
+absencetransactions
+  .command('create')
+  .description('Create an absence transaction')
+  .requiredOption('--employee <id>', 'Employee ID')
+  .requiredOption('--cause-code <code>', 'Cause code (e.g. SEM, SJK, VAB)')
+  .requiredOption('--date <date>', 'Date (YYYY-MM-DD)')
+  .option('--hours <hours>', 'Hours')
+  .option('--extent <extent>', 'Extent / percentage absent')
+  .option('--input <file>', 'Additional data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    let input: Record<string, unknown> = {};
+    if (opts.input) {
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      input = JSON.parse(raw) as Record<string, unknown>;
+    }
+    const params: Record<string, unknown> = {
+      ...input,
+      EmployeeId: opts.employee,
+      CauseCode: opts.causeCode,
+      Date: opts.date,
+    };
+    if (opts.hours !== undefined) params.Hours = opts.hours;
+    if (opts.extent !== undefined) params.Extent = opts.extent;
+    if (
+      !(await confirmMutation(`Create absence transaction for employee ${opts.employee}`, opts, {
+        AbsenceTransaction: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createAbsenceTransaction(params);
+    outputDetail(
+      data as Record<string, unknown>,
+      absenceTransactionDetailColumns,
+      json(),
+      'AbsenceTransaction',
+    );
+  });
+
+absencetransactions
+  .command('delete <id>')
+  .description('Delete an absence transaction')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (id: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    if (!(await confirmMutation(`Delete absence transaction ${id}`, opts))) {
+      return;
+    }
+    await deleteAbsenceTransaction(id);
+    outputConfirmation(
+      `Absence transaction ${id} deleted.`,
+      json(),
+      { id, deleted: true },
+      undefined,
+      'AbsenceTransaction',
+    );
+  });
+
+// --- schedule times (schematider / Lön) ---
+const scheduletimes = program
+  .command('schedule-times')
+  .description('Schedule time operations (requires the Lön scope)');
+
+scheduletimes
+  .command('get <employeeId> <date>')
+  .description('Get the schedule for an employee on a date (YYYY-MM-DD)')
+  .action(async (employeeId: string, date: string) => {
+    const { getScheduleTime } = await import('./operations/scheduletimes.js');
+    const data = await getScheduleTime(employeeId, date);
+    outputDetail(
+      data as Record<string, unknown>,
+      scheduleTimeDetailColumns,
+      json(),
+      'ScheduleTime',
+    );
+  });
+
+scheduletimes
+  .command('update <employeeId> <date>')
+  .description('Update the schedule for an employee on a date')
+  .requiredOption('--input <file>', 'Schedule data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (
+      employeeId: string,
+      date: string,
+      opts: { input: string; yes?: boolean; dryRun?: boolean },
+    ) => {
+      const { updateScheduleTime } = await import('./operations/scheduletimes.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update schedule for ${employeeId} on ${date}`, opts, {
+          ScheduleTime: fields,
+        }))
+      ) {
+        return;
+      }
+      const data = await updateScheduleTime(employeeId, date, fields);
+      outputDetail(
+        data as Record<string, unknown>,
+        scheduleTimeDetailColumns,
+        json(),
+        'ScheduleTime',
+      );
+    },
+  );
+
+scheduletimes
+  .command('reset-day <employeeId> <date>')
+  .description('Update the schedule and reset the day for an employee on a date')
+  .requiredOption('--input <file>', 'Schedule data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (
+      employeeId: string,
+      date: string,
+      opts: { input: string; yes?: boolean; dryRun?: boolean },
+    ) => {
+      const { resetScheduleTimeDay } = await import('./operations/scheduletimes.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Reset schedule day for ${employeeId} on ${date}`, opts, {
+          ScheduleTime: fields,
+        }))
+      ) {
+        return;
+      }
+      const data = await resetScheduleTimeDay(employeeId, date, fields);
+      outputDetail(
+        data as Record<string, unknown>,
+        scheduleTimeDetailColumns,
+        json(),
+        'ScheduleTime',
+      );
+    },
+  );
 
 // --- tax reductions (ROT/RUT) ---
 const taxreductions = program

@@ -77,7 +77,7 @@ export function registerStatusTools(server: McpServer): void {
       }
 
       // 7. Scope validation
-      const { SCOPES } = await import('../auth.js');
+      const { effectiveScopes } = await import('../auth.js');
       const { fortnoxRequest, FortnoxApiError } = await import('../fortnox-client.js');
 
       const scopeEndpoints: Record<string, string> = {
@@ -91,9 +91,10 @@ export function registerStatusTools(server: McpServer): void {
         settings: 'settings/company',
         inbox: 'inbox',
         connectfile: 'voucherfileconnections?limit=1',
+        salary: 'employees?limit=1',
       };
 
-      const required = SCOPES.split(' ');
+      const required = effectiveScopes(creds).split(' ');
       const missing: string[] = [];
 
       for (const scope of required) {
