@@ -95,9 +95,9 @@ function endpointToScope(endpoint: string): string | undefined {
     taxreductions: 'invoice',
     pricelists: 'price',
     prices: 'price',
-    inbox: 'archive',
+    inbox: 'inbox',
     archive: 'archive',
-    voucherfileconnections: 'archive',
+    voucherfileconnections: 'connectfile',
   };
   for (const [prefix, scope] of Object.entries(mapping)) {
     if (path.startsWith(prefix)) return scope;

@@ -21,9 +21,19 @@ export interface ListFinancialYearsParams {
 export async function listFinancialYears(
   params: ListFinancialYearsParams = {},
 ): Promise<FinancialYearsResponse> {
-  return fortnoxRequest<FinancialYearsResponse>('financialyears', {
-    params: { Date: params.date },
+  // Fortnox's /3/financialyears does NOT support a date query filter — passing
+  // ?Date=... returns 400 "Ogiltig parameter" (error 2000588). So fetch all
+  // years and, when a date is given, filter locally to the year whose
+  // From/To-date range brackets it (YYYY-MM-DD compares lexicographically).
+  const data = await fortnoxRequest<FinancialYearsResponse>('financialyears');
+  if (!params.date) return data;
+  const d = params.date;
+  const matching = (data.FinancialYears ?? []).filter((fy) => {
+    const from = String(fy.FromDate ?? '');
+    const to = String(fy.ToDate ?? '');
+    return from !== '' && to !== '' && from <= d && d <= to;
   });
+  return { ...data, FinancialYears: matching };
 }
 
 export async function getFinancialYear(id: number): Promise<Record<string, unknown>> {

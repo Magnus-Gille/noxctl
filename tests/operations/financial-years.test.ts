@@ -33,14 +33,22 @@ describe('financial year operations', () => {
       expect(calledUrl).toContain('financialyears');
     });
 
-    it('passes Date filter to find the year containing a date', async () => {
-      mockFetch({ FinancialYears: [] });
+    it('filters locally to the year containing a date (no Date query param)', async () => {
+      mockFetch({
+        FinancialYears: [
+          { Id: 1, FromDate: '2025-01-01', ToDate: '2025-12-31' },
+          { Id: 2, FromDate: '2026-01-01', ToDate: '2026-12-31' },
+        ],
+      });
       const { listFinancialYears } = await import('../../src/operations/financial-years.js');
 
-      await listFinancialYears({ date: '2026-03-15' });
+      const result = await listFinancialYears({ date: '2026-03-15' });
 
+      // Fortnox rejects ?Date= (error 2000588), so we must filter client-side.
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('Date=2026-03-15');
+      expect(calledUrl).not.toContain('Date=');
+      expect(result.FinancialYears).toHaveLength(1);
+      expect(result.FinancialYears[0]!.Id).toBe(2);
     });
   });
 

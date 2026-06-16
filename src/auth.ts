@@ -11,7 +11,7 @@ const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
 const CALLBACK_HOST = '127.0.0.1';
 
 export const SCOPES =
-  'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings';
+  'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
 
 export const CREDENTIAL_SCHEMA_VERSION = 2;
 
