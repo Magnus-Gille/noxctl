@@ -1,7 +1,22 @@
 # Project Status
 
-**Last session:** 2026-06-16
-**Branch:** `main` — **0.3.0 shipped**
+**Last session:** 2026-06-17
+**Branch:** `feat/payroll-salary-integration` — payroll built & committed (not pushed/PR'd); `main` is **0.3.0 shipped**
+
+## Unreleased — Payroll (Lön) integration ⏳ (branch `feat/payroll-salary-integration`, commit `bfe84c4`)
+
+Full coverage of the Fortnox salary API — the endpoints were in the spec all along; the unlock was Fortnox now exposing the **Lön** Behörighet to integrations.
+
+- **employees** (list/get/create/update), **salary-transactions**, **attendance-transactions** (närvaro), **absence-transactions** (frånvaro) [each list/get/create/delete], **schedule-times** (get/update/reset-day — composite EmployeeId+Date key). Operations + MCP tools (Swedish) + CLI + views + tests for each.
+- **`salary` scope is OPT-IN** (not in default `SCOPES` — would break `init` for apps lacking the Lön permission). Enable via `noxctl init --with-salary` (or `FORTNOX_WITH_SALARY=1`). Granted scopes persisted per-profile (`FortnoxCredentials.scopes`); client-credentials refresh + `doctor`/`fortnox_status` honor it via `effectiveScopes(creds)`. Existing installs unaffected until they re-init with the flag.
+- Adversarial review caught 1 bug (attendance list dropped the employeeid/date filter on the `all` branch) — fixed red/green.
+- **677 unit tests**, lint + format + build green.
+
+### Payroll — before release
+- ⚠️ **Live-verify the write paths** (create/update/delete employee + transactions) on the demo company with `--profile demo --with-salary` BEFORE publishing — payroll mutations are mock-tested only, and mocks miss Fortnox scope/read-only/param semantics.
+- Then open PR + cut a release.
+
+## 0.3.0 — SHIPPED ✅
 
 ## 0.3.0 — SHIPPED ✅
 
@@ -36,5 +51,5 @@ CHANGELOG corrected (PR #46); `v0.3.0` tag re-pointed to include all fixes.
 
 ## Notes
 
-- 590 unit tests, lint + build green.
+- 677 unit tests, lint + build green.
 - Lesson reinforced: mock tests can't validate Fortnox scope / read-only / query-param semantics — **live-verify write features against the demo company before publishing.**
