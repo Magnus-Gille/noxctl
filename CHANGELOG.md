@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Voucher file attachments** (#37) — `noxctl vouchers attach <series> <number> <file...> [--year]` uploads receipt/underlag files to the Fortnox inbox and links them to a voucher; matching `fortnox_attach_voucher_files` MCP tool. The financial year is resolved from the voucher's transaction date when `--year` is omitted. Requires the Fortnox "archive" scope enabled on the app. Also delivers the file-attachments half of #13.
 - **Contracts API** (#10) — recurring invoicing: `noxctl contracts list|get|create|update|finish|create-invoice|increase-invoice-count` and matching MCP tools.
 - **Financial years / locked period** (#11) — `noxctl financial-years list|get|locked-period` and MCP tools; context for period-aware operations.
 - **Analytics views** (#7) — overdue summary, unpaid totals, top customers, VAT summary with net VAT position: `noxctl analytics ...` and MCP tools.

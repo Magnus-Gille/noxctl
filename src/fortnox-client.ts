@@ -166,7 +166,6 @@ export async function fortnoxRequest<T>(
 
     const headers: Record<string, string> = {
       Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
       Accept: 'application/json',
     };
 
@@ -176,11 +175,15 @@ export async function fortnoxRequest<T>(
     };
 
     if (options.rawBody !== undefined) {
+      // A raw body (e.g. FormData for a multipart file upload): do NOT set
+      // Content-Type — fetch/undici derives it (and the multipart boundary)
+      // from the body itself.
       fetchOptions.body = options.rawBody;
-      // Let fetch/undici set the multipart boundary itself.
-      delete (headers as Record<string, string>)['Content-Type'];
-    } else if (options.body) {
-      fetchOptions.body = JSON.stringify(options.body);
+    } else {
+      headers['Content-Type'] = 'application/json';
+      if (options.body) {
+        fetchOptions.body = JSON.stringify(options.body);
+      }
     }
 
     const response = await fetch(url.toString(), fetchOptions);

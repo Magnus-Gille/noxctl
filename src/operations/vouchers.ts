@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
+import { basename, extname } from 'node:path';
 import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 import { voucherSeriesSegment } from '../identifiers.js';
 import { listFinancialYears } from './financial-years.js';
@@ -85,11 +85,30 @@ interface VoucherFileConnectionResponse {
   VoucherFileConnection: Record<string, unknown>;
 }
 
+const MIME_BY_EXT: Record<string, string> = {
+  '.pdf': 'application/pdf',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.heic': 'image/heic',
+  '.tif': 'image/tiff',
+  '.tiff': 'image/tiff',
+  '.txt': 'text/plain',
+  '.csv': 'text/csv',
+  '.xml': 'application/xml',
+};
+
+function mimeForFile(filePath: string): string {
+  return MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
 // Upload a single file to the Fortnox inbox; returns the archived File object (has .Id).
 export async function uploadInboxFile(filePath: string): Promise<Record<string, unknown>> {
   const buf = readFileSync(filePath);
   const form = new FormData();
-  form.append('file', new Blob([buf]), basename(filePath));
+  form.append('file', new Blob([buf], { type: mimeForFile(filePath) }), basename(filePath));
   const data = await fortnoxRequest<InboxFileResponse>('inbox', { method: 'POST', rawBody: form });
   return data.File;
 }
@@ -123,40 +142,69 @@ export interface AttachVoucherFilesParams {
 export interface VoucherFileAttachment {
   fileName: string;
   fileId: string;
+  voucherYear: number;
   connection: Record<string, unknown>;
 }
 
 // Resolve the financial year from the voucher's transaction date when not given.
-async function resolveVoucherFinancialYear(
-  series: string,
-  voucherNumber: string,
-): Promise<number | undefined> {
+// Throws (rather than silently leaving the year undefined) when it can't be
+// determined, so the user knows to pass --year explicitly — e.g. for a voucher
+// in a past financial year, which getVoucher can't fetch without the year.
+async function resolveVoucherFinancialYear(series: string, voucherNumber: string): Promise<number> {
   const voucher = await getVoucher(series, voucherNumber);
   const date = (voucher as Record<string, unknown>).TransactionDate as string | undefined;
-  if (!date) return undefined;
+  if (!date) {
+    throw new Error(
+      `Could not determine the financial year: voucher ${series}/${voucherNumber} has no TransactionDate. Pass --year explicitly.`,
+    );
+  }
   const fy = await listFinancialYears({ date });
   const list = (fy.FinancialYears ?? []) as Record<string, unknown>[];
-  return list.length ? Number(list[0]!.Id) : undefined;
+  if (!list.length) {
+    throw new Error(`No financial year found for voucher date ${date}. Pass --year explicitly.`);
+  }
+  return Number(list[0]!.Id);
 }
 
 // Orchestrate: resolve year if omitted, then upload+connect each file in order.
 export async function attachVoucherFiles(
   params: AttachVoucherFilesParams,
 ): Promise<VoucherFileAttachment[]> {
+  // Pre-flight: confirm every file exists before uploading any of them, so a
+  // typo in a later path can't leave earlier files orphaned in the inbox.
+  for (const filePath of params.filePaths) {
+    if (!existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+  }
+
   const year =
     params.financialYear ??
     (await resolveVoucherFinancialYear(params.series, params.voucherNumber));
+
   const results: VoucherFileAttachment[] = [];
   for (const filePath of params.filePaths) {
-    const file = await uploadInboxFile(filePath);
-    const fileId = String((file as Record<string, unknown>).Id);
-    const connection = await createVoucherFileConnection(
-      params.series,
-      params.voucherNumber,
-      fileId,
-      year,
-    );
-    results.push({ fileName: basename(filePath), fileId, connection });
+    try {
+      const file = await uploadInboxFile(filePath);
+      // Per Fortnox docs (best-practices/vouchers): use the uploaded file's
+      // `Id` as the VoucherFileConnection FileId — NOT ArchiveFileId.
+      const fileId = String((file as Record<string, unknown>).Id);
+      const connection = await createVoucherFileConnection(
+        params.series,
+        params.voucherNumber,
+        fileId,
+        year,
+      );
+      results.push({ fileName: basename(filePath), fileId, voucherYear: year, connection });
+    } catch (err) {
+      // Surface what already succeeded so the user can locate/clean up any files
+      // uploaded to the inbox before this failure.
+      const done = results.map((r) => r.fileName).join(', ') || 'none';
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Failed attaching "${basename(filePath)}" to voucher ${params.series}/${params.voucherNumber}: ${detail}. Files already attached this run: ${done}.`,
+      );
+    }
   }
   return results;
 }

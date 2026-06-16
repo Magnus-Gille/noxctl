@@ -462,4 +462,5 @@ export const monthlyRevenueColumns: Column[] = [
 export const voucherAttachmentColumns: Column[] = [
   { key: 'fileName', header: 'File', width: 40 },
   { key: 'fileId', header: 'File ID', width: 36 },
+  { key: 'voucherYear', header: 'Year', width: 5, align: 'right' },
 ];

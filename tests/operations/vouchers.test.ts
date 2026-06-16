@@ -1,14 +1,18 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
 }));
 
+const fsMock = vi.hoisted(() => {
+  const readFileSync = vi.fn(() => Buffer.from('fake-file-content'));
+  const existsSync = vi.fn(() => true);
+  return { readFileSync, existsSync };
+});
 vi.mock('node:fs', () => ({
-  default: {
-    readFileSync: vi.fn().mockReturnValue(Buffer.from('fake-file-content')),
-  },
-  readFileSync: vi.fn().mockReturnValue(Buffer.from('fake-file-content')),
+  default: { readFileSync: fsMock.readFileSync, existsSync: fsMock.existsSync },
+  readFileSync: fsMock.readFileSync,
+  existsSync: fsMock.existsSync,
 }));
 
 function mockFetch(response: unknown) {
@@ -21,6 +25,12 @@ function mockFetch(response: unknown) {
 }
 
 describe('voucher operations', () => {
+  beforeEach(() => {
+    // Re-establish fs defaults each test (restoreAllMocks below clears them).
+    fsMock.readFileSync.mockReturnValue(Buffer.from('fake-file-content'));
+    fsMock.existsSync.mockReturnValue(true);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -243,8 +253,8 @@ describe('voucher operations', () => {
       });
 
       expect(results).toHaveLength(2);
-      expect(results[0]).toMatchObject({ fileName: 'a.pdf', fileId: 'id1' });
-      expect(results[1]).toMatchObject({ fileName: 'b.jpg', fileId: 'id2' });
+      expect(results[0]).toMatchObject({ fileName: 'a.pdf', fileId: 'id1', voucherYear: 4 });
+      expect(results[1]).toMatchObject({ fileName: 'b.jpg', fileId: 'id2', voucherYear: 4 });
     });
 
     it('resolves financialYear from voucher when not provided', async () => {
@@ -323,6 +333,81 @@ describe('voucher operations', () => {
       const connectionCall = mockFn.mock.calls[3] as [string, RequestInit];
       const body = JSON.parse(connectionCall[1].body as string);
       expect(body.VoucherFileConnection.VoucherYear).toBe(4);
+    });
+
+    it('fails fast (before any upload) when a file path does not exist', async () => {
+      const { attachVoucherFiles } = await import('../../src/operations/vouchers.js');
+      fsMock.existsSync.mockReturnValue(false);
+      mockFetch({}); // a fetch spy so we can assert it was never called
+
+      await expect(
+        attachVoucherFiles({
+          series: 'A',
+          voucherNumber: '60',
+          filePaths: ['/tmp/missing.pdf'],
+          financialYear: 4,
+        }),
+      ).rejects.toThrow(/File not found: \/tmp\/missing\.pdf/);
+
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('throws (telling the user to pass --year) when the financial year cannot be resolved', async () => {
+      const { attachVoucherFiles } = await import('../../src/operations/vouchers.js');
+      const mockFn = vi
+        .fn()
+        // getVoucher
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(JSON.stringify({ Voucher: { TransactionDate: '2025-03-15' } })),
+        })
+        // listFinancialYears -> empty
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(JSON.stringify({ FinancialYears: [] })),
+        });
+      global.fetch = mockFn;
+
+      await expect(
+        attachVoucherFiles({ series: 'A', voucherNumber: '60', filePaths: ['/tmp/c.pdf'] }),
+      ).rejects.toThrow(/pass --year/i);
+    });
+
+    it('surfaces already-attached files when an upload fails mid-batch', async () => {
+      const { attachVoucherFiles } = await import('../../src/operations/vouchers.js');
+      const mockFn = vi
+        .fn()
+        // file 1 upload OK
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () => Promise.resolve(JSON.stringify({ File: { Id: 'id1', Name: 'a.pdf' } })),
+        })
+        // file 1 connection OK
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () => Promise.resolve(JSON.stringify({ VoucherFileConnection: { FileId: 'id1' } })),
+        })
+        // file 2 upload FAILS
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve(JSON.stringify({ ErrorInformation: { message: 'boom' } })),
+        });
+      global.fetch = mockFn;
+
+      await expect(
+        attachVoucherFiles({
+          series: 'A',
+          voucherNumber: '60',
+          filePaths: ['/tmp/a.pdf', '/tmp/b.jpg'],
+          financialYear: 4,
+        }),
+      ).rejects.toThrow(/already attached this run: a\.pdf/);
     });
   });
 });
