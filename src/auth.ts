@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { loadCredentialBlob, saveCredentialBlob, type LoadSource } from './credentials-store.js';
+import { KeychainLockedError } from './keychain-target.js';
 import { DEFAULT_PROFILE, validateProfileName } from './profile-name.js';
 import { migrateLegacyIfNeeded, readProfileIndex, upsertProfile } from './profiles.js';
 
@@ -83,7 +84,10 @@ export async function loadCredentials(profile?: string): Promise<FortnoxCredenti
   let result: { blob: string | null; source: LoadSource; legacyBlob: string | null };
   try {
     result = await loadCredentialBlob(target);
-  } catch {
+  } catch (err) {
+    // A locked dedicated keychain must surface, not look like "no credentials" —
+    // the caller tells the user to run `noxctl keychain unlock` (tap YubiKey).
+    if (err instanceof KeychainLockedError) throw err;
     return null;
   }
 

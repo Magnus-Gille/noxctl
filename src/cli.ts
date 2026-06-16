@@ -10,6 +10,7 @@ import {
   outputConfirmation,
   formatTaxReport,
   formatFinancialReport,
+  errorEnvelope,
 } from './formatter.js';
 import {
   readActivePointer,
@@ -21,6 +22,7 @@ import {
   type ResolvedProfile,
 } from './profiles.js';
 import { setResolvedProfile } from './auth.js';
+import { applyPeriod } from './date-periods.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
 import {
   invoiceListColumns,
@@ -58,6 +60,13 @@ import {
   priceListDetailColumns,
   priceListColumns,
   priceDetailColumns,
+  financialYearListColumns,
+  financialYearDetailColumns,
+  lockedPeriodDetailColumns,
+  contractListColumns,
+  contractDetailColumns,
+  topCustomerColumns,
+  monthlyRevenueColumns,
 } from './views.js';
 
 const program = new Command();
@@ -67,7 +76,7 @@ program
   .description('CLI and MCP server for Fortnox accounting')
   .version('0.2.0')
   .addOption(
-    new Option('-o, --output <format>', 'Output format')
+    new Option('-o, --output <format>', 'Output format (default: table on TTY, json when piped)')
       .choices(['json', 'table'])
       .default(undefined),
   )
@@ -80,6 +89,45 @@ function json(): boolean {
   return isJsonMode(program.opts());
 }
 
+// Suppress Commander's own plain-text usage errors (unknown command, missing
+// required option, ...) when in JSON mode, so the top-level catch can emit a
+// structured error envelope instead of leaving non-JSON on stderr. In table
+// mode, keep Commander's friendly usage message.
+//
+// Both configureOutput and exitOverride must be set HERE, before the command
+// tree is built: Commander only copies these settings into subcommands created
+// *after* they're configured on the parent. Set at the bottom, a subcommand's
+// parse error would call process.exit() directly and bypass the catch below
+// (leaving JSON-mode failures with no envelope).
+program.configureOutput({
+  outputError: (str, write) => {
+    if (!json()) write(str);
+  },
+});
+program.exitOverride();
+
+// Emit a fatal error honoring -o json mode (structured envelope to stderr) vs
+// plain text, then exit. Validation failures inside command actions must go
+// through this so they don't bypass the JSON error contract the way a bare
+// console.error would. The top-level catch handles thrown errors the same way;
+// this is for the cases where we want a specific non-1 exit code.
+function fail(message: string, exitCode = 1): never {
+  if (json()) {
+    console.error(JSON.stringify(errorEnvelope(new Error(message)), null, 2));
+  } else {
+    console.error(message);
+  }
+  process.exit(exitCode);
+}
+
+function fromToParams(opts: { period?: string; from?: string; to?: string }): {
+  fromDate?: string;
+  toDate?: string;
+} {
+  const { from, to } = applyPeriod(opts);
+  return { fromDate: from, toDate: to };
+}
+
 let resolvedProfileInfo: ResolvedProfile = { name: DEFAULT_PROFILE, source: 'default' };
 
 export function getResolvedProfileInfo(): ResolvedProfile {
@@ -87,7 +135,7 @@ export function getResolvedProfileInfo(): ResolvedProfile {
 }
 
 // Commands that don't need (and shouldn't require) a resolved profile.
-const PROFILE_RESOLUTION_SKIP = new Set(['help']);
+const PROFILE_RESOLUTION_SKIP = new Set(['help', 'completion']);
 
 program.hook('preAction', async (thisCommand, actionCommand) => {
   const name = actionCommand.name();
@@ -111,10 +159,10 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
     // loudly but continue so `doctor` / `profile use` can repair the state.
     const wouldRelyOnPointer = !flag && !env;
     if (wouldRelyOnPointer && name === 'serve') {
-      console.error(
+      fail(
         `Active profile pointer ${desc}. Refusing to start MCP server with ambiguous profile. Run \`noxctl doctor\` or set NOXCTL_PROFILE explicitly.`,
+        2,
       );
-      process.exit(2);
     }
     process.stderr.write(`[warning: active-profile pointer ${desc}; ignoring]\n`);
   }
@@ -123,8 +171,7 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
     resolvedProfileInfo = resolveProfile({ flag, env, pointer });
   } catch (err) {
     if (err instanceof InvalidProfileNameError) {
-      console.error(err.message);
-      process.exit(2);
+      fail(err.message, 2);
     }
     throw err;
   }
@@ -193,6 +240,13 @@ async function confirmMutation(
   const company = await fetchCompanyHint();
   const suffix = company ? ` (${company})` : '';
 
+  // Show what will actually be sent so the user can verify before confirming.
+  if (payload !== undefined) {
+    console.log('Request payload:');
+    console.log(JSON.stringify(payload, null, 2));
+    console.log();
+  }
+
   const rl = createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -200,6 +254,27 @@ async function confirmMutation(
 
   try {
     const answer = await rl.question(`${action}. Continue?${suffix} [y/N] `);
+    return ['y', 'yes'].includes(answer.trim().toLowerCase());
+  } finally {
+    rl.close();
+  }
+}
+
+function requireDarwin(): void {
+  if (process.platform !== 'darwin') {
+    fail('The dedicated YubiKey-locked keychain is a macOS-only feature.', 2);
+  }
+}
+
+// Confirmation for local, irreversible operations (not Fortnox mutations).
+async function localConfirm(question: string, yes?: boolean): Promise<boolean> {
+  if (yes) return true;
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error('Confirmation required. Re-run with --yes.');
+  }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    const answer = await rl.question(`${question} [y/N] `);
     return ['y', 'yes'].includes(answer.trim().toLowerCase());
   } finally {
     rl.close();
@@ -668,6 +743,23 @@ program
           : 'Linux Secret Service';
     pass('Credential store', storeBackend);
 
+    // 2a. Dedicated YubiKey-locked keychain (macOS only)
+    if (process.platform === 'darwin') {
+      const kt = await import('./keychain-target.js');
+      const activePath = kt.activeKeychainPath();
+      if (activePath) {
+        const state = kt.keychainLockState(activePath);
+        if (state === 'locked') {
+          fail('Dedicated keychain', 'locked — run `noxctl keychain unlock` (tap your YubiKey)');
+        } else {
+          pass('Dedicated keychain', `active, ${state} (${activePath})`);
+        }
+        pass('ykman', kt.ykmanAvailable() ? 'installed' : 'not installed (brew install ykman)');
+      } else {
+        pass('Dedicated keychain', 'not enabled (using login keychain)');
+      }
+    }
+
     // 2b. Profile resolution
     pass('Profile', `${resolvedProfileInfo.name} (source: ${resolvedProfileInfo.source})`);
 
@@ -703,7 +795,18 @@ program
     }
 
     // 3. Credentials exist
-    const creds = await loadCredentials();
+    let creds: Awaited<ReturnType<typeof loadCredentials>>;
+    try {
+      creds = await loadCredentials();
+    } catch (err) {
+      const { KeychainLockedError } = await import('./keychain-target.js');
+      if (err instanceof KeychainLockedError) {
+        fail('Credentials', err.message);
+        console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+        return;
+      }
+      throw err;
+    }
     if (!creds) {
       fail(
         'Credentials',
@@ -802,6 +905,292 @@ program
     console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
   });
 
+// --- keychain (dedicated YubiKey-locked credential store, macOS only) ---
+const keychain = program
+  .command('keychain')
+  .description('Manage the dedicated YubiKey-locked credential keychain (macOS)');
+
+keychain
+  .command('status')
+  .description('Show dedicated-keychain mode, lock state, and YubiKey availability')
+  .action(async () => {
+    const kt = await import('./keychain-target.js');
+    const onDarwin = process.platform === 'darwin';
+
+    console.log('Keychain status\n');
+    console.log(
+      `  Platform          ${process.platform}${onDarwin ? '' : ' (dedicated keychain is macOS-only)'}`,
+    );
+    if (!onDarwin) return;
+
+    const activePath = kt.activeKeychainPath();
+    const kcPath = activePath ?? kt.dedicatedKeychainPath();
+    const lockState = kt.keychainLockState(kcPath);
+
+    console.log(`  Dedicated mode    ${activePath ? 'active' : 'inactive (using login keychain)'}`);
+    console.log(`  Keychain file     ${kcPath} (${lockState})`);
+    console.log(
+      `  Challenge file    ${kt.readChallenge() ? kt.challengeFilePath() : 'not present'}`,
+    );
+    console.log(`  ykman installed   ${kt.ykmanAvailable() ? 'yes' : 'no (brew install ykman)'}`);
+    console.log(`  YubiKey present   ${kt.yubikeyPresent() ? 'yes' : 'no'}`);
+    const enrolledSerial = kt.readEnrolledSerial();
+    console.log(`  Enrolled serial   ${enrolledSerial ?? 'not recorded'}`);
+    if (enrolledSerial) {
+      const mismatch = kt.diagnoseSerialMismatch(enrolledSerial, kt.listYubikeySerials());
+      if (mismatch) console.log(`\n  ${mismatch}`);
+    }
+
+    if (activePath && lockState === 'locked') {
+      console.log('\n  Locked — run `noxctl keychain unlock` (tap your YubiKey).');
+    }
+  });
+
+keychain
+  .command('unlock')
+  .description('Unlock the dedicated keychain for this session (tap your YubiKey)')
+  .action(async () => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+
+    const state = kt.keychainLockState(kcPath);
+    if (state === 'missing') {
+      console.error('No dedicated keychain found. Run `noxctl keychain init` first.');
+      process.exit(1);
+    }
+    if (state === 'unlocked') {
+      console.log('Keychain is already unlocked.');
+      return;
+    }
+    const challenge = kt.readChallenge();
+    if (!challenge) {
+      console.error(
+        'Challenge file missing — cannot derive the unlock password. Re-run `noxctl keychain init`.',
+      );
+      process.exit(1);
+    }
+    // Preflight: a wrong/absent key is diagnosable from serials alone, before
+    // burning a tap on a challenge that can only fail.
+    const mismatch = kt.diagnoseSerialMismatch(kt.readEnrolledSerial(), kt.listYubikeySerials());
+    if (mismatch) {
+      console.error(mismatch);
+      process.exit(1);
+    }
+    console.log('Tap your YubiKey when it blinks...');
+    let password: string;
+    try {
+      password = kt.computeChallengeResponse(challenge);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    try {
+      kt.unlockDedicatedKeychain(kcPath, password);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+    console.log('Keychain unlocked — open until your Mac sleeps.');
+  });
+
+keychain
+  .command('lock')
+  .description('Lock the dedicated keychain now')
+  .action(async () => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+    if (kt.keychainLockState(kcPath) === 'missing') {
+      console.error('No dedicated keychain found.');
+      process.exit(1);
+    }
+    kt.lockKeychain(kcPath);
+    console.log('Keychain locked.');
+  });
+
+keychain
+  .command('init')
+  .description('Create the YubiKey-locked keychain and copy in existing credentials')
+  .action(async () => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+
+    if (!kt.ykmanAvailable()) {
+      console.error('ykman not found — install it with `brew install ykman`, then re-run.');
+      process.exit(1);
+    }
+    if (!kt.yubikeyPresent()) {
+      console.error('No YubiKey detected — insert it and re-run.');
+      process.exit(1);
+    }
+
+    const kcPath = kt.dedicatedKeychainPath();
+    if (kt.readChallenge()) {
+      console.error(
+        'Already initialized. Use `noxctl keychain unlock` or `noxctl keychain status`.',
+      );
+      process.exit(1);
+    }
+    if (kt.keychainLockState(kcPath) !== 'missing') {
+      console.error(
+        `A keychain already exists at ${kcPath} but no challenge file is present.\n` +
+          `Remove the stale keychain (\`security delete-keychain "${kcPath}"\`) and re-run.`,
+      );
+      process.exit(1);
+    }
+
+    console.log('This creates a dedicated, lock-on-sleep keychain whose password is derived');
+    console.log('from your YubiKey (OTP slot 2 challenge-response). You unlock it once per');
+    console.log('session with a tap. Existing credentials are copied in; the login-keychain');
+    console.log('originals are left in place (run `noxctl keychain seal` to remove them later).');
+    console.log('');
+    console.log('Slot 2 must already be programmed: `ykman otp chalresp --generate --touch 2`.');
+    console.log('');
+
+    // Collect existing credentials from the LOGIN keychain BEFORE activating
+    // dedicated mode (challenge file absent -> activeKeychainPath() is null).
+    const { readProfileIndex } = await import('./profiles.js');
+    const { loadCredentialBlob, saveCredentialBlob } = await import('./credentials-store.js');
+
+    const idx = await readProfileIndex();
+    const names = new Set<string>([DEFAULT_PROFILE, ...idx.profiles.map((p) => p.name)]);
+    const blobs: { profile: string; blob: string }[] = [];
+    for (const name of names) {
+      const { blob } = await loadCredentialBlob(name);
+      if (blob) blobs.push({ profile: name, blob });
+    }
+    console.log(
+      `Found ${blobs.length} credential set(s) to copy: ${
+        blobs.map((b) => b.profile).join(', ') || '(none)'
+      }`,
+    );
+    console.log('');
+
+    // Derive the keychain password from the YubiKey (requires a tap). Done
+    // before creating the keychain so a missed tap leaves nothing behind.
+    const challenge = kt.generateChallenge();
+    console.log('Tap your YubiKey when it blinks...');
+    let password: string;
+    try {
+      password = kt.computeChallengeResponse(challenge);
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
+
+    const created = kt.createDedicatedKeychain(kcPath, password);
+    if (created === 'exists') {
+      console.error(`Unexpected: keychain already exists at ${kcPath}. Aborting.`);
+      process.exit(1);
+    }
+    kt.setLockOnSleep(kcPath);
+
+    // Activate dedicated mode: now activeKeychainPath() resolves to kcPath and
+    // saveCredentialBlob targets the new (still-unlocked) keychain.
+    kt.writeChallenge(challenge);
+
+    // Remember which physical key answered the enrollment challenge so unlock
+    // can distinguish "wrong key inserted" from "missed tap" later.
+    const serials = kt.listYubikeySerials();
+    if (serials.length === 1) {
+      kt.writeEnrolledSerial(serials[0]);
+      console.log(`Enrolled against YubiKey serial ${serials[0]}.`);
+    } else if (serials.length > 1) {
+      console.log(
+        `Multiple YubiKeys present (${serials.join(', ')}) — not recording an enrolled serial.`,
+      );
+    }
+
+    let copied = 0;
+    for (const { profile, blob } of blobs) {
+      try {
+        await saveCredentialBlob(blob, profile);
+        copied++;
+      } catch (err) {
+        console.error(
+          `  ! failed to copy "${profile}": ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    console.log('');
+    console.log(`Done. Created ${kcPath}, copied ${copied}/${blobs.length} credential set(s).`);
+    console.log('The keychain is unlocked now and will lock when your Mac sleeps.');
+    console.log('Next session: `noxctl keychain unlock` (one tap).');
+    console.log('When you trust it: `noxctl keychain seal` to delete the login-keychain copies.');
+  });
+
+keychain
+  .command('seal')
+  .description('Delete the login-keychain credential copies left by `init` (irreversible)')
+  .option('--yes', 'Skip the confirmation prompt')
+  .action(async (opts: { yes?: boolean }) => {
+    requireDarwin();
+    const kt = await import('./keychain-target.js');
+
+    const activePath = kt.activeKeychainPath();
+    if (!activePath) {
+      console.error(
+        'Dedicated keychain mode is not active — nothing to seal. Run `noxctl keychain init` first.',
+      );
+      process.exit(1);
+    }
+    if (kt.keychainLockState(activePath) === 'locked') {
+      console.error(
+        'Dedicated keychain is locked — run `noxctl keychain unlock` first so the copies can be verified before the originals are deleted.',
+      );
+      process.exit(1);
+    }
+
+    const { readProfileIndex } = await import('./profiles.js');
+    const { LEGACY_KEYCHAIN_ACCOUNT, keychainAccount } = await import('./profile-name.js');
+    const { loadCredentialBlob } = await import('./credentials-store.js');
+
+    const idx = await readProfileIndex();
+    const uniqueNames = [
+      ...new Set([DEFAULT_PROFILE, ...idx.profiles.map((p) => p.name)].map((n) => n.toLowerCase())),
+    ];
+
+    // Verify the dedicated keychain actually holds each profile's creds before
+    // deleting the login originals — never strand the user with no copy.
+    const verified: string[] = [];
+    for (const name of uniqueNames) {
+      const { blob } = await loadCredentialBlob(name);
+      if (blob) verified.push(name);
+    }
+    if (verified.length === 0) {
+      console.error(
+        'The dedicated keychain holds no credentials — refusing to delete the login copies.',
+      );
+      process.exit(1);
+    }
+
+    console.log(
+      `Verified ${verified.length} credential set(s) in the dedicated keychain: ${verified.join(', ')}`,
+    );
+    const confirmed = await localConfirm(
+      'Delete the login-keychain copies now? This cannot be undone.',
+      opts.yes,
+    );
+    if (!confirmed) {
+      console.log('Aborted. Login-keychain copies left in place.');
+      return;
+    }
+
+    // Accounts init may have written to the login keychain: the legacy
+    // "default" account plus profile:<name> for every known profile.
+    const accounts = new Set<string>([LEGACY_KEYCHAIN_ACCOUNT]);
+    for (const name of uniqueNames) accounts.add(keychainAccount(name));
+
+    let deleted = 0;
+    for (const account of accounts) {
+      if (kt.deleteLoginSecret(account)) deleted++;
+    }
+    console.log(`Deleted ${deleted} login-keychain entr${deleted === 1 ? 'y' : 'ies'}.`);
+    console.log('Credentials now live only in the YubiKey-locked keychain.');
+  });
+
 // --- serve (default command) ---
 program
   .command('serve', { isDefault: true })
@@ -821,6 +1210,10 @@ invoices
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -829,8 +1222,7 @@ invoices
     const data = await listInvoices({
       filter: opts.filter,
       customerNumber: opts.customer,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -848,7 +1240,7 @@ invoices
   .action(async (documentNumber: string) => {
     const { getInvoice } = await import('./operations/invoices.js');
     const data = await getInvoice(documentNumber);
-    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
   });
 
 invoices
@@ -880,7 +1272,7 @@ Examples:
       return;
     }
     const data = await createInvoice(params);
-    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
   });
 
 invoices
@@ -905,7 +1297,7 @@ Examples:
         return;
       }
       const data = await updateInvoice(documentNumber, fields);
-      outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
     },
   );
 
@@ -952,6 +1344,7 @@ invoices
         json(),
         data,
         invoiceConfirmColumns,
+        'Invoice',
       );
     },
   );
@@ -967,7 +1360,13 @@ invoices
       return;
     }
     const data = await bookkeepInvoice(documentNumber);
-    outputConfirmation(`Invoice ${documentNumber} bookkeept.`, json(), data, invoiceConfirmColumns);
+    outputConfirmation(
+      `Invoice ${documentNumber} bookkeept.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+      'Invoice',
+    );
   });
 
 invoices
@@ -981,7 +1380,13 @@ invoices
       return;
     }
     const data = await creditInvoice(documentNumber);
-    outputConfirmation(`Invoice ${documentNumber} credited.`, json(), data, invoiceConfirmColumns);
+    outputConfirmation(
+      `Invoice ${documentNumber} credited.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+      'Invoice',
+    );
   });
 
 // --- tax ---
@@ -990,14 +1395,22 @@ const tax = program.command('tax').description('Tax operations');
 tax
   .command('report')
   .description('Generate VAT tax report for a period')
-  .requiredOption('--from <date>', 'From date (YYYY-MM-DD)')
-  .requiredOption('--to <date>', 'To date (YYYY-MM-DD)')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--year <number>', 'Financial year', parseInt)
   .action(async (opts) => {
     const { generateTaxReport } = await import('./operations/tax.js');
+    const range = fromToParams(opts);
+    if (!range.fromDate || !range.toDate) {
+      fail('tax report requires a period: --from/--to or --period.', 2);
+    }
     const data = await generateTaxReport({
-      fromDate: opts.from,
-      toDate: opts.to,
+      fromDate: range.fromDate,
+      toDate: range.toDate,
       financialYear: opts.year,
     });
     if (json()) {
@@ -1019,12 +1432,15 @@ reports
   .option('--year <number>', 'Financial year', parseInt)
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .action(async (opts) => {
     const { getIncomeStatement } = await import('./operations/financial-reports.js');
     const data = await getIncomeStatement({
       financialYear: opts.year,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
     });
     if (json()) {
       console.log(JSON.stringify(data, null, 2));
@@ -1109,7 +1525,7 @@ customers
   .action(async (customerNumber: string) => {
     const { getCustomer } = await import('./operations/customers.js');
     const data = await getCustomer(customerNumber);
-    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
   });
 
 customers
@@ -1138,7 +1554,7 @@ Examples:
       return;
     }
     const data = await createCustomer(params);
-    outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
   });
 
 customers
@@ -1164,7 +1580,7 @@ Examples:
         return;
       }
       const data = await updateCustomer(customerNumber, fields);
-      outputDetail(data as Record<string, unknown>, customerDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
     },
   );
 
@@ -1199,7 +1615,7 @@ articles
   .action(async (articleNumber: string) => {
     const { getArticle } = await import('./operations/articles.js');
     const data = await getArticle(articleNumber);
-    outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
   });
 
 articles
@@ -1232,7 +1648,7 @@ Examples:
       return;
     }
     const data = await createArticle(params);
-    outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
   });
 
 articles
@@ -1256,7 +1672,7 @@ Examples:
         return;
       }
       const data = await updateArticle(articleNumber, fields);
-      outputDetail(data as Record<string, unknown>, articleDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
     },
   );
 
@@ -1297,7 +1713,7 @@ suppliers
   .action(async (supplierNumber: string) => {
     const { getSupplier } = await import('./operations/suppliers.js');
     const data = await getSupplier(supplierNumber);
-    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
   });
 
 suppliers
@@ -1326,7 +1742,7 @@ Examples:
       return;
     }
     const data = await createSupplier(params);
-    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
   });
 
 suppliers
@@ -1352,7 +1768,7 @@ Examples:
         return;
       }
       const data = await updateSupplier(supplierNumber, fields);
-      outputDetail(data as Record<string, unknown>, supplierDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
     },
   );
 
@@ -1372,6 +1788,10 @@ supplierInvoices
   .option('--supplier <number>', 'Filter by supplier number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -1380,8 +1800,7 @@ supplierInvoices
     const data = await listSupplierInvoices({
       filter: opts.filter,
       supplierNumber: opts.supplier,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -1405,7 +1824,12 @@ supplierInvoices
   .action(async (givenNumber: string) => {
     const { getSupplierInvoice } = await import('./operations/supplier-invoices.js');
     const data = await getSupplierInvoice(givenNumber);
-    outputDetail(data as Record<string, unknown>, supplierInvoiceDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoiceDetailColumns,
+      json(),
+      'SupplierInvoice',
+    );
   });
 
 supplierInvoices
@@ -1434,7 +1858,12 @@ Examples:
       return;
     }
     const data = await createSupplierInvoice(params);
-    outputDetail(data as Record<string, unknown>, supplierInvoiceDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoiceDetailColumns,
+      json(),
+      'SupplierInvoice',
+    );
   });
 
 supplierInvoices
@@ -1453,6 +1882,7 @@ supplierInvoices
       json(),
       data,
       supplierInvoiceConfirmColumns,
+      'SupplierInvoice',
     );
   });
 
@@ -1465,7 +1895,12 @@ company
   .action(async () => {
     const { getCompanyInfo } = await import('./operations/company.js');
     const data = await getCompanyInfo();
-    outputDetail(data as Record<string, unknown>, companyDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      companyDetailColumns,
+      json(),
+      'CompanyInformation',
+    );
   });
 
 // --- vouchers ---
@@ -1477,6 +1912,10 @@ vouchers
   .option('--series <series>', 'Voucher series (e.g. "A")')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--year <number>', 'Financial year', parseInt)
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
@@ -1485,8 +1924,7 @@ vouchers
     const { listVouchers } = await import('./operations/vouchers.js');
     const data = await listVouchers({
       series: opts.series,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       financialYear: opts.year,
       page: opts.page,
       limit: opts.limit,
@@ -1507,7 +1945,7 @@ vouchers
     const { getVoucher } = await import('./operations/vouchers.js');
     const data = await getVoucher(series, voucherNumber, opts.year);
     if (json()) {
-      console.log(JSON.stringify(data, null, 2));
+      console.log(JSON.stringify({ Voucher: data }, null, 2));
     } else {
       outputDetail(data as Record<string, unknown>, voucherDetailColumns, false);
       const rows = (data as Record<string, unknown>).VoucherRows as Record<string, unknown>[];
@@ -1542,7 +1980,7 @@ Examples:
       return;
     }
     const data = await createVoucher(params);
-    outputDetail(data as Record<string, unknown>, voucherDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, voucherDetailColumns, json(), 'Voucher');
   });
 
 // --- invoice-payments ---
@@ -1585,7 +2023,12 @@ invoicePayments
   .action(async (paymentNumber: string) => {
     const { getInvoicePayment } = await import('./operations/invoice-payments.js');
     const data = await getInvoicePayment(paymentNumber);
-    outputDetail(data as Record<string, unknown>, invoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      invoicePaymentDetailColumns,
+      json(),
+      'InvoicePayment',
+    );
   });
 
 invoicePayments
@@ -1622,7 +2065,12 @@ Examples:
       return;
     }
     const data = await createInvoicePayment(params);
-    outputDetail(data as Record<string, unknown>, invoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      invoicePaymentDetailColumns,
+      json(),
+      'InvoicePayment',
+    );
   });
 
 invoicePayments
@@ -1636,7 +2084,13 @@ invoicePayments
       return;
     }
     await deleteInvoicePayment(paymentNumber);
-    outputConfirmation(`Invoice payment ${paymentNumber} deleted.`, json(), {});
+    outputConfirmation(
+      `Invoice payment ${paymentNumber} deleted.`,
+      json(),
+      { Number: paymentNumber, deleted: true },
+      undefined,
+      'InvoicePayment',
+    );
   });
 
 invoicePayments
@@ -1650,7 +2104,13 @@ invoicePayments
       return;
     }
     const result = await bookkeepInvoicePayment(paymentNumber);
-    outputConfirmation(`Invoice payment ${paymentNumber} bookkeept.`, json(), result);
+    outputConfirmation(
+      `Invoice payment ${paymentNumber} bookkeept.`,
+      json(),
+      result,
+      undefined,
+      'InvoicePayment',
+    );
   });
 
 // --- supplier-invoice-payments ---
@@ -1694,7 +2154,12 @@ supplierInvoicePayments
   .action(async (paymentNumber: string) => {
     const { getSupplierInvoicePayment } = await import('./operations/supplier-invoice-payments.js');
     const data = await getSupplierInvoicePayment(paymentNumber);
-    outputDetail(data as Record<string, unknown>, supplierInvoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoicePaymentDetailColumns,
+      json(),
+      'SupplierInvoicePayment',
+    );
   });
 
 supplierInvoicePayments
@@ -1730,7 +2195,12 @@ Examples:
       return;
     }
     const data = await createSupplierInvoicePayment(params);
-    outputDetail(data as Record<string, unknown>, supplierInvoicePaymentDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      supplierInvoicePaymentDetailColumns,
+      json(),
+      'SupplierInvoicePayment',
+    );
   });
 
 supplierInvoicePayments
@@ -1745,7 +2215,13 @@ supplierInvoicePayments
       return;
     }
     await deleteSupplierInvoicePayment(paymentNumber);
-    outputConfirmation(`Supplier invoice payment ${paymentNumber} deleted.`, json(), {});
+    outputConfirmation(
+      `Supplier invoice payment ${paymentNumber} deleted.`,
+      json(),
+      { Number: paymentNumber, deleted: true },
+      undefined,
+      'SupplierInvoicePayment',
+    );
   });
 
 // --- offers ---
@@ -1758,6 +2234,10 @@ offers
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -1766,8 +2246,7 @@ offers
     const data = await listOffers({
       filter: opts.filter,
       customerNumber: opts.customer,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -1785,7 +2264,7 @@ offers
   .action(async (documentNumber: string) => {
     const { getOffer } = await import('./operations/offers.js');
     const data = await getOffer(documentNumber);
-    outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
   });
 
 offers
@@ -1814,7 +2293,7 @@ Examples:
       return;
     }
     const data = await createOffer(params);
-    outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
   });
 
 offers
@@ -1832,7 +2311,7 @@ offers
         return;
       }
       const data = await updateOffer(documentNumber, fields);
-      outputDetail(data as Record<string, unknown>, offerDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
     },
   );
 
@@ -1852,6 +2331,7 @@ offers
       json(),
       data,
       invoiceConfirmColumns,
+      'Invoice',
     );
   });
 
@@ -1866,7 +2346,13 @@ offers
       return;
     }
     const data = await createOrderFromOffer(documentNumber);
-    outputConfirmation(`Order created from offer ${documentNumber}.`, json(), data);
+    outputConfirmation(
+      `Order created from offer ${documentNumber}.`,
+      json(),
+      data,
+      undefined,
+      'Order',
+    );
   });
 
 // --- orders ---
@@ -1879,6 +2365,10 @@ orders
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
@@ -1887,8 +2377,7 @@ orders
     const data = await listOrders({
       filter: opts.filter,
       customerNumber: opts.customer,
-      fromDate: opts.from,
-      toDate: opts.to,
+      ...fromToParams(opts),
       page: opts.page,
       limit: opts.limit,
       all: opts.all,
@@ -1906,7 +2395,7 @@ orders
   .action(async (documentNumber: string) => {
     const { getOrder } = await import('./operations/orders.js');
     const data = await getOrder(documentNumber);
-    outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
   });
 
 orders
@@ -1935,7 +2424,7 @@ Examples:
       return;
     }
     const data = await createOrder(params);
-    outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
   });
 
 orders
@@ -1953,7 +2442,7 @@ orders
         return;
       }
       const data = await updateOrder(documentNumber, fields);
-      outputDetail(data as Record<string, unknown>, orderDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
     },
   );
 
@@ -1973,6 +2462,7 @@ orders
       json(),
       data,
       invoiceConfirmColumns,
+      'Invoice',
     );
   });
 
@@ -2005,7 +2495,7 @@ projects
   .action(async (projectNumber: string) => {
     const { getProject } = await import('./operations/projects.js');
     const data = await getProject(projectNumber);
-    outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
   });
 
 projects
@@ -2033,7 +2523,7 @@ projects
       return;
     }
     const data = await createProject(params);
-    outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
   });
 
 projects
@@ -2051,7 +2541,7 @@ projects
         return;
       }
       const data = await updateProject(projectNumber, fields);
-      outputDetail(data as Record<string, unknown>, projectDetailColumns, json());
+      outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
     },
   );
 
@@ -2090,7 +2580,7 @@ costcenters
   .action(async (code: string) => {
     const { getCostCenter } = await import('./operations/costcenters.js');
     const data = await getCostCenter(code);
-    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
 
 costcenters
@@ -2119,7 +2609,7 @@ costcenters
       return;
     }
     const data = await createCostCenter(params);
-    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
 
 costcenters
@@ -2136,7 +2626,7 @@ costcenters
       return;
     }
     const data = await updateCostCenter(code, fields);
-    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
 
 costcenters
@@ -2150,7 +2640,13 @@ costcenters
       return;
     }
     await deleteCostCenter(code);
-    console.log(`Cost center ${code} deleted.`);
+    outputConfirmation(
+      `Cost center ${code} deleted.`,
+      json(),
+      { Code: code, deleted: true },
+      undefined,
+      'CostCenter',
+    );
   });
 
 // --- tax reductions (ROT/RUT) ---
@@ -2192,7 +2688,12 @@ taxreductions
   .action(async (id: string) => {
     const { getTaxReduction } = await import('./operations/taxreductions.js');
     const data = await getTaxReduction(parseInt(id, 10));
-    outputDetail(data as Record<string, unknown>, taxReductionDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      taxReductionDetailColumns,
+      json(),
+      'TaxReduction',
+    );
   });
 
 taxreductions
@@ -2233,7 +2734,12 @@ taxreductions
       return;
     }
     const data = await createTaxReduction(params);
-    outputDetail(data as Record<string, unknown>, taxReductionDetailColumns, json());
+    outputDetail(
+      data as Record<string, unknown>,
+      taxReductionDetailColumns,
+      json(),
+      'TaxReduction',
+    );
   });
 
 // --- price lists ---
@@ -2271,7 +2777,7 @@ pricelists
   .action(async (code: string) => {
     const { getPriceList } = await import('./operations/pricelists.js');
     const data = await getPriceList(code);
-    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
 
 pricelists
@@ -2298,7 +2804,7 @@ pricelists
       return;
     }
     const data = await createPriceList(params);
-    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
 
 pricelists
@@ -2315,7 +2821,7 @@ pricelists
       return;
     }
     const data = await updatePriceList(code, fields);
-    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
 
 // --- prices ---
@@ -2352,7 +2858,7 @@ prices
   .action(async (opts) => {
     const { getPrice } = await import('./operations/pricelists.js');
     const data = await getPrice(opts.pricelist, opts.article, opts.fromQuantity);
-    outputDetail(data as Record<string, unknown>, priceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
   });
 
 prices
@@ -2376,25 +2882,372 @@ prices
       return;
     }
     const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
-    outputDetail(data as Record<string, unknown>, priceDetailColumns, json());
+    outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
   });
 
-// Error handling
-program.exitOverride();
+// --- contracts ---
+const contracts = program
+  .command('contracts')
+  .description('Contract operations (avtal — recurring invoicing)');
 
+contracts
+  .command('list')
+  .description('List/filter contracts')
+  .option('--filter <filter>', 'Filter: active, inactive, finished')
+  .option('--page <number>', 'Page number', parseInt)
+  .option('--limit <number>', 'Results per page', parseInt)
+  .option('-a, --all', 'Fetch all pages')
+  .action(async (opts) => {
+    const { listContracts } = await import('./operations/contracts.js');
+    const data = await listContracts({
+      filter: opts.filter,
+      page: opts.page,
+      limit: opts.limit,
+      all: opts.all,
+    });
+    outputList(data.Contracts ?? [], contractListColumns, json(), data, data.MetaInformation);
+  });
+
+contracts
+  .command('get <documentNumber>')
+  .description('Get a single contract')
+  .action(async (documentNumber: string) => {
+    const { getContract } = await import('./operations/contracts.js');
+    const data = await getContract(documentNumber);
+    outputDetail(data, contractDetailColumns, json(), 'Contract');
+  });
+
+contracts
+  .command('create')
+  .description('Create a contract (recurring invoicing)')
+  .requiredOption('--customer <number>', 'Customer number')
+  .requiredOption('--input <file>', 'Contract data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  echo '{"InvoiceRows":[{"Description":"Hosting","DeliveredQuantity":1,"Price":500,"AccountNumber":3001,"VAT":25}],"PeriodStart":"2026-07-01","PeriodEnd":"2027-06-30","InvoiceInterval":3,"ContractLength":12}' | noxctl contracts create --customer 25 --input - --dry-run`,
+  )
+  .action(async (opts) => {
+    const { createContract } = await import('./operations/contracts.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    const params = { CustomerNumber: opts.customer, ...input };
+    if (
+      !(await confirmMutation(`Create contract for customer ${opts.customer}`, opts, {
+        Contract: params,
+      }))
+    ) {
+      return;
+    }
+    const data = await createContract(params);
+    outputDetail(data, contractDetailColumns, json(), 'Contract');
+  });
+
+contracts
+  .command('update <documentNumber>')
+  .description('Update a contract')
+  .requiredOption('--input <file>', 'Fields to update as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (documentNumber: string, opts) => {
+    const { updateContract } = await import('./operations/contracts.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update contract ${documentNumber}`, opts, { Contract: fields }))) {
+      return;
+    }
+    const data = await updateContract(documentNumber, fields);
+    outputDetail(data, contractDetailColumns, json(), 'Contract');
+  });
+
+contracts
+  .command('finish <documentNumber>')
+  .description('Finish a contract — no further invoices will be created')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { finishContract } = await import('./operations/contracts.js');
+    if (!(await confirmMutation(`Finish contract ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await finishContract(documentNumber);
+    outputConfirmation(
+      `Contract ${documentNumber} finished.`,
+      json(),
+      data,
+      contractDetailColumns,
+      'Contract',
+    );
+  });
+
+contracts
+  .command('create-invoice <documentNumber>')
+  .description('Create the next invoice from a contract immediately')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { createInvoiceFromContract } = await import('./operations/contracts.js');
+    if (!(await confirmMutation(`Create invoice from contract ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await createInvoiceFromContract(documentNumber);
+    outputConfirmation(
+      `Invoice created from contract ${documentNumber}.`,
+      json(),
+      data,
+      invoiceConfirmColumns,
+      'Invoice',
+    );
+  });
+
+contracts
+  .command('increase-invoice-count <documentNumber>')
+  .description('Extend a non-continuous contract by one invoice')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { increaseInvoiceCount } = await import('./operations/contracts.js');
+    if (!(await confirmMutation(`Increase invoice count for contract ${documentNumber}`, opts))) {
+      return;
+    }
+    const data = await increaseInvoiceCount(documentNumber);
+    outputConfirmation(
+      `Invoice count increased for contract ${documentNumber}.`,
+      json(),
+      data,
+      contractDetailColumns,
+      'Contract',
+    );
+  });
+
+// --- financial years ---
+const financialYears = program
+  .command('financial-years')
+  .description('Financial year and locked period operations');
+
+financialYears
+  .command('list')
+  .description('List financial years (räkenskapsår)')
+  .option('--date <date>', 'Find the financial year containing this date (YYYY-MM-DD)')
+  .action(async (opts: { date?: string }) => {
+    const { listFinancialYears } = await import('./operations/financial-years.js');
+    const data = await listFinancialYears({ date: opts.date });
+    outputList(
+      data.FinancialYears ?? [],
+      financialYearListColumns,
+      json(),
+      data,
+      data.MetaInformation,
+    );
+  });
+
+financialYears
+  .command('get <id>')
+  .description('Get a single financial year')
+  .action(async (id: string) => {
+    const { getFinancialYear } = await import('./operations/financial-years.js');
+    const data = await getFinancialYear(parseInt(id, 10));
+    outputDetail(data, financialYearDetailColumns, json(), 'FinancialYear');
+  });
+
+financialYears
+  .command('locked-period')
+  .description('Show the locked period (bokföring låst t.o.m.)')
+  .action(async () => {
+    const { getLockedPeriod } = await import('./operations/financial-years.js');
+    const data = await getLockedPeriod();
+    if (json()) {
+      console.log(JSON.stringify({ LockedPeriod: data }, null, 2));
+      return;
+    }
+    if (!data.EndDate) {
+      console.log('No period is locked.');
+      return;
+    }
+    outputDetail(data, lockedPeriodDetailColumns, false);
+  });
+
+// --- analytics ---
+const analytics = program
+  .command('analytics')
+  .description('Precomputed analytics views (overdue, unpaid, top customers, VAT)');
+
+analytics
+  .command('overdue')
+  .description('Overdue invoices summary')
+  .action(async () => {
+    const { getOverdueSummary } = await import('./operations/analytics.js');
+    const summary = await getOverdueSummary();
+    if (json()) {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    }
+    if (summary.count === 0) {
+      console.log('No overdue invoices.');
+      return;
+    }
+    console.log(
+      `Overdue: ${summary.count} invoice(s), ${summary.totalBalance.toFixed(2)} outstanding. Oldest due ${summary.oldestDueDate}.\n`,
+    );
+    outputList(summary.invoices, invoiceListColumns, false, summary.invoices);
+  });
+
+analytics
+  .command('unpaid')
+  .description('Unpaid totals (outstanding receivables)')
+  .action(async () => {
+    const { getUnpaidTotals } = await import('./operations/analytics.js');
+    const s = await getUnpaidTotals();
+    if (json()) {
+      console.log(JSON.stringify(s, null, 2));
+      return;
+    }
+    console.log(`Unpaid:  ${s.count} invoice(s), ${s.totalBalance.toFixed(2)} outstanding.`);
+    console.log(`Overdue: ${s.overdueCount} invoice(s), ${s.overdueBalance.toFixed(2)}.`);
+  });
+
+analytics
+  .command('top-customers')
+  .description('Top customers by invoiced amount')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, last-quarter, ytd, ... Mutually exclusive with --from/--to.',
+  )
+  .option('--limit <number>', 'Number of customers (default 10)', parseInt)
+  .action(async (opts) => {
+    const { getTopCustomers } = await import('./operations/analytics.js');
+    const range = fromToParams(opts);
+    const result = await getTopCustomers({
+      fromDate: range.fromDate,
+      toDate: range.toDate,
+      limit: opts.limit,
+    });
+    if (json()) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    outputList(
+      result.customers.map((c) => ({ ...c })),
+      topCustomerColumns,
+      false,
+      result.customers,
+    );
+  });
+
+analytics
+  .command('vat')
+  .description('VAT summary for a period (net VAT position)')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, last-quarter, ytd, ... Mutually exclusive with --from/--to.',
+  )
+  .option('--year <number>', 'Financial year', parseInt)
+  .action(async (opts) => {
+    const { getVatSummary } = await import('./operations/analytics.js');
+    const range = fromToParams(opts);
+    if (!range.fromDate || !range.toDate) {
+      fail('analytics vat requires a period: --from/--to or --period.', 2);
+    }
+    const summary = await getVatSummary({
+      fromDate: range.fromDate,
+      toDate: range.toDate,
+      financialYear: opts.year,
+    });
+    if (json()) {
+      console.log(JSON.stringify(summary, null, 2));
+      return;
+    }
+    console.log(formatTaxReport(summary));
+    console.log(
+      `\nNet VAT: ${(summary.netVat as number).toFixed(2)} (negative = owed to Skatteverket)`,
+    );
+  });
+
+// --- dashboard ---
+program
+  .command('dashboard')
+  .description('At-a-glance summary: recent invoices, outstanding, overdue, monthly revenue')
+  .option('--months <number>', 'Months of revenue history (default 6)', parseInt)
+  .action(async (opts: { months?: number }) => {
+    const { getDashboard } = await import('./operations/analytics.js');
+    const dash = await getDashboard({ months: opts.months });
+    if (json()) {
+      console.log(JSON.stringify(dash, null, 2));
+      return;
+    }
+
+    console.log('OUTSTANDING');
+    console.log(
+      `  Unpaid:  ${dash.unpaid.count} invoice(s), ${dash.unpaid.totalBalance.toFixed(2)}`,
+    );
+    console.log(
+      `  Overdue: ${dash.overdue.count} invoice(s), ${dash.overdue.totalBalance.toFixed(2)}` +
+        (dash.overdue.oldestDueDate ? ` (oldest due ${dash.overdue.oldestDueDate})` : ''),
+    );
+
+    if (dash.overdue.count > 0) {
+      console.log('\nOVERDUE INVOICES');
+      outputList(dash.overdue.invoices, invoiceListColumns, false, dash.overdue.invoices);
+    }
+
+    console.log('\nRECENT INVOICES');
+    outputList(dash.recentInvoices, invoiceListColumns, false, dash.recentInvoices);
+
+    console.log('\nMONTHLY INVOICED');
+    outputList(
+      dash.monthlyRevenue.map((m) => ({ ...m })),
+      monthlyRevenueColumns,
+      false,
+      dash.monthlyRevenue,
+    );
+  });
+
+// --- completion ---
+program
+  .command('completion <shell>')
+  .description('Generate shell completion script (bash, zsh, fish)')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl completion bash > /usr/local/etc/bash_completion.d/noxctl
+  noxctl completion zsh > "\${fpath[1]}/_noxctl"
+  noxctl completion fish > ~/.config/fish/completions/noxctl.fish`,
+  )
+  .action(async (shell: string) => {
+    const { extractCommandTree, renderCompletion } = await import('./completions.js');
+    console.log(renderCompletion(shell, extractCommandTree(program)));
+  });
+
+// Error handling (configureOutput + exitOverride set above, before the command
+// tree, so subcommands inherit them).
 try {
   await program.parseAsync(process.argv);
 } catch (err) {
-  if (err instanceof Error && 'code' in err) {
-    const code = (err as { code: string }).code;
-    // Commander throws for --help and --version with exitCode 0
-    if (code === 'commander.helpDisplayed' || code === 'commander.version') {
-      process.exit(0);
-    }
-    if (code === 'commander.unknownCommand' || code === 'commander.missingMandatoryOptionValue') {
-      process.exit(1);
-    }
+  const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : undefined;
+  // Commander throws these for --help and --version after writing output; exit 0.
+  if (code === 'commander.helpDisplayed' || code === 'commander.version') {
+    process.exit(0);
   }
-  console.error(err instanceof Error ? err.message : err);
+  // Commander parse errors (unknownCommand, missingMandatoryOptionValue,
+  // excessArguments, ...) carry a `commander.*` code. configureOutput above
+  // already wrote their plain-text usage message in table mode, so we must not
+  // print it again here; in JSON mode that output was suppressed, so we emit
+  // the structured envelope below instead.
+  const isCommanderParseError = typeof code === 'string' && code.startsWith('commander.');
+  if (json()) {
+    // Structured mode fails structured: scripted callers branch on .error
+    // instead of string-scraping stderr.
+    console.error(JSON.stringify(errorEnvelope(err), null, 2));
+  } else if (!isCommanderParseError) {
+    console.error(err instanceof Error ? err.message : err);
+  }
   process.exit(1);
 }

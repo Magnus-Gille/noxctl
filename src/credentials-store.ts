@@ -11,6 +11,7 @@ import {
   validateProfileName,
 } from './profile-name.js';
 import { configDir } from './config-paths.js';
+import { activeKeychainPath, readDedicatedSecret } from './keychain-target.js';
 
 function legacyCredentialsFile(): string {
   return path.join(configDir(), 'credentials.json');
@@ -114,6 +115,12 @@ function decodeHexIfNeeded(value: string): string {
 }
 
 function loadMacSecret(account: string): string | null {
+  // Dedicated-keychain mode: read prompt-free from the YubiKey-locked keychain.
+  // A locked keychain throws KeychainLockedError (propagated so the caller can
+  // tell the user to run `noxctl keychain unlock`), not a silent null.
+  const dedicated = activeKeychainPath();
+  if (dedicated) return readDedicatedSecret(account, dedicated);
+
   try {
     const raw = execFileSync(
       'security',
@@ -133,6 +140,11 @@ function saveMacSecret(account: string, secret: string): void {
   // the Security framework — the secret never appears in process arguments.
   const scriptPath = path.join(os.tmpdir(), `noxctl-keychain-${process.pid}.swift`);
 
+  // In dedicated-keychain mode, target that keychain file; otherwise the
+  // default (login) keychain. The path is passed as argv (not interpolated) so
+  // an odd path can't break or inject into the Swift source.
+  const keychainPath = activeKeychainPath() ?? '';
+
   // account is either LEGACY_KEYCHAIN_ACCOUNT ("default") or `profile:<validated>`.
   // Validation in profile-name.ts restricts the character set so embedding is safe.
   const swiftScript = `
@@ -145,20 +157,30 @@ guard let password = String(data: data, encoding: .utf8) else { exit(1) }
 let service = "${SERVICE_NAME}"
 let account = "${account}"
 
-let deleteQuery: [String: Any] = [
+let kcPath = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ""
+var useKeychain: SecKeychain? = nil
+if !kcPath.isEmpty {
+  var kc: SecKeychain?
+  if SecKeychainOpen(kcPath, &kc) == errSecSuccess { useKeychain = kc }
+  else { exit(1) }
+}
+
+var deleteQuery: [String: Any] = [
   kSecClass as String: kSecClassGenericPassword,
   kSecAttrService as String: service,
   kSecAttrAccount as String: account
 ]
+if let kc = useKeychain { deleteQuery[kSecMatchSearchList as String] = [kc] }
 SecItemDelete(deleteQuery as CFDictionary)
 
 let pwData = password.data(using: String.Encoding.utf8)!
-let addQuery: [String: Any] = [
+var addQuery: [String: Any] = [
   kSecClass as String: kSecClassGenericPassword,
   kSecAttrService as String: service,
   kSecAttrAccount as String: account,
   kSecValueData as String: pwData
 ]
+if let kc = useKeychain { addQuery[kSecUseKeychain as String] = kc }
 let status = SecItemAdd(addQuery as CFDictionary, nil)
 if status != errSecSuccess { exit(1) }
 `;
@@ -166,7 +188,7 @@ if status != errSecSuccess { exit(1) }
   try {
     fsSync.writeFileSync(scriptPath, swiftScript, { mode: 0o600 });
 
-    const result = spawnSync('swift', [scriptPath], {
+    const result = spawnSync('swift', [scriptPath, keychainPath], {
       input: secret,
       encoding: 'utf-8',
     });
@@ -174,18 +196,20 @@ if status != errSecSuccess { exit(1) }
     if (result.status !== 0) {
       throw new Error(result.stderr || 'Swift keychain helper failed');
     }
-  } catch {
-    // Fallback to security CLI if Swift is unavailable or fails
-    execFileSync('security', [
-      'add-generic-password',
-      '-a',
-      account,
-      '-s',
-      SERVICE_NAME,
-      '-w',
-      secret,
-      '-U',
-    ]);
+  } catch (err) {
+    // Fail closed rather than fall back to `security add-generic-password -w
+    // <secret>`: that CLI only accepts the password via the argv `-w` slot
+    // (briefly visible to other processes via `ps`) or an interactive prompt,
+    // so a fallback would leak the credential into process arguments — exactly
+    // what the stdin-based Swift writer above exists to avoid. `swift` ships
+    // with the Xcode Command Line Tools, so guide the user to install them.
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Could not store credentials securely: the Swift Keychain helper failed (${detail}). ` +
+        `The 'swift' toolchain is required to write credentials without exposing them in ` +
+        `process arguments — install the Xcode Command Line Tools with 'xcode-select --install' ` +
+        `and try again.`,
+    );
   } finally {
     try {
       fsSync.unlinkSync(scriptPath);
@@ -354,8 +378,16 @@ export async function saveCredentialBlob(
 }
 
 function deleteMacSecret(account: string): boolean {
+  const keychainPath = activeKeychainPath();
   try {
-    execFileSync('security', ['delete-generic-password', '-a', account, '-s', SERVICE_NAME]);
+    execFileSync('security', [
+      'delete-generic-password',
+      '-a',
+      account,
+      '-s',
+      SERVICE_NAME,
+      ...(keychainPath ? [keychainPath] : []),
+    ]);
     return true;
   } catch {
     return false;

@@ -94,6 +94,31 @@ describe('customer operations', () => {
       const result = await createCustomer({ Name: 'New Corp' });
       expect(result.CustomerNumber).toBe('2');
     });
+
+    it('strips server-derived read-only fields so read→create round-trips work', async () => {
+      mockFetch({ Customer: { CustomerNumber: '2', Name: 'AFRY AB' } });
+      const { createCustomer } = await import('../../src/operations/customers.js');
+
+      await createCustomer({
+        Name: 'AFRY AB',
+        Country: 'Sverige',
+        CountryCode: 'SE',
+        DeliveryCountry: 'Sverige',
+        DeliveryCountryCode: 'SE',
+        VisitingCountry: 'Sverige',
+        VisitingCountryCode: 'SE',
+      });
+
+      const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body) as {
+        Customer: Record<string, unknown>;
+      };
+      expect(body.Customer.Country).toBeUndefined();
+      expect(body.Customer.DeliveryCountry).toBeUndefined();
+      expect(body.Customer.VisitingCountry).toBeUndefined();
+      expect(body.Customer.CountryCode).toBe('SE');
+      expect(body.Customer.DeliveryCountryCode).toBe('SE');
+      expect(body.Customer.VisitingCountryCode).toBe('SE');
+    });
   });
 
   describe('updateCustomer', () => {
@@ -109,6 +134,19 @@ describe('customer operations', () => {
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Customer.Name).toBe('Updated');
       expect(body.Customer.customerNumber).toBeUndefined();
+    });
+
+    it('strips server-derived read-only fields', async () => {
+      mockFetch({ Customer: { CustomerNumber: '1', Name: 'Updated' } });
+      const { updateCustomer } = await import('../../src/operations/customers.js');
+
+      await updateCustomer('1', { Name: 'Updated', Country: 'Sverige', CountryCode: 'SE' });
+
+      const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body) as {
+        Customer: Record<string, unknown>;
+      };
+      expect(body.Customer.Country).toBeUndefined();
+      expect(body.Customer.CountryCode).toBe('SE');
     });
   });
 });

@@ -46,12 +46,23 @@ export async function getCustomer(customerNumber: string): Promise<Record<string
   return data.Customer;
 }
 
+// Server-derived display fields Fortnox rejects on write ("Fältet Country är
+// endast läsbart"). Stripping them lets a `get` response be fed back into
+// create/update unchanged; the *CountryCode fields remain the writable source.
+const READ_ONLY_CUSTOMER_FIELDS = ['Country', 'DeliveryCountry', 'VisitingCountry'] as const;
+
+function stripReadOnlyFields(params: Record<string, unknown>): Record<string, unknown> {
+  const writable = { ...params };
+  for (const field of READ_ONLY_CUSTOMER_FIELDS) delete writable[field];
+  return writable;
+}
+
 export async function createCustomer(
   params: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const data = await fortnoxRequest<CustomerResponse>('customers', {
     method: 'POST',
-    body: { Customer: params },
+    body: { Customer: stripReadOnlyFields(params) },
   });
   return data.Customer;
 }
@@ -65,7 +76,7 @@ export async function updateCustomer(
     `customers/${customerSegment(customerNumber)}`,
     {
       method: 'PUT',
-      body: { Customer: body },
+      body: { Customer: stripReadOnlyFields(body) },
     },
   );
   return data.Customer;

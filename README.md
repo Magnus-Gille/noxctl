@@ -155,6 +155,59 @@ Non-default sessions print a `[profile: <name>]` stderr banner on startup and pr
 
 If the active pointer becomes unreadable or corrupt and no explicit `--profile` flag or `NOXCTL_PROFILE` is set, `noxctl serve` **refuses to start** rather than silently falling back to `default`. This prevents a corrupted pointer from routing production MCP sessions to the wrong tenant. The CLI's `doctor` and `profile use` commands are exempt — they can still run against a broken pointer so you can repair it.
 
+## YubiKey-locked keychain (macOS)
+
+By default, credentials live in your macOS **login keychain**, which unlocks automatically when you log in. That's convenient, but it means an AI agent (or anything running as you) can read the tokens without a per-session gesture from you.
+
+The optional **dedicated keychain** moves credentials into a separate, lock-on-sleep keychain whose password is derived from your YubiKey via HMAC-SHA1 challenge-response. You unlock it once per session with a single tap; it re-locks when your Mac sleeps. The keychain password is never typed or stored — it only exists on the YubiKey.
+
+This is opt-in and macOS-only. It does not change how credentials are stored on Linux or Windows.
+
+### One-time YubiKey setup
+
+Program OTP slot 2 for challenge-response (requires touch). **This writes only the empty OTP slot 2** — FIDO2, PIV, OATH, OpenPGP, and slot 1 are untouched, and it is reversible with `ykman otp delete 2`.
+
+```bash
+brew install ykman                              # if not already installed
+ykman otp chalresp --generate --touch 2         # program slot 2
+```
+
+### Enable it
+
+```bash
+noxctl keychain init      # generate challenge, tap to derive the password,
+                          # create the locked keychain, copy existing creds in
+```
+
+`init` uses **copy-and-keep**: your existing login-keychain credentials are copied into the new keychain but left in place as a rollback. Once you've confirmed the new flow works, remove the originals:
+
+```bash
+noxctl keychain seal      # delete the login-keychain copies (irreversible)
+```
+
+Until you `seal`, the login copies remain readable without a tap — so the per-session protection isn't fully in effect.
+
+### Daily use
+
+```bash
+noxctl keychain unlock    # tap your YubiKey — open until the Mac next sleeps
+noxctl keychain status    # mode, lock state, ykman/YubiKey presence
+noxctl keychain lock      # lock immediately
+```
+
+When the keychain is locked, any command that needs credentials fails fast with a message telling you to run `noxctl keychain unlock` — it never pops a macOS password dialog (the challenge-response password can't be typed into one).
+
+### Recovery if you lose the YubiKey
+
+The keychain password lives only on the key, so a lost or re-programmed key means the dedicated keychain can't be unlocked. As long as you have **not** run `seal`, your credentials are still in the login keychain — delete the dedicated keychain and challenge file to fall back:
+
+```bash
+security delete-keychain ~/Library/Keychains/fortnox-mcp.keychain-db
+rm ~/.fortnox-mcp/keychain-challenge
+```
+
+If you *have* sealed, re-run `noxctl init` to re-authenticate from scratch.
+
 ## Tools
 
 Every operation is available both as a CLI command and as an MCP tool. The CLI is the primary interface; the MCP server exposes the same operations to AI agents. All mutations — every row labeled `(mutation)` — prompt for confirmation on a TTY and require `--yes` (CLI) or `confirm: true` (MCP) when piped. See [Mutation safety](#mutation-safety).
@@ -308,6 +361,36 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl prices get --pricelist <code> --article <number>` | `fortnox_get_price` | Get a specific price |
 | `noxctl prices update --pricelist <code> --article <number> --input <file>` | `fortnox_update_price` | Update a price (mutation) |
 
+### Contracts (avtal — recurring invoicing)
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl contracts list [--filter active\|inactive\|finished]` | `fortnox_list_contracts` | List/filter contracts |
+| `noxctl contracts get <number>` | `fortnox_get_contract` | Get a single contract |
+| `noxctl contracts create --customer <number> --input <file>` | `fortnox_create_contract` | Create a contract (mutation) |
+| `noxctl contracts update <number> --input <file>` | `fortnox_update_contract` | Update a contract (mutation) |
+| `noxctl contracts finish <number>` | `fortnox_finish_contract` | Finish a contract (mutation) |
+| `noxctl contracts create-invoice <number>` | `fortnox_create_invoice_from_contract` | Create the next invoice now (mutation) |
+| `noxctl contracts increase-invoice-count <number>` | `fortnox_increase_contract_invoice_count` | Extend by one invoice (mutation) |
+
+### Financial years and locked period
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl financial-years list [--date <date>]` | `fortnox_list_financialyears` | List financial years (räkenskapsår) |
+| `noxctl financial-years get <id>` | `fortnox_get_financialyear` | Get a single financial year |
+| `noxctl financial-years locked-period` | `fortnox_get_lockedperiod` | Show through which date bookkeeping is locked |
+
+### Analytics and dashboard
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl analytics overdue` | `fortnox_overdue_invoices` | Overdue invoices summary |
+| `noxctl analytics unpaid` | `fortnox_unpaid_totals` | Outstanding receivables, with overdue split |
+| `noxctl analytics top-customers [--period <period>]` | `fortnox_top_customers` | Top customers by invoiced amount |
+| `noxctl analytics vat --period <period>` | `fortnox_vat_summary` | VAT summary with net VAT position |
+| `noxctl dashboard` | — | At-a-glance: outstanding, overdue, recent invoices, monthly revenue |
+
 ### Company
 
 | CLI | MCP tool | Description |
@@ -324,6 +407,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl profile use <name>` | — | Set the active profile (writes `~/.fortnox-mcp/active-profile`) |
 | `noxctl profile current` | — | Show the currently resolved profile and where it came from |
 | `noxctl profile list` | — | List known profiles from the index |
+| `noxctl completion <bash\|zsh\|fish>` | — | Generate a shell completion script |
 
 ## CLI output
 
@@ -335,6 +419,14 @@ noxctl -o json invoices list      # force JSON (JavaScript Object Notation)
 noxctl -o table invoices list     # force table
 noxctl invoices list | jq .       # auto-JSON (piped)
 ```
+
+JSON output has a stable envelope: list commands wrap under the plural resource key (`{"Invoices": [...], "MetaInformation": {...}}`) and single-resource commands under the singular key (`{"Invoice": {...}}`), so scripted callers can rely on a fixed accessor. Failures in JSON mode are emitted to stderr as a structured envelope:
+
+```json
+{ "error": { "status": 400, "message": "...", "source": "fortnox-api" } }
+```
+
+Natural date periods are accepted wherever `--from`/`--to` work, via `--period`: `Q1`, `2025-Q3`, `march`/`mars`, `this-quarter`, `last-quarter`, `this-month`, `last-month`, `ytd`, `this-year`, `last-year`, or a bare year. Periods are **calendar-year** based (broken fiscal years are not yet considered).
 
 When running from a local clone instead of an installed binary, replace `noxctl` with `node dist/cli.js`.
 

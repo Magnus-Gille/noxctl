@@ -395,3 +395,64 @@ export const companyDetailColumns: Column[] = [
   { key: 'Email', header: 'Email', width: 40 },
   { key: 'DatabaseNumber', header: 'Database #', width: 10 },
 ];
+
+// --- Financial year views ---
+
+export const financialYearListColumns: Column[] = [
+  { key: 'Id', header: 'Id', width: 4, align: 'right' },
+  { key: 'FromDate', header: 'From', width: 10 },
+  { key: 'ToDate', header: 'To', width: 10 },
+  { key: 'AccountingMethod', header: 'Method', width: 8 },
+  { key: 'AccountChartType', header: 'Account Chart', width: 30 },
+];
+
+export const financialYearDetailColumns: Column[] = financialYearListColumns;
+
+export const lockedPeriodDetailColumns: Column[] = [
+  { key: 'EndDate', header: 'Locked Through', width: 10 },
+];
+
+// --- Contract views ---
+
+export const contractListColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Doc #', width: 7, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 20 },
+  { key: 'PeriodStart', header: 'Start', width: 10 },
+  { key: 'PeriodEnd', header: 'End', width: 10 },
+  { key: 'InvoiceInterval', header: 'Interval', width: 8, align: 'right' },
+  { key: 'Continuous', header: 'Cont.', width: 5 },
+  { key: 'Total', header: 'Total', width: 10, align: 'right', format: currency },
+];
+
+export const contractDetailColumns: Column[] = [
+  { key: 'DocumentNumber', header: 'Document #', width: 10 },
+  { key: 'CustomerNumber', header: 'Customer #', width: 10 },
+  { key: 'CustomerName', header: 'Customer', width: 30 },
+  { key: 'Active', header: 'Active', width: 5 },
+  { key: 'Continuous', header: 'Continuous', width: 5 },
+  { key: 'ContractDate', header: 'Contract Date', width: 10 },
+  { key: 'ContractLength', header: 'Length (months)', width: 6, align: 'right' },
+  { key: 'PeriodStart', header: 'Period Start', width: 10 },
+  { key: 'PeriodEnd', header: 'Period End', width: 10 },
+  { key: 'InvoiceInterval', header: 'Invoice Interval', width: 6, align: 'right' },
+  { key: 'InvoicesRemaining', header: 'Invoices Remaining', width: 6, align: 'right' },
+  { key: 'LastInvoiceDate', header: 'Last Invoice', width: 10 },
+  { key: 'Total', header: 'Total', width: 12, align: 'right', format: currency },
+  { key: 'TotalVAT', header: 'VAT', width: 12, align: 'right', format: currency },
+  { key: 'Comments', header: 'Comments', width: 40 },
+];
+
+// --- Analytics views ---
+
+export const topCustomerColumns: Column[] = [
+  { key: 'CustomerNumber', header: 'Cust #', width: 8, align: 'right' },
+  { key: 'CustomerName', header: 'Customer', width: 30 },
+  { key: 'total', header: 'Invoiced', width: 14, align: 'right', format: currency },
+  { key: 'invoiceCount', header: 'Invoices', width: 8, align: 'right' },
+];
+
+export const monthlyRevenueColumns: Column[] = [
+  { key: 'month', header: 'Month', width: 7 },
+  { key: 'total', header: 'Invoiced', width: 14, align: 'right', format: currency },
+  { key: 'invoiceCount', header: 'Invoices', width: 8, align: 'right' },
+];
