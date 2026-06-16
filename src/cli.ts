@@ -2021,7 +2021,7 @@ Examples:
         financialYear: opts.year,
       });
       if (json()) {
-        console.log(JSON.stringify({ VoucherFileConnections: results }, null, 2));
+        console.log(JSON.stringify({ Attachments: results }, null, 2));
       } else {
         outputList(
           results as unknown as Record<string, unknown>[],

@@ -7,12 +7,18 @@ vi.mock('../../src/auth.js', () => ({
 const fsMock = vi.hoisted(() => {
   const readFileSync = vi.fn(() => Buffer.from('fake-file-content'));
   const existsSync = vi.fn(() => true);
-  return { readFileSync, existsSync };
+  const statSync = vi.fn(() => ({ isFile: () => true }));
+  return { readFileSync, existsSync, statSync };
 });
 vi.mock('node:fs', () => ({
-  default: { readFileSync: fsMock.readFileSync, existsSync: fsMock.existsSync },
+  default: {
+    readFileSync: fsMock.readFileSync,
+    existsSync: fsMock.existsSync,
+    statSync: fsMock.statSync,
+  },
   readFileSync: fsMock.readFileSync,
   existsSync: fsMock.existsSync,
+  statSync: fsMock.statSync,
 }));
 
 function mockFetch(response: unknown) {
@@ -29,6 +35,7 @@ describe('voucher operations', () => {
     // Re-establish fs defaults each test (restoreAllMocks below clears them).
     fsMock.readFileSync.mockReturnValue(Buffer.from('fake-file-content'));
     fsMock.existsSync.mockReturnValue(true);
+    fsMock.statSync.mockReturnValue({ isFile: () => true });
   });
 
   afterEach(() => {
@@ -348,6 +355,23 @@ describe('voucher operations', () => {
           financialYear: 4,
         }),
       ).rejects.toThrow(/File not found: \/tmp\/missing\.pdf/);
+
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('rejects a directory path before uploading (no EISDIR mid-batch)', async () => {
+      const { attachVoucherFiles } = await import('../../src/operations/vouchers.js');
+      fsMock.statSync.mockReturnValue({ isFile: () => false });
+      mockFetch({});
+
+      await expect(
+        attachVoucherFiles({
+          series: 'A',
+          voucherNumber: '60',
+          filePaths: ['/tmp/adir'],
+          financialYear: 4,
+        }),
+      ).rejects.toThrow(/Not a file: \/tmp\/adir/);
 
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });

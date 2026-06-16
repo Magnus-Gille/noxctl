@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
 import { voucherSeriesSegment } from '../identifiers.js';
@@ -175,6 +175,9 @@ export async function attachVoucherFiles(
   for (const filePath of params.filePaths) {
     if (!existsSync(filePath)) {
       throw new Error(`File not found: ${filePath}`);
+    }
+    if (!statSync(filePath).isFile()) {
+      throw new Error(`Not a file: ${filePath}`);
     }
   }
 

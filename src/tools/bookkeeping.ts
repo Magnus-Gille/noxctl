@@ -152,7 +152,7 @@ export function registerBookkeepingTools(server: McpServer): void {
         .describe('Visa vad som skulle skickas utan att ladda upp filerna'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ series, voucherNumber, files, year, confirm, dryRun }) => {
+    async ({ series, voucherNumber, files, year, confirm, dryRun, includeRaw }) => {
       if (dryRun) {
         return dryRunResponse(
           `attach ${files.length} file(s) to voucher ${series}/${voucherNumber}`,
@@ -174,8 +174,9 @@ export function registerBookkeepingTools(server: McpServer): void {
         financialYear: year,
       });
       const ids = results.map((r) => r.fileId).join(', ');
+      const summary = `Kopplade ${results.length} fil(er) till verifikation ${series}/${voucherNumber}. Fil-ID: ${ids}`;
       return textResponse(
-        `Kopplade ${results.length} fil(er) till verifikation ${series}/${voucherNumber}. Fil-ID: ${ids}`,
+        includeRaw ? `${summary}\n\n${JSON.stringify(results, null, 2)}` : summary,
       );
     },
   );
