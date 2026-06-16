@@ -80,18 +80,44 @@ jobs:
         with:
           script: |
             const summary = process.env.DIFF_SUMMARY;
-            await github.rest.issues.create({
+            const today = new Date().toISOString().slice(0, 10);
+
+            // Dedup: the fetch can fail every week for the same reason (e.g. a
+            // persistent HTTP 429). Rather than open a fresh issue each Monday,
+            // append a comment to the existing open fetch-failure issue if one
+            // exists, so the failure history lives in a single tracker.
+            const open = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Fortnox API spec fetch failed (${new Date().toISOString().slice(0, 10)})`,
-              body: [
-                'The weekly API drift check could not fetch the OpenAPI spec.',
-                '',
-                '```',
-                summary,
-                '```',
-                '',
-                'This may be transient (rate limiting) or indicate a URL change.',
-              ].join('\n'),
-              labels: ['api-drift'],
+              state: 'open',
+              labels: 'api-drift',
+              per_page: 100,
             });
+            const existing = open.data.find(
+              (i) => !i.pull_request && /fetch failed|drift check|429/i.test(i.title),
+            );
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: ['Still failing on ' + today + ':', '', '```', summary, '```'].join('\n'),
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Fortnox API spec fetch failed (${today})`,
+                body: [
+                  'The weekly API drift check could not fetch the OpenAPI spec.',
+                  '',
+                  '```',
+                  summary,
+                  '```',
+                  '',
+                  'This may be transient (rate limiting) or indicate a URL change.',
+                ].join('\n'),
+                labels: ['api-drift'],
+              });
+            }
