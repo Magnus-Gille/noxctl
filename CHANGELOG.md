@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-16
+
 ### Added
 
 - **Voucher file attachments** (#37) — `noxctl vouchers attach <series> <number> <file...> [--year]` uploads receipt/underlag files to the Fortnox inbox and links them to a voucher; matching `fortnox_attach_voucher_files` MCP tool. The financial year is resolved from the voucher's transaction date when `--year` is omitted. Requires the Fortnox "archive" scope enabled on the app. Also delivers the file-attachments half of #13.
