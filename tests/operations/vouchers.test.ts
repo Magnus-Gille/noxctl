@@ -180,30 +180,33 @@ describe('voucher operations', () => {
       expect(result).toMatchObject(conn);
     });
 
-    it('includes VoucherYear when provided', async () => {
+    it('passes the financial year as the financialyear query param (never in the body)', async () => {
       const { createVoucherFileConnection } = await import('../../src/operations/vouchers.js');
       mockFetch({ VoucherFileConnection: { FileId: 'f2', VoucherYear: 4 } });
 
       await createVoucherFileConnection('A', '61', 'f2', 4);
 
-      const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
         string,
         RequestInit,
       ];
+      // VoucherYear is read-only on POST (Fortnox 2000321) — must NOT be in the body.
+      expect(url).toContain('financialyear=4');
       const body = JSON.parse(init.body as string);
-      expect(body.VoucherFileConnection.VoucherYear).toBe(4);
+      expect('VoucherYear' in body.VoucherFileConnection).toBe(false);
     });
 
-    it('omits VoucherYear when not provided', async () => {
+    it('omits the financialyear query param when no year is given', async () => {
       const { createVoucherFileConnection } = await import('../../src/operations/vouchers.js');
       mockFetch({ VoucherFileConnection: { FileId: 'f3' } });
 
       await createVoucherFileConnection('A', '62', 'f3');
 
-      const [, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
         string,
         RequestInit,
       ];
+      expect(url).not.toContain('financialyear');
       const body = JSON.parse(init.body as string);
       expect('VoucherYear' in body.VoucherFileConnection).toBe(false);
     });
@@ -336,10 +339,11 @@ describe('voucher operations', () => {
       // Connection should carry VoucherYear 4
       expect((results[0]!.connection as Record<string, unknown>).VoucherYear).toBe(4);
 
-      // Verify the connection call included VoucherYear 4
+      // Verify the connection call passed the resolved year as the query param
       const connectionCall = mockFn.mock.calls[3] as [string, RequestInit];
+      expect(connectionCall[0]).toContain('financialyear=4');
       const body = JSON.parse(connectionCall[1].body as string);
-      expect(body.VoucherFileConnection.VoucherYear).toBe(4);
+      expect('VoucherYear' in body.VoucherFileConnection).toBe(false);
     });
 
     it('fails fast (before any upload) when a file path does not exist', async () => {

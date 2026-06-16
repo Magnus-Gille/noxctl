@@ -89,6 +89,8 @@ export function registerStatusTools(server: McpServer): void {
         bookkeeping: 'vouchers?limit=1',
         companyinformation: 'companyinformation',
         settings: 'settings/company',
+        inbox: 'inbox',
+        connectfile: 'voucherfileconnections?limit=1',
       };
 
       const required = SCOPES.split(' ');
@@ -100,7 +102,12 @@ export function registerStatusTools(server: McpServer): void {
         try {
           await fortnoxRequest(endpoint);
         } catch (err) {
-          if (err instanceof FortnoxApiError && err.statusCode === 403) {
+          // Missing scope = 403, or a 400 whose message names the scope
+          // (archive/inbox family). Other errors aren't scope problems.
+          if (
+            err instanceof FortnoxApiError &&
+            (err.statusCode === 403 || /scope/i.test(err.fortnoxMessage ?? ''))
+          ) {
             missing.push(scope);
           }
         }

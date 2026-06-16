@@ -876,6 +876,8 @@ program
       bookkeeping: 'vouchers?limit=1',
       companyinformation: 'companyinformation',
       settings: 'settings/company',
+      inbox: 'inbox',
+      connectfile: 'voucherfileconnections?limit=1',
     };
 
     const required = SCOPES.split(' ');
@@ -887,10 +889,15 @@ program
       try {
         await fortnoxRequest(endpoint);
       } catch (err) {
-        if (err instanceof FortnoxApiError && err.statusCode === 403) {
+        // A missing scope shows up as a 403, OR (for some endpoints, e.g. the
+        // archive/inbox family) a 400 whose message names the scope. Treat both
+        // as "not authorized"; other errors (500, etc.) aren't scope problems.
+        if (
+          err instanceof FortnoxApiError &&
+          (err.statusCode === 403 || /scope/i.test(err.fortnoxMessage ?? ''))
+        ) {
           missing.push(scope);
         }
-        // Non-403 errors (e.g. 500) are not scope problems — ignore here
       }
     }
 

@@ -113,22 +113,26 @@ export async function uploadInboxFile(filePath: string): Promise<Record<string, 
   return data.File;
 }
 
-// Link an already-uploaded file (by id) to a voucher.
+// Link an already-uploaded file (by id) to a voucher. The financial year goes in
+// the `financialyear` query param, NOT the body: Fortnox treats VoucherYear in
+// the body as read-only (rejects it with error 2000321) and derives it from the
+// voucher itself.
 export async function createVoucherFileConnection(
   series: string,
   voucherNumber: string,
   fileId: string,
   financialYear?: number,
 ): Promise<Record<string, unknown>> {
-  const connection: Record<string, unknown> = {
-    FileId: fileId,
-    VoucherSeries: series,
-    VoucherNumber: voucherNumber,
-  };
-  if (financialYear !== undefined) connection.VoucherYear = financialYear;
   const data = await fortnoxRequest<VoucherFileConnectionResponse>('voucherfileconnections', {
     method: 'POST',
-    body: { VoucherFileConnection: connection },
+    body: {
+      VoucherFileConnection: {
+        FileId: fileId,
+        VoucherSeries: series,
+        VoucherNumber: voucherNumber,
+      },
+    },
+    params: financialYear !== undefined ? { financialyear: financialYear } : undefined,
   });
   return data.VoucherFileConnection;
 }
