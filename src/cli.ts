@@ -159,10 +159,10 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
     // loudly but continue so `doctor` / `profile use` can repair the state.
     const wouldRelyOnPointer = !flag && !env;
     if (wouldRelyOnPointer && name === 'serve') {
-      console.error(
+      fail(
         `Active profile pointer ${desc}. Refusing to start MCP server with ambiguous profile. Run \`noxctl doctor\` or set NOXCTL_PROFILE explicitly.`,
+        2,
       );
-      process.exit(2);
     }
     process.stderr.write(`[warning: active-profile pointer ${desc}; ignoring]\n`);
   }
@@ -171,8 +171,7 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
     resolvedProfileInfo = resolveProfile({ flag, env, pointer });
   } catch (err) {
     if (err instanceof InvalidProfileNameError) {
-      console.error(err.message);
-      process.exit(2);
+      fail(err.message, 2);
     }
     throw err;
   }
@@ -263,8 +262,7 @@ async function confirmMutation(
 
 function requireDarwin(): void {
   if (process.platform !== 'darwin') {
-    console.error('The dedicated YubiKey-locked keychain is a macOS-only feature.');
-    process.exit(2);
+    fail('The dedicated YubiKey-locked keychain is a macOS-only feature.', 2);
   }
 }
 

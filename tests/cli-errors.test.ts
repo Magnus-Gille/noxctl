@@ -150,3 +150,22 @@ describe('Commander parse errors honor -o json', () => {
     expect(res.stderr.split('required option').length - 1).toBe(1);
   });
 });
+
+describe('global --profile validation honors -o json', () => {
+  // The preAction hook validates --profile before any data command runs, so a
+  // scripted `-o json` caller must still get a structured envelope.
+  it('rejects an invalid profile with a JSON envelope in json mode', () => {
+    const res = run(['-o', 'json', '--profile', '../evil', 'customers', 'list']);
+    expect(res.status).toBe(2);
+    const parsed = JSON.parse(res.stderr.trim()) as { error: { message: string; source: string } };
+    expect(parsed.error.source).toBe('noxctl');
+    expect(parsed.error.message).toMatch(/invalid profile name/i);
+  });
+
+  it('rejects an invalid profile with plain text in table mode', () => {
+    const res = run(['-o', 'table', '--profile', '../evil', 'customers', 'list']);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toMatch(/invalid profile name/i);
+    expect(() => JSON.parse(res.stderr.trim())).toThrow();
+  });
+});
