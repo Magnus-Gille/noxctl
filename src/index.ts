@@ -28,7 +28,7 @@ import { registerAnalyticsTools } from './tools/analytics.js';
 export function createServer(): McpServer {
   const server = new McpServer({
     name: 'fortnox-mcp',
-    version: '0.2.0',
+    version: '0.3.0',
   });
 
   registerCustomerTools(server);
