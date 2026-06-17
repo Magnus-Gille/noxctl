@@ -393,7 +393,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 |-----|----------|-------------|
 | `noxctl employees list` | `fortnox_list_employees` | List employees |
 | `noxctl employees get <employeeId>` | `fortnox_get_employee` | Get a single employee |
-| `noxctl employees create --first-name <n> --last-name <n> --email <e> --employment-form <f> --personel-type <t> --salary-form <f>` | `fortnox_create_employee` | Create an employee (mutation). Set employment-form/personel-type/salary-form so Fortnox can assign an employment agreement |
+| `noxctl employees create --first-name <n> --last-name <n> --email <e> [--employment-form <f> --personel-type <t> --salary-form <f>]` | `fortnox_create_employee` | Create an employee (mutation). `--employment-form`/`--personel-type`/`--salary-form` are required *unless* the company has a default employment agreement — otherwise Fortnox rejects with a `ftgavtalid` error |
 | `noxctl employees update <employeeId> --input <file>` | `fortnox_update_employee` | Update an employee (mutation) |
 | `noxctl salary-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_salarytransactions` | List salary transactions |
 | `noxctl salary-transactions get <salaryRow>` | `fortnox_get_salarytransaction` | Get a single salary transaction |

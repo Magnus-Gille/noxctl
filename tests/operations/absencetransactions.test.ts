@@ -86,13 +86,22 @@ describe('absence transaction operations', () => {
       const { createAbsenceTransaction } =
         await import('../../src/operations/absencetransactions.js');
 
-      await createAbsenceTransaction({ EmployeeId: '1', CauseCode: 'VAB', Date: '2024-01-15' });
+      await createAbsenceTransaction({
+        EmployeeId: '1',
+        CauseCode: 'VAB',
+        Date: '2024-01-15',
+        Hours: 8,
+        Extent: 50,
+      });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[1].method).toBe('POST');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.AbsenceTransaction.EmployeeId).toBe('1');
       expect(body.AbsenceTransaction.CauseCode).toBe('VAB');
+      // Hours/Extent are numbers in the Fortnox spec, not strings.
+      expect(body.AbsenceTransaction.Hours).toBe(8);
+      expect(body.AbsenceTransaction.Extent).toBe(50);
     });
 
     it('unwraps the response', async () => {

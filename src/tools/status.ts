@@ -84,6 +84,7 @@ export function registerStatusTools(server: McpServer): void {
         article: 'articles?limit=1',
         customer: 'customers?limit=1',
         invoice: 'invoices?limit=1',
+        payment: 'invoicepayments?limit=1',
         supplier: 'suppliers?limit=1',
         supplierinvoice: 'supplierinvoices?limit=1',
         bookkeeping: 'vouchers?limit=1',

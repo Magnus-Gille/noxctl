@@ -93,6 +93,8 @@ describe('absence transaction tools', () => {
           EmployeeId: '1',
           CauseCode: 'VAB',
           Date: '2024-01-15',
+          Hours: 8,
+          Extent: 50,
           confirm: true,
         },
       });
@@ -102,6 +104,26 @@ describe('absence transaction tools', () => {
       const body = JSON.parse(fetchCall[1].body);
       expect(body.AbsenceTransaction.EmployeeId).toBe('1');
       expect(body.AbsenceTransaction.CauseCode).toBe('VAB');
+      // Hours/Extent are numbers in the Fortnox spec, not strings.
+      expect(body.AbsenceTransaction.Hours).toBe(8);
+      expect(body.AbsenceTransaction.Extent).toBe(50);
+      expect(typeof body.AbsenceTransaction.Hours).toBe('number');
+    });
+
+    it('rejects a string Hours (spec requires a number)', async () => {
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_absencetransaction',
+        arguments: {
+          EmployeeId: '1',
+          CauseCode: 'VAB',
+          Date: '2024-01-15',
+          Hours: '8',
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
     });
 
     it('supports dry run', async () => {
