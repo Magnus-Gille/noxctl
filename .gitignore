@@ -1,5 +1,6 @@
 node_modules/
 dist/
+__pycache__/
 *.js.map
 *.d.ts.map
 .env
@@ -9,3 +10,8 @@ credentials.dpapi
 PLAN.md
 .claude/
 debate/
+
+# Fortnox's OpenAPI spec is its "call structure" (Developer Agreement cl. 6.1/6.3)
+# — not redistributed in this repo. Fetched on demand into this local cache by
+# scripts/check-api-changes.sh; drift is tracked via api-spec/openapi-fingerprint.json.
+api-spec/openapi.json

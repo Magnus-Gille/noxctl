@@ -1,6 +1,6 @@
 {
   "name": "noxctl",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "CLI and MCP server for Fortnox accounting — invoices, customers, bookkeeping, and VAT",
   "type": "module",
   "bin": {
@@ -18,6 +18,7 @@
     "lint": "eslint src/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
+    "check:api": "bash scripts/check-api-changes.sh",
     "prepublishOnly": "npm run build",
     "prepare": "husky"
   },

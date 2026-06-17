@@ -13,8 +13,9 @@ Fortnox responses can contain:
 - organisation numbers or VAT numbers
 - invoice text, voucher text, and bookkeeping metadata
 - company information and settings
+- **employee personal data (payroll/Lön commands):** names, Swedish personal identity numbers (personnummer), bank/clearing numbers, salaries and pay rates, and attendance/absence records
 
-The summarized default output reduces exposure, but it does not eliminate it.
+The summarized default output reduces exposure, but it does not eliminate it. The payroll endpoints handle special-category-adjacent personal data — treat employee data with particular care (GDPR), and prefer keeping `includeRaw` off when payroll resources are involved.
 
 ## `includeRaw`
 
