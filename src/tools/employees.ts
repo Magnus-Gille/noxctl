@@ -95,7 +95,7 @@ export function registerEmployeeTools(server: McpServer): void {
 
   server.tool(
     'fortnox_create_employee',
-    'Skapa en ny anställd i Fortnox (kräver Lön-behörigheten). FirstName, LastName och Email krävs.',
+    'Skapa en ny anställd i Fortnox (kräver Lön-behörigheten). FirstName, LastName och Email krävs. Tips: ange även EmploymentForm, PersonelType och SalaryForm — annars kan Fortnox inte tilldela ett företagsavtal (felet "ftgavtalid").',
     {
       EmployeeId: z
         .string()

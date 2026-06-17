@@ -2769,10 +2769,21 @@ employees
 
 employees
   .command('create')
-  .description('Create an employee')
+  .description(
+    'Create an employee. Tip: set --employment-form, --personel-type and --salary-form, otherwise Fortnox cannot assign an employment agreement (företagsavtal).',
+  )
   .requiredOption('--first-name <name>', 'First name')
   .requiredOption('--last-name <name>', 'Last name')
   .requiredOption('--email <email>', 'Email address')
+  .option(
+    '--employment-form <form>',
+    'Employment form: TV, PRO, TID, SVT, VIK, PRJ, PRA, FER, SES, NEJ',
+  )
+  .option('--personel-type <type>', 'Personnel type: TJM (tjänsteman) or ARB (arbetare)')
+  .option('--salary-form <form>', 'Salary form: MAN (monthly) or TIM (hourly)')
+  .option('--employment-date <date>', 'Employment start date (YYYY-MM-DD)')
+  .option('--monthly-salary <amount>', 'Monthly salary')
+  .option('--hourly-pay <amount>', 'Hourly pay')
   .option('--input <file>', 'Additional employee data as JSON file (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
@@ -2789,6 +2800,12 @@ employees
       LastName: opts.lastName,
       Email: opts.email,
     };
+    if (opts.employmentForm !== undefined) params.EmploymentForm = opts.employmentForm;
+    if (opts.personelType !== undefined) params.PersonelType = opts.personelType;
+    if (opts.salaryForm !== undefined) params.SalaryForm = opts.salaryForm;
+    if (opts.employmentDate !== undefined) params.EmploymentDate = opts.employmentDate;
+    if (opts.monthlySalary !== undefined) params.MonthlySalary = opts.monthlySalary;
+    if (opts.hourlyPay !== undefined) params.HourlyPay = opts.hourlyPay;
     if (
       !(await confirmMutation(`Create employee "${opts.firstName} ${opts.lastName}"`, opts, {
         Employee: params,
