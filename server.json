@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.magnus-gille/noxctl",
+  "description": "CLI and MCP server for Fortnox accounting — invoices, customers, bookkeeping, VAT, and payroll (Lön)",
+  "repository": {
+    "url": "https://github.com/Magnus-Gille/noxctl",
+    "source": "github"
+  },
+  "version": "0.4.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "noxctl",
+      "version": "0.4.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "serve"
+        }
+      ],
+      "environmentVariables": [
+        {
+          "name": "NOXCTL_PROFILE",
+          "description": "Optional Fortnox profile to bind. Authenticate first with `noxctl init` (credentials are stored in the OS keychain, not passed as env vars). Defaults to the 'default' profile.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
