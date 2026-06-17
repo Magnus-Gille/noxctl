@@ -1,7 +1,7 @@
 # Project Status
 
 **Last session:** 2026-06-17
-**Branch:** `feat/payroll-salary-integration` — payroll built & committed (not pushed/PR'd); `main` is **0.3.0 shipped**
+**Branch:** `feat/payroll-salary-integration` — pushed, **PR #49 open** (awaiting review/merge); `main` is **0.3.0 shipped**
 
 ## Unreleased — Payroll (Lön) integration ⏳ (branch `feat/payroll-salary-integration`, commit `bfe84c4`)
 
@@ -22,9 +22,9 @@ Re-authed demo with `--with-salary`, then ran the full round-trip against the re
 - Ergonomics added (commit `47d78d6`): `employees create` flags for the agreement fields + a targeted hint on the ftgavtalid error. Test employee left inactivated on demo (Employee API has no hard DELETE).
 - **678 unit tests**, lint + format + build green.
 
-### Payroll — before release
+### Payroll — PR #49 open
+- Merge PR #49, then cut a release (include the opt-in `salary` scope re-init note in the release notes, like #37's inbox/connectfile).
 - Optional: find a valid löneart on a configured Lön company to prove a green salary-transaction create.
-- Then push branch + open PR + cut a release.
 
 ## 0.3.0 — SHIPPED ✅
 
