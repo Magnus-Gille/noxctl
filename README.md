@@ -12,9 +12,9 @@ noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 
 ## Status
 
-noxctl is an independent open-source project. It is not affiliated with, endorsed by, or certified by Fortnox AB.
+noxctl is an independent, **unofficial** open-source project. It is **not affiliated with, endorsed by, or certified by Fortnox AB.**
 
-Use it with your own Fortnox account and developer credentials. You are responsible for complying with Fortnox terms, Swedish bookkeeping/tax rules, and your own privacy obligations.
+Use it with your own Fortnox account and developer credentials. **It is provided "as is", with no warranty and no liability — the author takes no responsibility for anything you do with it; you use it entirely at your own risk and are responsible for complying with Fortnox terms, Swedish bookkeeping/tax/payroll rules, and your own privacy obligations.** See the full [Disclaimer](#disclaimer).
 
 ## Prerequisites
 
@@ -26,6 +26,16 @@ Use it with your own Fortnox account and developer credentials. You are responsi
 Fortnox product plans, API activation requirements, and integration licensing can change. Verify the current Fortnox requirements before publishing or relying on this setup for business-critical work.
 
 ## Setup
+
+### How it connects to Fortnox
+
+noxctl is a thin client over the **Fortnox REST API (v3)** at `https://api.fortnox.se/3`. It uses a **bring-your-own-app** model — there is no shared backend and no middleman:
+
+1. **You** create a Fortnox developer app (integration) and pick its permissions (scopes).
+2. **You** authorize that app against your own Fortnox company over OAuth2 (`noxctl init`).
+3. noxctl stores the resulting token in your OS keychain and calls the Fortnox API **directly from your machine** — nothing is proxied through any server operated by the author.
+
+So you control the credentials, the scopes, and which company is connected end to end. The three steps below set this up.
 
 ### 1. Create a Fortnox app
 
@@ -590,15 +600,17 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## Disclaimer
 
-noxctl is an independent open-source project — not affiliated with, endorsed by, or certified by Fortnox AB.
+noxctl is an independent, **unofficial** open-source project — **not affiliated with, endorsed by, or certified by Fortnox AB.** "Fortnox" is a trademark of Fortnox AB, used here only to describe interoperability.
 
-**You are responsible for your own bookkeeping.** Under Swedish law (Bokföringslagen), the company owner or board bears full responsibility for the correctness of all accounting records, regardless of what tools are used. noxctl is an instrument that executes your instructions — review entries before confirming, especially when using `--yes` or `confirm: true`.
+**No warranty, no liability.** noxctl is provided "as is", without warranty of any kind, express or implied. The author and contributors accept **no responsibility and no liability whatsoever** for anything arising from its use — including, without limitation: incorrect, incomplete, or lost bookkeeping; erroneous invoices, payments, payroll, or tax filings; exposure or loss of data; service downtime; financial loss; or any breach of Fortnox's terms. **You use it entirely at your own risk.** (See the MIT License below — the same limitation applies in full.)
 
-**Privacy note:** When using noxctl with AI assistants, customer and supplier data may enter third-party AI systems. Use `includeRaw: false` unless full payloads are necessary, and make sure your use complies with GDPR, processor agreements, and any required transfer assessments.
+**You are responsible for everything you do with it.** Under Swedish law (Bokföringslagen), the company owner or board bears full responsibility for the correctness of all accounting and payroll records, regardless of the tools used. noxctl only executes the instructions you give it — review entries before confirming, especially with `--yes` / `confirm: true`, and reconcile against Fortnox and your own records.
+
+**Privacy / personal data.** noxctl can move accounting *and personal* data out of Fortnox — customer/supplier details and, via the payroll commands, employee personal data such as Swedish personal identity numbers (personnummer), salaries, and absence records. When using it with AI assistants or MCP hosts, that data may enter third-party systems. Keep `includeRaw: false` unless full payloads are necessary, and ensure your use complies with GDPR, processor/data-processing agreements, and any required transfer assessments. See `PRIVACY.md`.
 
 **Tax note:** The VAT report is an informational summary only. Reconcile it against Fortnox and your accounting records before submitting anything to Skatteverket.
 
-**Fortnox API access** requires your own developer credentials and Fortnox setup. You must comply with the applicable Fortnox terms. noxctl does not redistribute any Fortnox-owned code or data.
+**Fortnox API access** requires your own Fortnox account, developer app, and credentials. You must comply with the applicable Fortnox developer terms. noxctl ships no shared credentials, redistributes no Fortnox-owned code or data, and routes nothing through any server operated by the author — it calls the Fortnox API directly from your machine.
 
 ## License
 

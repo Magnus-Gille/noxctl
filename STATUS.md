@@ -1,9 +1,13 @@
 # Project Status
 
 **Last session:** 2026-06-17
-**Branch:** `feat/payroll-salary-integration` — pushed, **PR #49 open** (awaiting review/merge); `main` is **0.3.0 shipped**
+**Branch:** `release/0.4.0` — prepping the 0.4.0 release PR. Payroll (Lön) **merged to `main`** via PR #49 (squash `a9d3e14`); npm latest is still `0.3.0`.
 
-## Unreleased — Payroll (Lön) integration ⏳ (branch `feat/payroll-salary-integration`, commit `bfe84c4`)
+## 0.4.0 release (in progress)
+
+Version bumped 0.3.0 → 0.4.0 (package.json, cli.ts, index.ts), CHANGELOG `[Unreleased]` → `[0.4.0]`, README disclaimer/integration + PRIVACY payroll-data updated. After this PR merges: `npm publish` + GitHub release `v0.4.0`. Release notes MUST tell users the Lön scope is opt-in → re-run `noxctl init --with-salary`.
+
+## Shipped in 0.4.0 — Payroll (Lön) integration ✅ (merged via PR #49)
 
 Full coverage of the Fortnox salary API — the endpoints were in the spec all along; the unlock was Fortnox now exposing the **Lön** Behörighet to integrations.
 
