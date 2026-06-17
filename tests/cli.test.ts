@@ -16,6 +16,65 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('customers');
     expect(output).toContain('company');
     expect(output).toContain('vouchers');
+    expect(output).toContain('employees');
+    expect(output).toContain('salary-transactions');
+    expect(output).toContain('attendance-transactions');
+    expect(output).toContain('absence-transactions');
+    expect(output).toContain('schedule-times');
+  });
+
+  it('noxctl employees --help shows employee subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'employees', '--help'], execOpts) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('update');
+  });
+
+  it('noxctl salary-transactions --help shows subcommands', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'salary-transactions', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('get');
+    expect(output).toContain('create');
+    expect(output).toContain('delete');
+  });
+
+  it('noxctl attendance-transactions --help shows subcommands', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'attendance-transactions', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('create');
+    expect(output).toContain('delete');
+  });
+
+  it('noxctl absence-transactions --help shows subcommands', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'absence-transactions', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('list');
+    expect(output).toContain('create');
+    expect(output).toContain('delete');
+  });
+
+  it('noxctl schedule-times --help shows subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'schedule-times', '--help'], execOpts) as string;
+    expect(output).toContain('get');
+    expect(output).toContain('update');
+    expect(output).toContain('reset-day');
+  });
+
+  it('noxctl init --help shows the --with-salary flag', () => {
+    const output = execFileSync('node', [CLI_PATH, 'init', '--help'], execOpts) as string;
+    expect(output).toContain('--with-salary');
   });
 
   it('noxctl invoices --help shows invoice subcommands', () => {

@@ -189,6 +189,26 @@ describe('fortnox-client', () => {
       }
     });
 
+    it('includes employment-agreement hint when employee create fails on ftgavtalid', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: () =>
+          Promise.resolve({
+            ErrorInformation: { message: 'Värdet kan inte vara null. (ftgavtalid)', code: 0 },
+          }),
+      });
+
+      try {
+        await fortnoxRequest('employees', { method: 'POST', body: { Employee: {} } });
+        expect.unreachable();
+      } catch (err) {
+        const e = err as FortnoxApiError;
+        expect(e.hint).toContain('EmploymentForm');
+        expect(e.message).toContain('Hint:');
+      }
+    });
+
     it('includes server error hint for 500', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,

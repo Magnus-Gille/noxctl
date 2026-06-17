@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Payroll / Lön integration** — coverage for the Fortnox salary API, now that the **Lön** permission is grantable to integrations:
+  - **Employees** — `noxctl employees list|get|create|update` and `fortnox_list_employees` / `fortnox_get_employee` / `fortnox_create_employee` / `fortnox_update_employee`.
+  - **Salary transactions** — `noxctl salary-transactions list|get|create|delete` and matching MCP tools (filterable by `--employee` / `--date`).
+  - **Attendance transactions** (närvaro) — `noxctl attendance-transactions list|get|create|delete` and MCP tools.
+  - **Absence transactions** (frånvaro) — `noxctl absence-transactions list|get|create|delete` and MCP tools.
+  - **Schedule times** (schematider) — `noxctl schedule-times get|update|reset-day` and MCP tools.
+- **Opt-in `salary` scope** — the Lön scope is **not** requested by default (it would break `init` for apps without the Lön permission). Enable it with `noxctl init --with-salary` (or `FORTNOX_WITH_SALARY=1` for non-interactive runs). The granted scope set is persisted per-profile so the client-credentials refresh re-requests it, and `noxctl doctor` / `fortnox_status` probe it only when it was granted.
+
 ## [0.3.0] - 2026-06-16
 
 ### Added

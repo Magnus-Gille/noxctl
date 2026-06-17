@@ -77,13 +77,14 @@ export function registerStatusTools(server: McpServer): void {
       }
 
       // 7. Scope validation
-      const { SCOPES } = await import('../auth.js');
+      const { effectiveScopes } = await import('../auth.js');
       const { fortnoxRequest, FortnoxApiError } = await import('../fortnox-client.js');
 
       const scopeEndpoints: Record<string, string> = {
         article: 'articles?limit=1',
         customer: 'customers?limit=1',
         invoice: 'invoices?limit=1',
+        payment: 'invoicepayments?limit=1',
         supplier: 'suppliers?limit=1',
         supplierinvoice: 'supplierinvoices?limit=1',
         bookkeeping: 'vouchers?limit=1',
@@ -91,9 +92,10 @@ export function registerStatusTools(server: McpServer): void {
         settings: 'settings/company',
         inbox: 'inbox',
         connectfile: 'voucherfileconnections?limit=1',
+        salary: 'employees?limit=1',
       };
 
-      const required = SCOPES.split(' ');
+      const required = effectiveScopes(creds).split(' ');
       const missing: string[] = [];
 
       for (const scope of required) {

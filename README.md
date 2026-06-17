@@ -52,8 +52,11 @@ Fortnox product plans, API activation requirements, and integration licensing ca
    | Projekt              | Project             | Projects                                       |
    | Kostnadsställe       | Cost Center         | Cost centers                                   |
    | Priser               | Price               | Price lists, prices                            |
+   | Lön                  | Salary              | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
 
    Enable every scope for the resources you intend to use. Missing scopes surface as `403 Forbidden` with a hint pointing at the right one.
+
+   **Payroll (Lön) is opt-in.** The `salary` scope is *not* requested by default, because requesting a scope your app hasn't been granted breaks authorization. To use the payroll commands, enable the **Lön** permission above, then authorize with `noxctl init --with-salary` (or set `FORTNOX_WITH_SALARY=1` for non-interactive setups). The granted scope set is remembered per profile, so token refreshes keep working.
 
 5. Save the integration
 
@@ -381,6 +384,32 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl financial-years list [--date <date>]` | `fortnox_list_financialyears` | List financial years (räkenskapsår) |
 | `noxctl financial-years get <id>` | `fortnox_get_financialyear` | Get a single financial year |
 | `noxctl financial-years locked-period` | `fortnox_get_lockedperiod` | Show through which date bookkeeping is locked |
+
+### Payroll (Lön)
+
+> **Requires the `salary` scope**, which is **opt-in**. Enable the **Lön** permission on your Fortnox app, then run `noxctl init --with-salary` (or set `FORTNOX_WITH_SALARY=1` in non-interactive setups). Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
+
+| CLI | MCP tool | Description |
+|-----|----------|-------------|
+| `noxctl employees list` | `fortnox_list_employees` | List employees |
+| `noxctl employees get <employeeId>` | `fortnox_get_employee` | Get a single employee |
+| `noxctl employees create --first-name <n> --last-name <n> --email <e> [--employment-form <f> --personel-type <t> --salary-form <f>]` | `fortnox_create_employee` | Create an employee (mutation). `--employment-form`/`--personel-type`/`--salary-form` are required *unless* the company has a default employment agreement — otherwise Fortnox rejects with a `ftgavtalid` error |
+| `noxctl employees update <employeeId> --input <file>` | `fortnox_update_employee` | Update an employee (mutation) |
+| `noxctl salary-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_salarytransactions` | List salary transactions |
+| `noxctl salary-transactions get <salaryRow>` | `fortnox_get_salarytransaction` | Get a single salary transaction |
+| `noxctl salary-transactions create --employee <id> --salary-code <code> --date <date> [--amount <n>]` | `fortnox_create_salarytransaction` | Create a salary transaction (mutation) |
+| `noxctl salary-transactions delete <salaryRow>` | `fortnox_delete_salarytransaction` | Delete a salary transaction (mutation) |
+| `noxctl attendance-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_attendancetransactions` | List attendance (närvaro) transactions |
+| `noxctl attendance-transactions get <id>` | `fortnox_get_attendancetransaction` | Get a single attendance transaction |
+| `noxctl attendance-transactions create --employee <id> --cause-code <code> --date <date> [--hours <n>]` | `fortnox_create_attendancetransaction` | Create an attendance transaction (mutation) |
+| `noxctl attendance-transactions delete <id>` | `fortnox_delete_attendancetransaction` | Delete an attendance transaction (mutation) |
+| `noxctl absence-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_absencetransactions` | List absence (frånvaro) transactions |
+| `noxctl absence-transactions get <id>` | `fortnox_get_absencetransaction` | Get a single absence transaction |
+| `noxctl absence-transactions create --employee <id> --cause-code <code> --date <date> [--hours <n>] [--extent <n>]` | `fortnox_create_absencetransaction` | Create an absence transaction (mutation) |
+| `noxctl absence-transactions delete <id>` | `fortnox_delete_absencetransaction` | Delete an absence transaction (mutation) |
+| `noxctl schedule-times get <employeeId> <date>` | `fortnox_get_scheduletime` | Get the schedule for an employee on a date |
+| `noxctl schedule-times update <employeeId> <date> --input <file>` | `fortnox_update_scheduletime` | Update a day's schedule (mutation) |
+| `noxctl schedule-times reset-day <employeeId> <date> --input <file>` | `fortnox_reset_scheduletime_day` | Update a day's schedule and reset the day (mutation) |
 
 ### Analytics and dashboard
 

@@ -464,3 +464,110 @@ export const voucherAttachmentColumns: Column[] = [
   { key: 'fileId', header: 'File ID', width: 36 },
   { key: 'voucherYear', header: 'Year', width: 5, align: 'right' },
 ];
+
+// --- Payroll / Lön views (target ≤80 cols) ---
+
+// Employees
+export const employeeListColumns: Column[] = [
+  { key: 'EmployeeId', header: 'Emp #', width: 12 },
+  { key: 'FullName', header: 'Name', width: 26 },
+  { key: 'JobTitle', header: 'Title', width: 20 },
+  { key: 'Inactive', header: 'Inactive', width: 8 },
+];
+
+export const employeeDetailColumns: Column[] = [
+  { key: 'EmployeeId', header: 'Employee #', width: 15 },
+  { key: 'FirstName', header: 'First Name', width: 20 },
+  { key: 'LastName', header: 'Last Name', width: 20 },
+  { key: 'FullName', header: 'Full Name', width: 30 },
+  { key: 'Email', header: 'Email', width: 30 },
+  { key: 'PersonalIdentityNumber', header: 'Personnr', width: 14 },
+  { key: 'JobTitle', header: 'Job Title', width: 30 },
+  { key: 'EmploymentDate', header: 'Employed', width: 10 },
+  { key: 'EmployedTo', header: 'Employed To', width: 10 },
+  { key: 'EmploymentForm', header: 'Form', width: 6 },
+  { key: 'PersonelType', header: 'Type', width: 6 },
+  { key: 'SalaryForm', header: 'Salary Form', width: 6 },
+  { key: 'MonthlySalary', header: 'Monthly', width: 12, align: 'right' },
+  { key: 'HourlyPay', header: 'Hourly', width: 12, align: 'right' },
+  { key: 'TaxTable', header: 'Tax Table', width: 10 },
+  { key: 'TaxColumn', header: 'Tax Col', width: 7, align: 'right' },
+  { key: 'Inactive', header: 'Inactive', width: 8 },
+];
+
+// Salary transactions
+export const salaryTransactionListColumns: Column[] = [
+  { key: 'SalaryRow', header: 'Row', width: 8, align: 'right' },
+  { key: 'EmployeeId', header: 'Emp #', width: 12 },
+  { key: 'SalaryCode', header: 'Code', width: 10 },
+  { key: 'Date', header: 'Date', width: 12 },
+  { key: 'Amount', header: 'Amount', width: 12, align: 'right' },
+];
+
+export const salaryTransactionDetailColumns: Column[] = [
+  { key: 'SalaryRow', header: 'Row', width: 10, align: 'right' },
+  { key: 'EmployeeId', header: 'Employee #', width: 15 },
+  { key: 'SalaryCode', header: 'Salary Code', width: 12 },
+  { key: 'Date', header: 'Date', width: 12 },
+  { key: 'Amount', header: 'Amount', width: 12, align: 'right' },
+  { key: 'Number', header: 'Number', width: 12 },
+  { key: 'CostCenter', header: 'Cost Center', width: 12 },
+  { key: 'Project', header: 'Project', width: 12 },
+  { key: 'Expense', header: 'Expense', width: 8 },
+  { key: 'TextRow', header: 'Text', width: 40 },
+  { key: 'Total', header: 'Total', width: 12, align: 'right' },
+  { key: 'VAT', header: 'VAT', width: 10, align: 'right' },
+];
+
+// Attendance transactions
+export const attendanceTransactionListColumns: Column[] = [
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'EmployeeId', header: 'Emp #', width: 12 },
+  { key: 'CauseCode', header: 'Cause', width: 6 },
+  { key: 'Date', header: 'Date', width: 10 },
+  { key: 'Hours', header: 'Hours', width: 6, align: 'right' },
+];
+
+export const attendanceTransactionDetailColumns: Column[] = [
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'EmployeeId', header: 'Employee #', width: 15 },
+  { key: 'CauseCode', header: 'Cause Code', width: 10 },
+  { key: 'Date', header: 'Date', width: 12 },
+  { key: 'Hours', header: 'Hours', width: 10, align: 'right' },
+  { key: 'CostCenter', header: 'Cost Center', width: 12 },
+  { key: 'Project', header: 'Project', width: 12 },
+];
+
+// Absence transactions
+export const absenceTransactionListColumns: Column[] = [
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'EmployeeId', header: 'Emp #', width: 12 },
+  { key: 'CauseCode', header: 'Cause', width: 6 },
+  { key: 'Date', header: 'Date', width: 10 },
+  { key: 'Hours', header: 'Hours', width: 6, align: 'right' },
+];
+
+export const absenceTransactionDetailColumns: Column[] = [
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'EmployeeId', header: 'Employee #', width: 15 },
+  { key: 'CauseCode', header: 'Cause Code', width: 10 },
+  { key: 'Date', header: 'Date', width: 12 },
+  { key: 'Hours', header: 'Hours', width: 10, align: 'right' },
+  { key: 'Extent', header: 'Extent', width: 8, align: 'right' },
+  { key: 'HolidayEntitling', header: 'Holiday', width: 8 },
+  { key: 'CostCenter', header: 'Cost Center', width: 12 },
+  { key: 'Project', header: 'Project', width: 12 },
+];
+
+// Schedule times
+export const scheduleTimeDetailColumns: Column[] = [
+  { key: 'EmployeeId', header: 'Employee #', width: 15 },
+  { key: 'Date', header: 'Date', width: 12 },
+  { key: 'Hours', header: 'Hours', width: 10, align: 'right' },
+  { key: 'ScheduleId', header: 'Schedule', width: 12 },
+  { key: 'IWH1', header: 'IWH1', width: 8 },
+  { key: 'IWH2', header: 'IWH2', width: 8 },
+  { key: 'IWH3', header: 'IWH3', width: 8 },
+  { key: 'IWH4', header: 'IWH4', width: 8 },
+  { key: 'IWH5', header: 'IWH5', width: 8 },
+];

@@ -24,6 +24,11 @@ import { registerPriceListTools } from './tools/pricelists.js';
 import { registerFinancialYearTools } from './tools/financial-years.js';
 import { registerContractTools } from './tools/contracts.js';
 import { registerAnalyticsTools } from './tools/analytics.js';
+import { registerEmployeeTools } from './tools/employees.js';
+import { registerSalaryTransactionTools } from './tools/salarytransactions.js';
+import { registerAttendanceTransactionTools } from './tools/attendancetransactions.js';
+import { registerAbsenceTransactionTools } from './tools/absencetransactions.js';
+import { registerScheduleTimeTools } from './tools/scheduletimes.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -52,6 +57,11 @@ export function createServer(): McpServer {
   registerFinancialYearTools(server);
   registerContractTools(server);
   registerAnalyticsTools(server);
+  registerEmployeeTools(server);
+  registerSalaryTransactionTools(server);
+  registerAttendanceTransactionTools(server);
+  registerAbsenceTransactionTools(server);
+  registerScheduleTimeTools(server);
 
   return server;
 }

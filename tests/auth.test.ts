@@ -25,6 +25,8 @@ import {
   fetchCompanyNameSafe,
   buildAuthorizationUrl,
   escapeHtml,
+  SCOPES,
+  SALARY_SCOPE,
   setResolvedProfile,
   getResolvedProfile,
   CREDENTIAL_SCHEMA_VERSION,
@@ -312,6 +314,36 @@ describe('auth', () => {
       await expect(getTokenViaClientCredentials(mockCredentials)).rejects.toThrow(
         'No tenant_id available',
       );
+    });
+
+    it('requests the credential-recorded scopes (opted-in salary), not the default SCOPES', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'cc', expires_in: 3600 }),
+      });
+
+      const granted = `${SCOPES} ${SALARY_SCOPE}`;
+      await getTokenViaClientCredentials({ ...mockCredentialsWithTenant, scopes: granted });
+
+      const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      const body = new URLSearchParams((call[1] as { body: string }).body);
+      expect(body.get('grant_type')).toBe('client_credentials');
+      expect(body.get('scope')).toBe(granted);
+      expect(body.get('scope')).toContain('salary');
+    });
+
+    it('falls back to the default SCOPES when the credential has no recorded scopes', async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'cc', expires_in: 3600 }),
+      });
+
+      await getTokenViaClientCredentials(mockCredentialsWithTenant);
+
+      const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
+      const body = new URLSearchParams((call[1] as { body: string }).body);
+      expect(body.get('scope')).toBe(SCOPES);
+      expect(body.get('scope')).not.toContain('salary');
     });
 
     it('throws on failed client credentials request', async () => {

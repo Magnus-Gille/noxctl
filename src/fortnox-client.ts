@@ -51,6 +51,14 @@ export class FortnoxApiError extends Error {
 }
 
 function getErrorHint(statusCode: number, message: string, endpoint?: string): string | undefined {
+  // Payroll: creating an employee fails with a null "ftgavtalid" when Fortnox
+  // can't assign a company/employment agreement — which happens when
+  // EmploymentForm / PersonelType / SalaryForm are omitted. Message-based (the
+  // status is a generic 400), so check it before the status switch.
+  if (/ftgavtal/i.test(message)) {
+    return 'Fortnox could not assign an employment agreement (företagsavtal). On employee create, also set EmploymentForm, PersonelType and SalaryForm — or configure a default agreement in Fortnox Lön.';
+  }
+
   switch (statusCode) {
     case 401:
       return 'Authentication failed. Try `noxctl init` to re-authenticate.';
@@ -98,6 +106,11 @@ function endpointToScope(endpoint: string): string | undefined {
     inbox: 'inbox',
     archive: 'archive',
     voucherfileconnections: 'connectfile',
+    employees: 'salary',
+    salarytransactions: 'salary',
+    attendancetransactions: 'salary',
+    absencetransactions: 'salary',
+    scheduletimes: 'salary',
   };
   for (const [prefix, scope] of Object.entries(mapping)) {
     if (path.startsWith(prefix)) return scope;

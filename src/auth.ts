@@ -13,6 +13,21 @@ const CALLBACK_HOST = '127.0.0.1';
 export const SCOPES =
   'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
 
+// The "Lön" (salary/payroll) scope. Opt-in only: requesting it at authorize
+// time fails for users whose Fortnox app integration does not have the Lön
+// permission enabled, so it is never part of the default SCOPES. `noxctl init
+// --with-salary` (or FORTNOX_WITH_SALARY=1) appends it and the granted scope
+// string is persisted per-profile (see FortnoxCredentials.scopes) so the
+// client-credentials refresh re-requests the same set.
+export const SALARY_SCOPE = 'salary';
+
+/** Effective scope string for a profile: the granted set if recorded, else the base SCOPES. */
+export function effectiveScopes(
+  creds: Pick<FortnoxCredentials, 'scopes'> | null | undefined,
+): string {
+  return creds?.scopes ?? SCOPES;
+}
+
 export const CREDENTIAL_SCHEMA_VERSION = 2;
 
 export interface FortnoxCredentials {
@@ -23,6 +38,12 @@ export interface FortnoxCredentials {
   expires_at: number;
   tenant_id?: string;
   company_name?: string;
+  // The OAuth scope string granted at authorization time. Optional for
+  // backward compatibility: credentials written before this field existed (or
+  // by the default `init`) fall back to SCOPES. Recorded so the
+  // client-credentials refresh re-requests exactly what was granted (e.g. the
+  // opt-in `salary` scope).
+  scopes?: string;
   schema_version?: number;
   last_write_epoch?: number;
 }
@@ -164,7 +185,7 @@ export async function getTokenViaClientCredentials(
 
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
-    scope: SCOPES,
+    scope: effectiveScopes(creds),
   });
 
   const response = await fetch(FORTNOX_TOKEN_URL, {
@@ -334,11 +355,12 @@ export function buildAuthorizationUrl(
   config: FortnoxAppConfig,
   redirectUri: string,
   state: string,
+  scopes: string = SCOPES,
 ): string {
   const params = new URLSearchParams({
     client_id: config.clientId,
     redirect_uri: redirectUri,
-    scope: SCOPES,
+    scope: scopes,
     state,
     response_type: 'code',
     access_type: 'offline',
@@ -354,6 +376,7 @@ export function buildAuthorizationUrl(
 export async function runOAuthSetup(
   config: FortnoxAppConfig,
   profile: string = DEFAULT_PROFILE,
+  scopes: string = SCOPES,
 ): Promise<void> {
   const validatedProfile = validateProfileName(profile);
   const PORT = 9876;
@@ -424,6 +447,7 @@ export async function runOAuthSetup(
             expires_at: Date.now() + tokens.expires_in * 1000,
             tenant_id: tenantId,
             company_name: companyName,
+            scopes,
           };
 
           // Preserve the original created_at when re-authenticating an existing
@@ -472,7 +496,7 @@ export async function runOAuthSetup(
     });
 
     server.listen(PORT, CALLBACK_HOST, () => {
-      const authUrl = buildAuthorizationUrl(config, REDIRECT_URI, oauthState);
+      const authUrl = buildAuthorizationUrl(config, REDIRECT_URI, oauthState, scopes);
       console.log('Opening Fortnox login in your browser...');
       openBrowser(authUrl);
       console.log(`\nWaiting for authentication on http://${CALLBACK_HOST}:${PORT}...`);

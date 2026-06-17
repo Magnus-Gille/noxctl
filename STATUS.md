@@ -1,7 +1,30 @@
 # Project Status
 
-**Last session:** 2026-06-16
-**Branch:** `main` — **0.3.0 shipped**
+**Last session:** 2026-06-17
+**Branch:** `feat/payroll-salary-integration` — pushed, **PR #49 open** (awaiting review/merge); `main` is **0.3.0 shipped**
+
+## Unreleased — Payroll (Lön) integration ⏳ (branch `feat/payroll-salary-integration`, commit `bfe84c4`)
+
+Full coverage of the Fortnox salary API — the endpoints were in the spec all along; the unlock was Fortnox now exposing the **Lön** Behörighet to integrations.
+
+- **employees** (list/get/create/update), **salary-transactions**, **attendance-transactions** (närvaro), **absence-transactions** (frånvaro) [each list/get/create/delete], **schedule-times** (get/update/reset-day — composite EmployeeId+Date key). Operations + MCP tools (Swedish) + CLI + views + tests for each.
+- **`salary` scope is OPT-IN** (not in default `SCOPES` — would break `init` for apps lacking the Lön permission). Enable via `noxctl init --with-salary` (or `FORTNOX_WITH_SALARY=1`). Granted scopes persisted per-profile (`FortnoxCredentials.scopes`); client-credentials refresh + `doctor`/`fortnox_status` honor it via `effectiveScopes(creds)`. Existing installs unaffected until they re-init with the flag.
+- Adversarial review caught 1 bug (attendance list dropped the employeeid/date filter on the `all` branch) — fixed red/green.
+- **681 unit tests**, lint + format + build green.
+
+### Payroll — live-verified on demo (2026-06-17) ✅
+Re-authed demo with `--with-salary`, then ran the full round-trip against the real Fortnox API:
+- ✅ `salary` scope authorized (`doctor`: 12/12).
+- ✅ **employees** create / get / update — create needs **EmploymentForm + PersonelType + SalaryForm** so Fortnox can assign a company agreement (otherwise the cryptic 400 `ftgavtalid`). Not a missing API field, not a demo-config gap.
+- ✅ **attendance** + **absence** create → get → delete (clean round-trips).
+- ✅ **schedule-times** get + update (Hours 0→8).
+- ⚠️ **salary-transactions** reaches the API & validates correctly, but needs a valid löneart for the active agreement (no list-lönearter endpoint exists to discover codes). Path proven; not a code bug.
+- Ergonomics added (commit `47d78d6`): `employees create` flags for the agreement fields + a targeted hint on the ftgavtalid error. Test employee left inactivated on demo (Employee API has no hard DELETE).
+- **681 unit tests**, lint + format + build green.
+
+### Payroll — PR #49 open
+- Merge PR #49, then cut a release (include the opt-in `salary` scope re-init note in the release notes, like #37's inbox/connectfile).
+- Optional: find a valid löneart on a configured Lön company to prove a green salary-transaction create.
 
 ## 0.3.0 — SHIPPED ✅
 
@@ -36,5 +59,5 @@ CHANGELOG corrected (PR #46); `v0.3.0` tag re-pointed to include all fixes.
 
 ## Notes
 
-- 590 unit tests, lint + build green.
+- 677 unit tests, lint + build green.
 - Lesson reinforced: mock tests can't validate Fortnox scope / read-only / query-param semantics — **live-verify write features against the demo company before publishing.**
