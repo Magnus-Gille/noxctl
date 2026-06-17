@@ -10,7 +10,7 @@
 
 ## API Drift Detection
 
-Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and diffs against `api-spec/openapi.json`. Opens a GitHub issue labeled `api-drift` when endpoints change. Can also be triggered manually from Actions tab.
+Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and compares it against the committed **fingerprint** (`api-spec/openapi-fingerprint.json` — opaque hashes only; the full spec is not stored in the repo, per Fortnox Developer Agreement cl. 6.1/6.3). Opens a GitHub issue labeled `api-drift` when endpoints/schemas change. Run locally with `npm run check:api`. Can also be triggered manually from the Actions tab.
 
 ## Backlog
 

@@ -610,7 +610,16 @@ noxctl is an independent, **unofficial** open-source project — **not affiliate
 
 **Tax note:** The VAT report is an informational summary only. Reconcile it against Fortnox and your accounting records before submitting anything to Skatteverket.
 
-**Fortnox API access** requires your own Fortnox account, developer app, and credentials. You must comply with the applicable Fortnox developer terms. noxctl ships no shared credentials, redistributes no Fortnox-owned code or data, and routes nothing through any server operated by the author — it calls the Fortnox API directly from your machine.
+**Fortnox API access** requires your own Fortnox account, developer app, and credentials. You must comply with the applicable Fortnox developer terms. noxctl ships no shared credentials, redistributes no Fortnox-owned code or data (not even Fortnox's OpenAPI spec — only opaque drift-detection hashes), and routes nothing through any server operated by the author — it calls the Fortnox API directly from your machine.
+
+### Your responsibilities under Fortnox's terms
+
+When you register a Fortnox developer app to use noxctl, **you** (not the noxctl author) accept Fortnox's [Developer Agreement](https://www.fortnox.se/developer) and are the contracting party. In particular:
+
+- **Eligibility:** registering a Fortnox developer app requires a company registered under Swedish law (Developer Agreement cl. 5.1).
+- **Running it for someone else's Fortnox** (e.g. as a bookkeeper/accountant for a client) makes you a data processor — you must have a data-processing agreement (*personuppgiftsbiträdesavtal*) with that client (cl. 12.3). Using it for your own company does not trigger this.
+- **Sending data to AI/LLMs:** Fortnox does not prohibit it, but you are responsible for the lawfulness of distributing personal data (cl. 13.5 + GDPR) — especially payroll (Lön) and ROT/RUT data, which contain personal identity numbers (personnummer). Ensure a lawful basis and, where required, a data-processing agreement with your AI provider and a valid transfer mechanism for non-EU/EES providers.
+- noxctl is a **client for Fortnox's own API** — a complement, not a replacement — using only documented endpoints and your own credentials.
 
 ## License
 

@@ -42,8 +42,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add api-spec/openapi.json
-          git commit -m "chore: update Fortnox OpenAPI snapshot"
+          git add api-spec/openapi-fingerprint.json
+          git commit -m "chore: update Fortnox API fingerprint"
           git push
 
       - name: Open issue on API change
@@ -67,7 +67,7 @@ jobs:
                 '',
                 'Review the changes and update operations/tools if needed.',
                 '',
-                'Updated snapshot committed to `api-spec/openapi.json`.',
+                'Updated fingerprint committed to `api-spec/openapi-fingerprint.json`. The full Fortnox spec is not stored in the repo — run `npm run check:api` locally to fetch it and inspect the actual diff.',
               ].join('\n'),
               labels: ['api-drift'],
             });

@@ -22,6 +22,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `fortnox_status` (MCP) now probes the `payment` scope, matching the CLI `doctor` command.
 
+### Changed
+
+- **API drift detection no longer commits Fortnox's OpenAPI spec** to the repo. It now stores only opaque per-endpoint/per-schema hashes in `api-spec/openapi-fingerprint.json` (the full spec is fetched on demand into a git-ignored cache), avoiding redistribution of Fortnox's call structure (Developer Agreement cl. 6.1/6.3). New `npm run check:api` script.
+- README/PRIVACY document the user's responsibilities under Fortnox's Developer Agreement (Swedish-company eligibility cl. 5.1, processor/DPA for third-party use cl. 12.3, and personal-data responsibility when sending Lön/ROT-RUT data to AI/LLMs cl. 13.5).
+
 ### Notes
 
 - Absence transaction `Hours` / `Extent` are sent as numbers (matching the Fortnox spec), unlike the string-typed `Hours` on attendance/schedule resources.

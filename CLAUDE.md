@@ -35,8 +35,8 @@ See `TODO.md` for the prioritized backlog and instructions for adding new resour
 - `src/fortnox-client.ts` — HTTP client with rate limiting and retry
 - `src/views.ts` — Column definitions for table output
 - `src/formatter.ts` — Table/JSON output formatting
-- `api-spec/openapi.json` — Fortnox OpenAPI snapshot (for drift detection)
-- `scripts/check-api-changes.sh` — Spec differ (used by CI)
+- `api-spec/openapi-fingerprint.json` — opaque per-endpoint/per-schema hashes of the Fortnox spec, for drift detection. The full spec is **not** committed (it's Fortnox's call structure — Developer Agreement cl. 6.1/6.3); it's fetched on demand into the git-ignored `api-spec/openapi.json` cache.
+- `scripts/check-api-changes.sh` + `scripts/api-fingerprint.py` — drift checker (`npm run check:api`; used by CI)
 
 ## Dev commands
 
