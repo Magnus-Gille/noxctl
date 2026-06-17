@@ -8,7 +8,7 @@
 import { createServer } from '../../src/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { loadCredentials } from '../../src/auth.js';
+import { effectiveScopes, loadCredentials, SALARY_SCOPE } from '../../src/auth.js';
 
 /**
  * Returns true when real Fortnox credentials are available in the keychain.
@@ -17,6 +17,21 @@ export async function credentialsAvailable(): Promise<boolean> {
   try {
     const creds = await loadCredentials();
     return creds !== null && typeof creds.access_token === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns true when the active profile's credentials were granted the opt-in
+ * `salary` (Lön) scope. Payroll live tests skip otherwise, so running the live
+ * suite against a non-payroll profile (e.g. the default company) doesn't 403.
+ */
+export async function salaryScopeAvailable(): Promise<boolean> {
+  try {
+    const creds = await loadCredentials();
+    if (!creds || typeof creds.access_token !== 'string') return false;
+    return effectiveScopes(creds).split(' ').includes(SALARY_SCOPE);
   } catch {
     return false;
   }

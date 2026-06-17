@@ -10,6 +10,7 @@ credentials.dpapi
 PLAN.md
 .claude/
 debate/
+.playwright-mcp/
 
 # Fortnox's OpenAPI spec is its "call structure" (Developer Agreement cl. 6.1/6.3)
 # — not redistributed in this repo. Fetched on demand into this local cache by
