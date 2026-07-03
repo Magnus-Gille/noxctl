@@ -30,11 +30,13 @@ function windowsCredentialsFile(profile: string): string {
   return path.join(configDir(), `credentials.${sanitizeForFilename(profile)}.dpapi`);
 }
 
-// Dual-write to the legacy slot during the 0.2.x compatibility window so an
-// older 0.1 binary can still read credentials written by this one. Flip to
-// `false` in 0.3.0 and delete the legacy reader branch below.
-// REMOVE IN 0.3.0
-export const LEGACY_DUAL_WRITE = true;
+// Dual-write to the legacy slot was needed during the 0.2.x compatibility
+// window so an older 0.1 binary could still read credentials written by this
+// one. That window has passed (shipping 0.4.0+), so new writes go only to the
+// per-profile slot. The legacy reader branches (loadCredentialBlob) stay in
+// place — removing them is a breaking change for external npm installs still
+// on the 0.1.x layout; see docs/legacy-credential-removal-plan.md.
+export const LEGACY_DUAL_WRITE = false;
 
 export type LoadSource =
   | 'new'
@@ -357,12 +359,11 @@ export async function saveCredentialBlob(
   // `credentials.default.dpapi`.
   writeToBackend(keychainAccount(normalized), windowsCredentialsFile(normalized), secret);
 
-  // Compatibility dual-write: for the default profile only, and only when the
-  // caller observed a legacy blob during load. This keeps an older 0.1 binary
-  // functional during the 0.2.x window without silently creating a legacy slot
-  // for users who never had one. Best-effort — a failure here must not break
-  // the auth flow, since the authoritative new-slot write already succeeded.
-  // REMOVE IN 0.3.0.
+  // Compatibility dual-write: disabled now that LEGACY_DUAL_WRITE is false
+  // (see its definition above). Kept behind the flag rather than deleted so
+  // it can be re-enabled without resurrecting the write-side logic, should
+  // that ever be needed. Best-effort — a failure here must not break the auth
+  // flow, since the authoritative new-slot write already succeeded.
   if (LEGACY_DUAL_WRITE && isDefault && options.alsoWriteLegacy) {
     try {
       writeToBackend(LEGACY_KEYCHAIN_ACCOUNT, legacyWindowsCredentialsFile(), secret);

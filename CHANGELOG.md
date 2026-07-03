@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Legacy credential dual-write disabled** (#53) — `saveCredentialBlob` no longer mirrors writes to the pre-0.2.0 unnamespaced keychain/DPAPI slot. The 0.2.x compatibility window (`LEGACY_DUAL_WRITE`) has passed; new credential saves go only to the namespaced `profile:default` slot. Reading the legacy slot is unaffected — `loadCredentialBlob` still transparently falls back to it, so already-migrated 0.1.x installs keep working. See `docs/legacy-credential-removal-plan.md` for the planned 0.5.0 removal of the legacy reader.
+
+### Added
+
+- `.github/dependabot.yml` — weekly npm dependency update PRs.
+
 ## [0.4.0] - 2026-06-17
 
 ### Added
