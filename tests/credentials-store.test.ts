@@ -371,35 +371,9 @@ describe('saveCredentialBlob (darwin)', () => {
     expect(writtenAccounts()).toEqual(['profile:default']);
   });
 
-  it('default profile dual-writes to legacy when alsoWriteLegacy is set', async () => {
+  it('does not dual-write to legacy when alsoWriteLegacy is set, since LEGACY_DUAL_WRITE is false', async () => {
     await saveCredentialBlob('{"x":1}', 'default', { alsoWriteLegacy: true });
-    expect(writtenAccounts()).toEqual(expect.arrayContaining(['profile:default', 'default']));
-    expect(writtenAccounts()).toHaveLength(2);
-  });
-
-  it('swallows a legacy-slot write failure when primary write succeeded', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // Primary (profile:default) write succeeds via the Swift helper; legacy
-    // (account=default) write fails at the security CLI fallback.
-    childProcess.spawnSync.mockImplementationOnce(() => ({
-      status: 0,
-      stderr: '',
-      stdout: '',
-    }));
-    childProcess.spawnSync.mockImplementationOnce(() => ({
-      status: 1,
-      stderr: 'legacy keychain unavailable',
-      stdout: '',
-    }));
-    childProcess.execFileSync.mockImplementation(() => {
-      throw new Error('security CLI also unavailable');
-    });
-
-    await expect(
-      saveCredentialBlob('{"x":1}', 'default', { alsoWriteLegacy: true }),
-    ).resolves.toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/legacy slot/i));
-    warnSpy.mockRestore();
+    expect(writtenAccounts()).toEqual(['profile:default']);
   });
 
   it('non-default profile ignores alsoWriteLegacy', async () => {
@@ -419,7 +393,7 @@ describe('saveCredentialBlob (darwin)', () => {
 
   it('treats mixed-case Default as the default profile (case-insensitive)', async () => {
     await saveCredentialBlob('{"x":1}', 'Default', { alsoWriteLegacy: true });
-    expect(writtenAccounts()).toEqual(expect.arrayContaining(['profile:default', 'default']));
+    expect(writtenAccounts()).toEqual(['profile:default']);
   });
 
   it('rejects invalid profile names', async () => {
@@ -540,7 +514,7 @@ describe('Linux secret-tool backend', () => {
     expect(accounts).toEqual(['profile:default']);
   });
 
-  it('dual-writes to legacy account=default when alsoWriteLegacy is set', async () => {
+  it('does not dual-write to legacy account=default when alsoWriteLegacy is set, since LEGACY_DUAL_WRITE is false', async () => {
     childProcess.execFileSync.mockReturnValue('');
     await saveCredentialBlob('{"x":1}', 'default', { alsoWriteLegacy: true });
 
@@ -552,8 +526,7 @@ describe('Linux secret-tool backend', () => {
       const idx = args.indexOf('account');
       return args[idx + 1];
     });
-    expect(accounts).toEqual(expect.arrayContaining(['profile:default', 'default']));
-    expect(accounts).toHaveLength(2);
+    expect(accounts).toEqual(['profile:default']);
   });
 });
 
