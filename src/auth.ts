@@ -9,6 +9,14 @@ import { migrateLegacyIfNeeded, readProfileIndex, upsertProfile } from './profil
 const FORTNOX_AUTH_URL = 'https://apps.fortnox.se/oauth-v1/auth';
 const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
 const CALLBACK_HOST = '127.0.0.1';
+const AUTH_REQUEST_TIMEOUT_MS = 30_000;
+
+function authFetch(input: string | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, {
+    ...init,
+    signal: init.signal ?? AbortSignal.timeout(AUTH_REQUEST_TIMEOUT_MS),
+  });
+}
 
 export const SCOPES =
   'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
@@ -60,6 +68,11 @@ export interface FortnoxAppConfig {
 // instance would share this state. Revisit if the MCP SDK grows request-local
 // context that handlers can read.
 let resolvedProfile: string = DEFAULT_PROFILE;
+
+// Token endpoints may rotate refresh tokens, so concurrent requests for the
+// same profile must share one refresh and one credential-store write. Profile
+// names are case-insensitive throughout the storage layer.
+const tokenRefreshes = new Map<string, Promise<string>>();
 
 // Whether the legacy (pre-0.2) credential slot was observed on the most recent
 // successful load of the default profile. Set only by loadCredentials; read by
@@ -152,7 +165,7 @@ export async function exchangeCodeForTokens(
     redirect_uri: redirectUri,
   });
 
-  const response = await fetch(FORTNOX_TOKEN_URL, {
+  const response = await authFetch(FORTNOX_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -188,7 +201,7 @@ export async function getTokenViaClientCredentials(
     scope: effectiveScopes(creds),
   });
 
-  const response = await fetch(FORTNOX_TOKEN_URL, {
+  const response = await authFetch(FORTNOX_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -229,7 +242,7 @@ export async function refreshAccessToken(
     refresh_token: creds.refresh_token,
   });
 
-  const response = await fetch(FORTNOX_TOKEN_URL, {
+  const response = await authFetch(FORTNOX_TOKEN_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -278,23 +291,39 @@ export async function getValidToken(profile?: string): Promise<string> {
     return creds.access_token;
   }
 
-  // Prefer client credentials when tenant_id is available (no refresh token management needed)
-  if (creds.tenant_id) {
-    try {
-      const refreshed = await getTokenViaClientCredentials(creds, target);
-      return refreshed.access_token;
-    } catch {
-      // Fall through to refresh_token flow
-    }
-  }
+  const refreshKey = target.toLowerCase();
+  const existing = tokenRefreshes.get(refreshKey);
+  if (existing) return existing;
 
-  // Fallback: standard refresh token flow
-  const refreshed = await refreshAccessToken(creds, target);
-  return refreshed.access_token;
+  const refresh = (async (): Promise<string> => {
+    // Prefer client credentials when tenant_id is available (no refresh token
+    // rotation). Retain the refresh-token fallback for existing profiles whose
+    // service-account setup is unavailable or revoked.
+    if (creds.tenant_id) {
+      try {
+        const refreshed = await getTokenViaClientCredentials(creds, target);
+        return refreshed.access_token;
+      } catch {
+        // Fall through to refresh_token flow
+      }
+    }
+
+    const refreshed = await refreshAccessToken(creds, target);
+    return refreshed.access_token;
+  })();
+
+  tokenRefreshes.set(refreshKey, refresh);
+  try {
+    return await refresh;
+  } finally {
+    // Do not delete a newer refresh that could have been installed after this
+    // one settled (defensive; normal execution never overlaps them).
+    if (tokenRefreshes.get(refreshKey) === refresh) tokenRefreshes.delete(refreshKey);
+  }
 }
 
 export async function fetchTenantId(accessToken: string): Promise<string | undefined> {
-  const response = await fetch('https://api.fortnox.se/3/companyinformation', {
+  const response = await authFetch('https://api.fortnox.se/3/companyinformation', {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: 'application/json',
@@ -312,7 +341,7 @@ export async function fetchTenantId(accessToken: string): Promise<string | undef
 
 export async function fetchCompanyNameSafe(accessToken: string): Promise<string | undefined> {
   try {
-    const response = await fetch('https://api.fortnox.se/3/companyinformation', {
+    const response = await authFetch('https://api.fortnox.se/3/companyinformation', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',

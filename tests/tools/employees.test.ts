@@ -63,6 +63,52 @@ describe('employee tools', () => {
       );
       expect(parsed.EmployeeId).toBe('1');
     });
+
+    it('redacts identity number and exact salary from the default MCP summary', async () => {
+      mockFetch({
+        Employee: {
+          EmployeeId: '1',
+          FirstName: 'Anna',
+          LastName: 'Andersson',
+          PersonalIdentityNumber: '19900101-1234',
+          MonthlySalary: '50000',
+          HourlyPay: '350',
+        },
+      });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_get_employee',
+        arguments: { employeeId: '1' },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).not.toContain('19900101-1234');
+      expect(text).not.toContain('50000');
+      expect(text).not.toContain('350');
+      expect(text).toContain('redacted');
+    });
+
+    it('keeps sensitive employee fields available only through explicit includeRaw', async () => {
+      mockFetch({
+        Employee: {
+          EmployeeId: '1',
+          PersonalIdentityNumber: '19900101-1234',
+          MonthlySalary: '50000',
+        },
+      });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_get_employee',
+        arguments: { employeeId: '1', includeRaw: true },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      const parsed = JSON.parse(text.split('Raw JSON:\n')[1]);
+      expect(parsed.PersonalIdentityNumber).toBe('19900101-1234');
+      expect(parsed.MonthlySalary).toBe('50000');
+    });
   });
 
   describe('fortnox_create_employee', () => {

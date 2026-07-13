@@ -1,67 +1,36 @@
 # Project Status
 
-**Last session:** 2026-06-17
-**Branch:** `release/0.4.0` — prepping the 0.4.0 release PR. Payroll (Lön) **merged to `main`** via PR #49 (squash `a9d3e14`); npm latest is still `0.3.0`.
+**Updated:** 2026-07-13
+**Branch:** `hardening/reliability-2026-07-13`
+**Base:** `origin/main` at `933631964b12bc07ee70bc1e7e89f77476c17df4`
+**State:** `0.4.1` release candidate is open as draft PR #65; parent Codex approved the initial hardening commit because Claude Opus was unavailable. Awaiting CI and final merge/release approval. Nothing has been published.
 
-## 0.4.0 release (in progress)
+## Hardening completed
 
-Version bumped 0.3.0 → 0.4.0 (package.json, cli.ts, index.ts), CHANGELOG `[Unreleased]` → `[0.4.0]`, README disclaimer/integration + PRIVACY payroll-data updated. After this PR merges: `npm publish` + GitHub release `v0.4.0`. Release notes MUST tell users the Lön scope is opt-in → re-run `noxctl init --with-salary`.
+- OAuth refreshes are single-flighted per case-insensitive profile, preventing concurrent refresh-token rotation and duplicate credential writes. OAuth calls have a 30-second deadline.
+- Fortnox calls have explicit deadlines (30 seconds; 120 seconds for raw-body uploads). Only reads retry transient network failures and HTTP 429/5xx responses, with three retries and a 30-second delay cap. Mutations remain single-attempt; mutation timeouts explicitly report that the remote outcome may be unknown.
+- Rate-limit admission is serialized so concurrent callers cannot exceed the existing 25-requests-per-5-seconds budget.
+- Default employee detail summaries redact personnummer and exact monthly/hourly pay. Exact fields require explicit CLI JSON or MCP `includeRaw`; MCP descriptions warn about sensitive payroll data. Mutation payload previews remain exact by design.
+- CI/publishing now require lint, formatting, build, tests, production audit, and package dry-run. The lockfile received audit-compatible transitive-only updates; direct dependency ranges did not change.
 
-## Shipped in 0.4.0 — Payroll (Lön) integration ✅ (merged via PR #49)
+## Verification
 
-Full coverage of the Fortnox salary API — the endpoints were in the spec all along; the unlock was Fortnox now exposing the **Lön** Behörighet to integrations.
+- `npm run check:release` — passed on Node `v22.17.0`: lint, Prettier check, TypeScript build, **66 test files / 722 tests**, production audit, and package dry-run.
+- `npm audit` — **0 vulnerabilities** across production and development dependencies (277 dependencies total).
+- `npm ls --depth=0` — clean dependency tree.
+- No live Fortnox calls or real accounting/payroll mutations were performed.
 
-- **employees** (list/get/create/update), **salary-transactions**, **attendance-transactions** (närvaro), **absence-transactions** (frånvaro) [each list/get/create/delete], **schedule-times** (get/update/reset-day — composite EmployeeId+Date key). Operations + MCP tools (Swedish) + CLI + views + tests for each.
-- **`salary` scope is OPT-IN** (not in default `SCOPES` — would break `init` for apps lacking the Lön permission). Enable via `noxctl init --with-salary` (or `FORTNOX_WITH_SALARY=1`). Granted scopes persisted per-profile (`FortnoxCredentials.scopes`); client-credentials refresh + `doctor`/`fortnox_status` honor it via `effectiveScopes(creds)`. Existing installs unaffected until they re-init with the flag.
-- Adversarial review caught 1 bug (attendance list dropped the employeeid/date filter on the `all` branch) — fixed red/green.
-- **681 unit tests**, lint + format + build green.
+## Review and rollout
 
-### Payroll — live-verified on demo (2026-06-17) ✅
-Re-authed demo with `--with-salary`, then ran the full round-trip against the real Fortnox API:
-- ✅ `salary` scope authorized (`doctor`: 12/12).
-- ✅ **employees** create / get / update — create needs **EmploymentForm + PersonelType + SalaryForm** so Fortnox can assign a company agreement (otherwise the cryptic 400 `ftgavtalid`). Not a missing API field, not a demo-config gap.
-- ✅ **attendance** + **absence** create → get → delete (clean round-trips).
-- ✅ **schedule-times** get + update (Hours 0→8).
-- ⚠️ **salary-transactions** reaches the API & validates correctly, but needs a valid löneart for the active agreement (no list-lönearter endpoint exists to discover codes). Path proven; not a code bug.
-- Ergonomics added (commit `47d78d6`): `employees create` flags for the agreement fields + a targeted hint on the ftgavtalid error. Test employee left inactivated on demo (Employee API has no hard DELETE).
-- **681 unit tests**, lint + format + build green.
+1. Review the release-version commit and require PR #65's Node 20/22 CI to pass.
+2. Merge only after approval and green CI.
+3. Tag/release `v0.4.1` and publish `noxctl@0.4.1` to npm using the normal release process. This npm patch is the deployment; the repository has no daemon or host rollout, and no Heimdall change is appropriate.
 
-### Payroll — PR #49 open
-- Merge PR #49, then cut a release (include the opt-in `salary` scope re-init note in the release notes, like #37's inbox/connectfile).
-- Optional: find a valid löneart on a configured Lön company to prove a green salary-transaction create.
+Rollback after a future npm publish: revert the merge commit; restore `latest` to `noxctl@0.4.0` with `npm dist-tag add noxctl@0.4.0 latest`; deprecate the superseded patch if needed. Existing installations remain on their installed version unless explicitly upgraded.
 
-## 0.3.0 — SHIPPED ✅
+## Residual risks
 
-- Published to **npm** (`noxctl@0.3.0`, latest) + public **GitHub release v0.3.0**.
-- Features: voucher file attachments (#37), Contracts API (#10), financial years / locked period (#11), analytics views + `dashboard` (#7/#12), natural date periods (#9), shell completions (#8), confirmation payload preview (#6), YubiKey serial diagnostics (#33), customer read-only field stripping (#31). **BREAKING (#34):** single-resource JSON output wrapped under the singular resource key.
-- Earlier PR #35 went through 5 Codex review rounds + 9 fixes; PR #38 added #37.
-
-## Live verification (demo company)
-
-#37 was live-verified against the Fortnox demo company (**MagnusGilleConsultingDEMO**, tenant 1818238) — which caught **3 bugs every mock test passed** (PR #45):
-
-1. noxctl never requested the `inbox` / `connectfile` OAuth scopes → added to `SCOPES` (+ `doctor`/`status` now test them and detect the 400 scope-error form).
-2. `VoucherYear` is read-only on the voucherfileconnections POST → moved to the `?financialyear=` query param.
-3. `/3/financialyears` rejects a `?Date=` filter (error 2000588) → date→FY resolution now filters locally.
-
-CHANGELOG corrected (PR #46); `v0.3.0` tag re-pointed to include all fixes.
-
-## Setup added
-
-- Reusable **`demo` profile** → MagnusGilleConsultingDEMO, authorized via the `noxctl` app with `inbox`+`connectfile` scopes. Use `--profile demo` for live write-testing. (Sandbox test data left there: voucher A/1 + a few inbox files — ignorable.)
-- **api-drift check restored** (#39, PR #42): extracts the spec from the ReDoc docs page (openapi.json endpoint is hard-429'd). Verified green in CI.
-
-## Open Issues
-
-- **#13** — bank transactions only (attachments half shipped via #37). The refreshed spec exposes `/3/noxfinansinvoices` (Fortnox Finans) — worth checking whether it covers part of this.
-
-## Next Steps
-
-- (Optional) re-auth the `default` (real-company) profile with `inbox`+`connectfile` if you want attachments there too; live-verify the other new endpoints against real data.
-- `LEGACY_DUAL_WRITE` ("REMOVE IN 0.3.0"): recommend removing the legacy *reader* in 0.4.0 (avoids stranding 0.1.x→0.3.0 direct upgraders).
-- Investigate `/3/noxfinansinvoices` for #13.
-
-## Notes
-
-- 677 unit tests, lint + build green.
-- Lesson reinforced: mock tests can't validate Fortnox scope / read-only / query-param semantics — **live-verify write features against the demo company before publishing.**
+- Node 20 was not available locally; the PR's existing Node 20/22 matrix is the remaining compatibility gate.
+- Fixed 30/120-second deadlines may need tuning from field evidence, but retries and delays are now bounded.
+- Explicit CLI JSON, MCP `includeRaw`, mutation confirmations, and dry-run payloads can still contain payroll PII by design; callers must treat them as sensitive.
+- Tests mock Fortnox transport. No mutation was live-tested in this hardening pass because preserving production data was a hard constraint.

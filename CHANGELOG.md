@@ -6,9 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-13
+
+### Fixed
+
+- Coalesce concurrent OAuth refreshes per profile so refresh-token rotation cannot race or overwrite newer credentials.
+- Bound Fortnox and OAuth network calls with explicit deadlines. Read-only requests retry transient network failures and retryable HTTP responses with capped backoff; mutations remain single-attempt and timeout errors warn that their outcome may be unknown.
+
 ### Changed
 
 - **Legacy credential dual-write disabled** (#53) — `saveCredentialBlob` no longer mirrors writes to the pre-0.2.0 unnamespaced keychain/DPAPI slot. The 0.2.x compatibility window (`LEGACY_DUAL_WRITE`) has passed; new credential saves go only to the namespaced `profile:default` slot. Reading the legacy slot is unaffected — `loadCredentialBlob` still transparently falls back to it, so already-migrated 0.1.x installs keep working. See `docs/legacy-credential-removal-plan.md` for the planned 0.5.0 removal of the legacy reader.
+- Default employee detail output now redacts personnummer and exact pay. Exact values remain available through explicit CLI JSON output or MCP `includeRaw`, whose descriptions now warn that payroll data can include sensitive personal information.
+- CI and package publishing now require lint, formatting, build, tests, a production dependency audit, and a package manifest dry-run. Safe transitive dependency updates remove the currently reported npm audit findings.
 
 ### Added
 
@@ -97,5 +106,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.4.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.4.0...v0.4.1
 [0.2.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.1.0

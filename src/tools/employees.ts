@@ -66,7 +66,10 @@ export function registerEmployeeTools(server: McpServer): void {
       page: z.number().optional().describe('Sidnummer (default 1)'),
       limit: z.number().optional().describe('Antal per sida (default 100)'),
       all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
-      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      includeRaw: z
+        .boolean()
+        .optional()
+        .describe('Inkludera rå JSON; kan exponera personnummer, lön och bankuppgifter'),
     },
     async ({ page, limit, all, includeRaw }) => {
       const data = await listEmployees({ page, limit, all });
@@ -85,7 +88,10 @@ export function registerEmployeeTools(server: McpServer): void {
     'Hämta en enskild anställd från Fortnox (kräver Lön-behörigheten).',
     {
       employeeId: z.string().describe('EmployeeId för den anställde'),
-      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      includeRaw: z
+        .boolean()
+        .optional()
+        .describe('Inkludera rå JSON; kan exponera personnummer, lön och bankuppgifter'),
     },
     async ({ employeeId, includeRaw }) => {
       const data = await getEmployee(employeeId);
@@ -107,7 +113,10 @@ export function registerEmployeeTools(server: McpServer): void {
       ...employeeWritableFields,
       confirm: z.boolean().optional().describe('Bekräfta att den anställde ska skapas'),
       dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa'),
-      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      includeRaw: z
+        .boolean()
+        .optional()
+        .describe('Inkludera rå JSON; kan exponera personnummer, lön och bankuppgifter'),
     },
     async ({ confirm, dryRun, includeRaw, ...params }) => {
       if (dryRun) {
@@ -133,7 +142,10 @@ export function registerEmployeeTools(server: McpServer): void {
       ...employeeWritableFields,
       confirm: z.boolean().optional().describe('Bekräfta att den anställde ska uppdateras'),
       dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att uppdatera'),
-      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      includeRaw: z
+        .boolean()
+        .optional()
+        .describe('Inkludera rå JSON; kan exponera personnummer, lön och bankuppgifter'),
     },
     async ({ employeeId, confirm, dryRun, includeRaw, ...fields }) => {
       if (dryRun) {

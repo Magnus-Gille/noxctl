@@ -2,26 +2,44 @@ import { getResolvedProfile, getValidToken } from './auth.js';
 import { DEFAULT_PROFILE } from './profile-name.js';
 
 const BASE_URL = 'https://api.fortnox.se/3';
+const REQUEST_TIMEOUT_MS = 30_000;
+const UPLOAD_TIMEOUT_MS = 120_000;
+const MAX_RETRIES = 3;
+const MAX_RETRY_DELAY_MS = 30_000;
 
 // Rate limiter: max 25 requests per 5 seconds
 const RATE_WINDOW_MS = 5000;
 const RATE_LIMIT = 25;
 const requestTimestamps: number[] = [];
+let rateLimitTail: Promise<void> = Promise.resolve();
 
 async function waitForRateLimit(): Promise<void> {
-  const now = Date.now();
-  // Remove timestamps older than the window
-  while (requestTimestamps.length > 0 && requestTimestamps[0]! < now - RATE_WINDOW_MS) {
-    requestTimestamps.shift();
-  }
+  let release!: () => void;
+  const previous = rateLimitTail;
+  rateLimitTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
 
-  if (requestTimestamps.length >= RATE_LIMIT) {
-    const oldestInWindow = requestTimestamps[0]!;
-    const waitMs = oldestInWindow + RATE_WINDOW_MS - now + 50; // 50ms buffer
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
+  await previous;
+  try {
+    while (true) {
+      const now = Date.now();
+      while (requestTimestamps.length > 0 && requestTimestamps[0]! <= now - RATE_WINDOW_MS) {
+        requestTimestamps.shift();
+      }
 
-  requestTimestamps.push(Date.now());
+      if (requestTimestamps.length < RATE_LIMIT) {
+        requestTimestamps.push(now);
+        return;
+      }
+
+      const oldestInWindow = requestTimestamps[0]!;
+      const waitMs = Math.max(1, oldestInWindow + RATE_WINDOW_MS - now + 50);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  } finally {
+    release();
+  }
 }
 
 export interface FortnoxError {
@@ -38,6 +56,7 @@ export class FortnoxApiError extends Error {
     public readonly fortnoxMessage: string,
     public readonly details?: string,
     endpoint?: string,
+    public readonly retryAfterMs?: number,
   ) {
     const hint = getErrorHint(statusCode, fortnoxMessage, endpoint);
     const profile = getResolvedProfile();
@@ -47,6 +66,20 @@ export class FortnoxApiError extends Error {
     super(parts.join('\n'));
     this.name = 'FortnoxApiError';
     this.hint = hint;
+  }
+}
+
+export class FortnoxRequestTimeoutError extends Error {
+  public readonly outcomeUnknown: boolean;
+
+  constructor(method: string, endpoint: string, timeoutMs: number) {
+    const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+    const suffix = mutation
+      ? ' The outcome is unknown; verify the result in Fortnox before retrying to avoid duplicate side effects.'
+      : ' It is safe to retry the read request.';
+    super(`Fortnox ${method} ${endpoint} timed out after ${timeoutMs} ms.${suffix}`);
+    this.name = 'FortnoxRequestTimeoutError';
+    this.outcomeUnknown = mutation;
   }
 }
 
@@ -73,7 +106,7 @@ function getErrorHint(statusCode: number, message: string, endpoint?: string): s
     case 404:
       return 'Resource not found. Verify the ID/number exists in Fortnox.';
     case 429:
-      return 'Rate limited by Fortnox. The request will be retried automatically.';
+      return 'Rate limited by Fortnox. Read requests are retried automatically; mutations are not retried to avoid duplicate side effects.';
     default:
       if (statusCode >= 500) {
         return 'Fortnox server error. Try again in a moment.';
@@ -118,10 +151,49 @@ function endpointToScope(endpoint: string): string | undefined {
   return undefined;
 }
 
+function errorCode(err: unknown): string | undefined {
+  let current: unknown = err;
+  for (let depth = 0; depth < 4 && current && typeof current === 'object'; depth++) {
+    const value = current as { code?: unknown; cause?: unknown };
+    if (typeof value.code === 'string') return value.code;
+    current = value.cause;
+  }
+  return undefined;
+}
+
+function isTimeoutError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    (err.name === 'TimeoutError' || err.name === 'AbortError' || errorCode(err) === 'ABORT_ERR')
+  );
+}
+
+function isTransientNetworkError(err: unknown): boolean {
+  if (isTimeoutError(err)) return true;
+  const code = errorCode(err);
+  if (
+    code &&
+    ['ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ENETUNREACH', 'ECONNREFUSED'].includes(code)
+  ) {
+    return true;
+  }
+  return err instanceof TypeError && /fetch failed/i.test(err.message);
+}
+
+function retryAfterDelay(response: Response): number | undefined {
+  const raw = response.headers?.get?.('retry-after');
+  if (!raw) return undefined;
+
+  const seconds = Number(raw);
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : new Date(raw).getTime() - Date.now();
+  if (!Number.isFinite(delay)) return undefined;
+  return Math.min(Math.max(0, delay), MAX_RETRY_DELAY_MS);
+}
+
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   retryable: boolean,
-  maxRetries = 3,
+  maxRetries = MAX_RETRIES,
 ): Promise<T> {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -134,15 +206,14 @@ async function retryWithBackoff<T>(
       if (err instanceof FortnoxApiError) {
         const retryable = [429, 500, 502, 503, 504];
         if (!retryable.includes(err.statusCode)) throw err;
-      } else if (
-        err instanceof Error &&
-        !err.message.includes('ECONNRESET') &&
-        !err.message.includes('ETIMEDOUT')
-      ) {
+      } else if (!isTransientNetworkError(err)) {
         throw err;
       }
 
-      const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
+      const delay =
+        err instanceof FortnoxApiError && err.retryAfterMs !== undefined
+          ? err.retryAfterMs
+          : Math.min(1000 * Math.pow(2, attempt), MAX_RETRY_DELAY_MS);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -163,67 +234,83 @@ export async function fortnoxRequest<T>(
   const method = (options.method || 'GET').toUpperCase();
   const retryable = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
 
-  return retryWithBackoff(async () => {
-    await waitForRateLimit();
+  const timeoutMs = options.rawBody === undefined ? REQUEST_TIMEOUT_MS : UPLOAD_TIMEOUT_MS;
 
-    const token = await getValidToken();
-    const url = new URL(`${BASE_URL}/${endpoint}`);
+  try {
+    return await retryWithBackoff(async () => {
+      await waitForRateLimit();
 
-    if (options.params) {
-      for (const [key, value] of Object.entries(options.params)) {
-        if (value !== undefined) {
-          url.searchParams.set(key, String(value));
+      const token = await getValidToken();
+      const url = new URL(`${BASE_URL}/${endpoint}`);
+
+      if (options.params) {
+        for (const [key, value] of Object.entries(options.params)) {
+          if (value !== undefined) {
+            url.searchParams.set(key, String(value));
+          }
         }
       }
-    }
 
-    const headers: Record<string, string> = {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    };
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      };
 
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-    };
+      const fetchOptions: RequestInit = {
+        method,
+        headers,
+        signal: AbortSignal.timeout(timeoutMs),
+      };
 
-    if (options.rawBody !== undefined) {
-      // A raw body (e.g. FormData for a multipart file upload): do NOT set
-      // Content-Type — fetch/undici derives it (and the multipart boundary)
-      // from the body itself.
-      fetchOptions.body = options.rawBody;
-    } else {
-      headers['Content-Type'] = 'application/json';
-      if (options.body) {
-        fetchOptions.body = JSON.stringify(options.body);
-      }
-    }
-
-    const response = await fetch(url.toString(), fetchOptions);
-
-    if (!response.ok) {
-      let errorMessage = `HTTP ${response.status}`;
-      let details: string | undefined;
-      try {
-        const errorBody = (await response.json()) as {
-          ErrorInformation?: { message?: string; code?: number };
-        };
-        if (errorBody?.ErrorInformation) {
-          errorMessage = errorBody.ErrorInformation.message || errorMessage;
-          details = `Error code: ${errorBody.ErrorInformation.code}`;
+      if (options.rawBody !== undefined) {
+        // A raw body (e.g. FormData for a multipart file upload): do NOT set
+        // Content-Type — fetch/undici derives it (and the multipart boundary)
+        // from the body itself.
+        fetchOptions.body = options.rawBody;
+      } else {
+        headers['Content-Type'] = 'application/json';
+        if (options.body) {
+          fetchOptions.body = JSON.stringify(options.body);
         }
-      } catch {
-        // ignore parse errors
       }
-      throw new FortnoxApiError(response.status, errorMessage, details, endpoint);
+
+      const response = await fetch(url.toString(), fetchOptions);
+
+      if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}`;
+        let details: string | undefined;
+        try {
+          const errorBody = (await response.json()) as {
+            ErrorInformation?: { message?: string; code?: number };
+          };
+          if (errorBody?.ErrorInformation) {
+            errorMessage = errorBody.ErrorInformation.message || errorMessage;
+            details = `Error code: ${errorBody.ErrorInformation.code}`;
+          }
+        } catch {
+          // ignore parse errors
+        }
+        throw new FortnoxApiError(
+          response.status,
+          errorMessage,
+          details,
+          endpoint,
+          retryAfterDelay(response),
+        );
+      }
+
+      // Some endpoints return empty responses (e.g., DELETE)
+      const text = await response.text();
+      if (!text) return undefined as T;
+
+      return JSON.parse(text) as T;
+    }, retryable);
+  } catch (err) {
+    if (isTimeoutError(err)) {
+      throw new FortnoxRequestTimeoutError(method, endpoint, timeoutMs);
     }
-
-    // Some endpoints return empty responses (e.g., DELETE)
-    const text = await response.text();
-    if (!text) return undefined as T;
-
-    return JSON.parse(text) as T;
-  }, retryable);
+    throw err;
+  }
 }
 
 /**
