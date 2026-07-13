@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-07-13
+
 ### Fixed
 
 - Coalesce concurrent OAuth refreshes per profile so refresh-token rotation cannot race or overwrite newer credentials.
@@ -104,5 +106,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.4.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.4.0...v0.4.1
 [0.2.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.1.0

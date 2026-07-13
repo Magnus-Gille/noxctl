@@ -3,7 +3,7 @@
 **Updated:** 2026-07-13
 **Branch:** `hardening/reliability-2026-07-13`
 **Base:** `origin/main` at `933631964b12bc07ee70bc1e7e89f77476c17df4`
-**State:** implementation complete; awaiting parent/fallback PR review before any push, PR, merge, publish, or deployment action.
+**State:** `0.4.1` release candidate is open as draft PR #65; parent Codex approved the initial hardening commit because Claude Opus was unavailable. Awaiting CI and final merge/release approval. Nothing has been published.
 
 ## Hardening completed
 
@@ -22,9 +22,9 @@
 
 ## Review and rollout
 
-1. Parent or Claude Opus reviews the local commit and diff.
-2. After approval, push the branch, open the PR, let Node 20/22 CI run, and merge only when green.
-3. This repository has no daemon or host deployment. Release, if desired, is an npm patch publish after the normal release/version process; no Heimdall change is appropriate.
+1. Review the release-version commit and require PR #65's Node 20/22 CI to pass.
+2. Merge only after approval and green CI.
+3. Tag/release `v0.4.1` and publish `noxctl@0.4.1` to npm using the normal release process. This npm patch is the deployment; the repository has no daemon or host rollout, and no Heimdall change is appropriate.
 
 Rollback after a future npm publish: revert the merge commit; restore `latest` to `noxctl@0.4.0` with `npm dist-tag add noxctl@0.4.0 latest`; deprecate the superseded patch if needed. Existing installations remain on their installed version unless explicitly upgraded.
 
