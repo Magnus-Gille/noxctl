@@ -265,7 +265,7 @@ describe('auth', () => {
       expect(result).toEqual(mockResponse);
       expect(global.fetch).toHaveBeenCalledWith(
         'https://apps.fortnox.se/oauth-v1/token',
-        expect.objectContaining({ method: 'POST' }),
+        expect.objectContaining({ method: 'POST', signal: expect.any(AbortSignal) }),
       );
     });
 
@@ -520,6 +520,58 @@ describe('auth', () => {
 
       const token = await getValidToken();
       expect(token).toBe('cc-fresh-token');
+    });
+
+    it('single-flights concurrent refreshes for the same profile', async () => {
+      const expired = { ...mockCredentials, expires_at: Date.now() - 1000 };
+      credentialStore.loadCredentialBlob.mockResolvedValue(blobResult(JSON.stringify(expired)));
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            access_token: 'shared-fresh-token',
+            refresh_token: 'shared-refresh-token',
+            expires_in: 3600,
+          }),
+      });
+
+      const tokens = await Promise.all([
+        getValidToken('default'),
+        getValidToken('default'),
+        getValidToken('Default'),
+      ]);
+
+      expect(tokens).toEqual(['shared-fresh-token', 'shared-fresh-token', 'shared-fresh-token']);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(credentialStore.saveCredentialBlob).toHaveBeenCalledTimes(1);
+    });
+
+    it('clears a failed single-flight so a later refresh can recover', async () => {
+      const expired = { ...mockCredentials, expires_at: Date.now() - 1000 };
+      credentialStore.loadCredentialBlob.mockResolvedValue(blobResult(JSON.stringify(expired)));
+
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          text: () => Promise.resolve('Unauthorized'),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              access_token: 'recovered-token',
+              refresh_token: 'recovered-refresh',
+              expires_in: 3600,
+            }),
+        });
+
+      const first = await Promise.allSettled([getValidToken('default'), getValidToken('default')]);
+      expect(first.every((result) => result.status === 'rejected')).toBe(true);
+      await expect(getValidToken('default')).resolves.toBe('recovered-token');
+      expect(global.fetch).toHaveBeenCalledTimes(2);
     });
 
     it('falls back to refresh token when client credentials fails', async () => {

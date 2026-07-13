@@ -19,8 +19,10 @@
     "lint": "eslint src/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
+    "verify": "npm run lint && npm run format:check && npm run build && npm test",
+    "check:release": "npm run verify && npm audit --omit=dev && npm pack --dry-run --ignore-scripts",
     "check:api": "bash scripts/check-api-changes.sh",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run check:release",
     "prepare": "husky"
   },
   "keywords": [

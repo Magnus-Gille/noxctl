@@ -467,6 +467,8 @@ export const voucherAttachmentColumns: Column[] = [
 
 // --- Payroll / Lön views (target ≤80 cols) ---
 
+const redactPayrollValue = (): string => '[redacted — use JSON/includeRaw for explicit access]';
+
 // Employees
 export const employeeListColumns: Column[] = [
   { key: 'EmployeeId', header: 'Emp #', width: 12 },
@@ -481,15 +483,32 @@ export const employeeDetailColumns: Column[] = [
   { key: 'LastName', header: 'Last Name', width: 20 },
   { key: 'FullName', header: 'Full Name', width: 30 },
   { key: 'Email', header: 'Email', width: 30 },
-  { key: 'PersonalIdentityNumber', header: 'Personnr', width: 14 },
+  {
+    key: 'PersonalIdentityNumber',
+    header: 'Personnr',
+    width: 14,
+    format: redactPayrollValue,
+  },
   { key: 'JobTitle', header: 'Job Title', width: 30 },
   { key: 'EmploymentDate', header: 'Employed', width: 10 },
   { key: 'EmployedTo', header: 'Employed To', width: 10 },
   { key: 'EmploymentForm', header: 'Form', width: 6 },
   { key: 'PersonelType', header: 'Type', width: 6 },
   { key: 'SalaryForm', header: 'Salary Form', width: 6 },
-  { key: 'MonthlySalary', header: 'Monthly', width: 12, align: 'right' },
-  { key: 'HourlyPay', header: 'Hourly', width: 12, align: 'right' },
+  {
+    key: 'MonthlySalary',
+    header: 'Monthly',
+    width: 12,
+    align: 'right',
+    format: redactPayrollValue,
+  },
+  {
+    key: 'HourlyPay',
+    header: 'Hourly',
+    width: 12,
+    align: 'right',
+    format: redactPayrollValue,
+  },
   { key: 'TaxTable', header: 'Tax Table', width: 10 },
   { key: 'TaxColumn', header: 'Tax Col', width: 7, align: 'right' },
   { key: 'Inactive', header: 'Inactive', width: 8 },

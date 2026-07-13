@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fortnoxRequest, FortnoxApiError } from '../src/fortnox-client.js';
+import {
+  fortnoxRequest,
+  FortnoxApiError,
+  FortnoxRequestTimeoutError,
+} from '../src/fortnox-client.js';
 import { getResolvedProfile } from '../src/auth.js';
 
 vi.mock('../src/auth.js', () => ({
@@ -9,6 +13,7 @@ vi.mock('../src/auth.js', () => ({
 
 describe('fortnox-client', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -26,6 +31,7 @@ describe('fortnox-client', () => {
       'https://api.fortnox.se/3/customers/1',
       expect.objectContaining({
         method: 'GET',
+        signal: expect.any(AbortSignal),
         headers: expect.objectContaining({
           Authorization: 'Bearer mock-token',
           'Content-Type': 'application/json',
@@ -135,6 +141,73 @@ describe('fortnox-client', () => {
         body: { Customer: { Name: 'New' } },
       }),
     ).rejects.toThrow(FortnoxApiError);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries a GET when Node fetch reports a transient error in its cause', async () => {
+    const transient = new TypeError('fetch failed', {
+      cause: Object.assign(new Error('socket reset'), { code: 'ECONNRESET' }),
+    });
+    global.fetch = vi
+      .fn()
+      .mockRejectedValueOnce(transient)
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve('{"ok": true}'),
+      });
+
+    await expect(fortnoxRequest('customers')).resolves.toEqual({ ok: true });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('caps Retry-After before retrying a read request', async () => {
+    vi.useFakeTimers();
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 429,
+        headers: { get: () => '120' },
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Rate limited', code: 0 } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve('{"ok": true}'),
+      });
+
+    const request = fortnoxRequest('customers');
+    await vi.advanceTimersByTimeAsync(29_999);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(request).resolves.toEqual({ ok: true });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds mutation requests and marks a timeout outcome as unknown', async () => {
+    const controller = new AbortController();
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal);
+    global.fetch = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      const signal = init.signal as AbortSignal;
+      return new Promise((_resolve, reject) => {
+        if (signal.aborted) {
+          reject(signal.reason);
+          return;
+        }
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      });
+    });
+
+    const request = fortnoxRequest('customers', {
+      method: 'POST',
+      body: { Customer: { Name: 'Acme AB' } },
+    });
+    const rejection = expect(request).rejects.toMatchObject({
+      name: 'FortnoxRequestTimeoutError',
+      outcomeUnknown: true,
+    } satisfies Partial<FortnoxRequestTimeoutError>);
+
+    controller.abort(new DOMException('request timed out', 'TimeoutError'));
+    await rejection;
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
 
