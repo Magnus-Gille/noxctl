@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-21
+
 ### Added
 
 - **Invoice PDF export** (#66) — `noxctl invoices pdf <docNumber>` and the `fortnox_invoice_pdf` MCP tool download an invoice as a PDF. Writes to `--file <path>`, to stdout with `--file -`, or to `invoice-<docNumber>.pdf` by default (the destination is `--file` because `-o/--output` is globally the output *format*). The PDF always comes from Fortnox's `/preview` endpoint, which returns the document **without** marking the invoice as sent. `--mark-sent` additionally calls `/print` afterwards to set `Sent`, and therefore prompts for confirmation; the file is written first, so a failed write can never leave an invoice flagged as sent with no PDF to show for it. Works for credit invoices too.
@@ -16,6 +18,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `noxctl invoices send <docNumber> --method print` (and `fortnox_send_invoice` with `method: "print"`) crashed with `SyntaxError: Unexpected token '%'`. Fortnox's `/print` endpoint answers with the PDF document rather than JSON, and the response was being parsed as JSON — after Fortnox had already flagged the invoice as sent, so a successful action was reported as a failure. The print path now reads the PDF response correctly and re-reads the invoice to report its true post-print state, still reporting success (with a note) if only that read-back fails.
 - Fortnox exposes `/invoices/{n}/print` as a `GET` even though it sets `Sent`. Requests can now be flagged as mutations independently of their HTTP verb, so `/print` is no longer eligible for automatic retries and a `/print` timeout is correctly reported as an unknown outcome instead of "safe to retry".
+- When `--mark-sent` fails after the PDF has already been written, the error now reports the saved file's path and size instead of only the Fortnox error, so a successful download is not mistaken for a total failure.
+
+### Security
+
+- A saved PDF is validated by its `%PDF-` magic bytes rather than by the `Content-Type` header, so a JSON error envelope or an HTML error page returned with a 200 can never be written to disk under a `.pdf` name.
+- The `fortnox_invoice_pdf` MCP tool will not overwrite an existing file without an explicit `overwrite: true`, and will not write through a symbolic link in either mode (`O_EXCL`/`O_NOFOLLOW`, with an `lstat` fallback on Windows). Its arguments are model-generated, so a stray path must not be able to truncate an unrelated file.
+
+### Dependencies
+
+- Bumped the transitive `body-parser` to 2.3.0 (GHSA-v422-hmwv-36x6, low). Lockfile-only; no `package.json` range changed.
 
 ## [0.4.1] - 2026-07-13
 

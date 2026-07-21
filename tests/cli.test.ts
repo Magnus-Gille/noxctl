@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const CLI_PATH = path.resolve('dist/cli.js');
@@ -325,5 +326,17 @@ describe('CLI smoke tests', () => {
     expect(() => {
       execFileSync('node', [CLI_PATH, 'nonexistent'], { ...execOpts, stdio: 'pipe' });
     }).toThrow();
+  });
+});
+
+describe('version consistency', () => {
+  // The CLI hardcodes its version string, so it can silently drift from
+  // package.json across releases — it already shipped one version behind once.
+  it('noxctl --version matches the package version', () => {
+    const pkg = JSON.parse(readFileSync(path.resolve('package.json'), 'utf-8')) as {
+      version: string;
+    };
+    const output = execFileSync('node', [CLI_PATH, '--version'], execOpts) as string;
+    expect(output.trim()).toBe(pkg.version);
   });
 });

@@ -8,6 +8,8 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
+  // Needed by FortnoxApiError, which prefixes messages with the active profile.
+  getResolvedProfile: vi.fn().mockReturnValue('default'),
 }));
 
 function mockFetch(response: unknown, ok = true, status = 200) {
@@ -363,6 +365,39 @@ describe('invoice tools', () => {
       const text = (result.content as { type: string; text: string }[])[0].text;
       expect(text).not.toContain('är nu markerad som skickad');
       expect(text).toMatch(/Varning/);
+      rmSync(target, { force: true });
+    });
+
+    // Found live against the demo tenant: /preview succeeded and the PDF was
+    // written, then /print failed (missing bank details). The error must say the
+    // file was saved, or the user assumes the whole command achieved nothing.
+    it('reports the saved path when the PDF is written but marking it sent fails', async () => {
+      const target = join(tmpdir(), `noxctl-test-marksent-fail-${process.pid}.pdf`);
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(pdfResponse())
+        .mockResolvedValue({
+          ok: false,
+          status: 400,
+          headers: new Headers(),
+          json: () =>
+            Promise.resolve({
+              ErrorInformation: { message: 'Bankuppgifter saknas.', code: 2000570 },
+            }),
+        });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: target, markSent: true, confirm: true },
+      });
+
+      expect(result.isError).toBe(true);
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain(target);
+      expect(text).toMatch(/Bankuppgifter saknas/);
+      // The PDF really is on disk despite the error.
+      expect(readFileSync(target).equals(PDF_BYTES)).toBe(true);
       rmSync(target, { force: true });
     });
 
