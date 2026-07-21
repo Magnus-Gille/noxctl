@@ -141,6 +141,12 @@ export interface MarkInvoicePrintedResult {
   /** The invoice's state after printing. */
   invoice: Record<string, unknown>;
   /**
+   * Whether that state was actually read back from Fortnox. When false, the
+   * print request was accepted but its effect could not be confirmed — callers
+   * must report the outcome as unknown rather than as sent.
+   */
+  confirmed: boolean;
+  /**
    * The document Fortnox generated for this print action, when it came back
    * intact. Callers saving a copy should prefer these bytes over a separately
    * fetched /preview: the two are distinct requests, so a concurrent edit could
@@ -167,19 +173,20 @@ export async function markInvoicePrinted(
   const pdf = await fortnoxRequestPdfFromMutation(`invoices/${documentId}/print`);
 
   try {
-    return { invoice: await getInvoice(documentNumber), pdf };
+    return { invoice: await getInvoice(documentNumber), confirmed: true, pdf };
   } catch (err) {
-    // Fortnox has already flagged the invoice; only reading it back failed.
-    // Report the action as the success it was, but keep the read error visible
-    // rather than pretending nothing went wrong.
+    // Fortnox accepted the print request, so the change has most likely been
+    // applied — but "most likely" is not "confirmed". Deliberately no
+    // `Sent: true` here: synthesizing it would present an unverified outcome as
+    // established fact about someone's accounting records.
     return {
       invoice: {
         DocumentNumber: documentNumber,
-        Sent: true,
-        Note: `Invoice was marked as sent, but reading it back failed: ${
+        Note: `Fortnox accepted the print request, but reading the invoice back failed, so its sent status could not be confirmed: ${
           err instanceof Error ? err.message : String(err)
         }`,
       },
+      confirmed: false,
       pdf,
     };
   }

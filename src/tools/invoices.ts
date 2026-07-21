@@ -327,17 +327,28 @@ export function registerInvoiceTools(server: McpServer): void {
         }
       }
 
+      // Only state that the invoice is sent if Fortnox confirmed it. Asking for
+      // markSent is not evidence that it took effect.
+      let sentNote = '';
+      if (printed && !printed.confirmed) {
+        sentNote = ` ${String(printed.invoice.Note)}`;
+      } else if (printed && printed.invoice.Sent === true) {
+        sentNote = ' Fakturan är nu markerad som skickad.';
+      } else if (printed) {
+        sentNote = ' Varning: Fortnox rapporterar fortfarande fakturan som ej skickad.';
+      }
+
       return confirmationResponse(
         `Faktura ${documentNumber} sparad som PDF: ${target} (${bytes} bytes).` +
-          (markSent ? ' Fakturan är nu markerad som skickad.' : '') +
-          (printed?.invoice.Note ? ` ${String(printed.invoice.Note)}` : '') +
+          sentNote +
           refreshNote,
         {
           DocumentNumber: documentNumber,
           Path: target,
           Bytes: bytes,
-          // Report what Fortnox says, not what we asked for.
-          Sent: printed ? printed.invoice.Sent : undefined,
+          // Report what Fortnox says, not what we asked for; undefined means
+          // "not checked" or "could not be confirmed".
+          Sent: printed?.confirmed ? printed.invoice.Sent : undefined,
         },
       );
     },

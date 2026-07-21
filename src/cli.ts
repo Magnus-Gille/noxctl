@@ -1470,7 +1470,7 @@ Examples:
       // already written and the invoice is already flagged, so a failure here is
       // reported as a note rather than raised as a failed operation.
       let bytes = pdf.length;
-      let note = printed?.invoice.Note ? ` ${String(printed.invoice.Note)}` : '';
+      let note = '';
       if (printed?.pdf) {
         try {
           writeFileSync(path, printed.pdf);
@@ -1482,6 +1482,15 @@ Examples:
         }
       }
 
+      // Only claim the invoice is sent if Fortnox actually said so.
+      if (printed && !printed.confirmed) {
+        note += ` ${String(printed.invoice.Note)}`;
+      } else if (printed && printed.invoice.Sent === true) {
+        note += ' Marked as sent.';
+      } else if (printed) {
+        note += ' Warning: Fortnox still reports this invoice as not sent.';
+      }
+
       outputConfirmation(
         `Invoice ${documentNumber} saved to ${path} (${bytes} bytes).${note}`,
         json(),
@@ -1489,8 +1498,9 @@ Examples:
           DocumentNumber: documentNumber,
           Path: path,
           Bytes: bytes,
-          // Report what Fortnox says the invoice's state is, not what we asked for.
-          Sent: printed ? printed.invoice.Sent : undefined,
+          // Report what Fortnox says the invoice's state is, not what we asked
+          // for; undefined means "not checked" or "could not be confirmed".
+          Sent: printed?.confirmed ? printed.invoice.Sent : undefined,
         },
       );
     },

@@ -278,6 +278,7 @@ describe('invoice operations', () => {
 
       const result = await markInvoicePrinted('1001');
 
+      expect(result.confirmed).toBe(true);
       expect(result.invoice.Sent).toBe(true);
       expect(result.pdf).toBeUndefined();
     });
@@ -321,8 +322,11 @@ describe('invoice operations', () => {
 
       const result = await markInvoicePrinted('1001');
 
-      expect(result.invoice.Sent).toBe(true);
+      // The print was accepted, so this is not an error...
       expect(result.invoice.DocumentNumber).toBe('1001');
+      // ...but the outcome was never confirmed, so it must NOT claim Sent.
+      expect(result.confirmed).toBe(false);
+      expect(result.invoice.Sent).toBeUndefined();
       // The read-back failure must remain visible, not be silently swallowed.
       expect(String(result.invoice.Note)).toMatch(/Boom/);
     });

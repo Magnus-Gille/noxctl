@@ -52,6 +52,21 @@ function mockPdfThenInvoice(invoice: Record<string, unknown>) {
     });
 }
 
+// Saving a PDF *and* marking it sent is three calls: /preview for the bytes,
+// /print for the mutation, then a read-back of the invoice.
+function mockPreviewPrintThenInvoice(invoice: Record<string, unknown>) {
+  global.fetch = vi
+    .fn()
+    .mockResolvedValueOnce(pdfResponse())
+    .mockResolvedValueOnce(pdfResponse())
+    .mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ Invoice: invoice })),
+      json: () => Promise.resolve({ Invoice: invoice }),
+    });
+}
+
 async function setupClientServer() {
   const server = createServer();
   const client = new Client({ name: 'test-client', version: '1.0.0' });
@@ -329,6 +344,25 @@ describe('invoice tools', () => {
 
       expect(result.isError).toBeFalsy();
       expect(readFileSync(target).equals(PDF_BYTES)).toBe(true);
+      rmSync(target, { force: true });
+    });
+
+    // Asking for markSent is not evidence that it took effect. If Fortnox
+    // reports the invoice as still unsent, say so rather than confirming.
+    it('does not claim the invoice is sent when Fortnox reports otherwise', async () => {
+      // The markSent flow is three calls: /preview, /print, then the read-back.
+      mockPreviewPrintThenInvoice({ DocumentNumber: '1001', Sent: false });
+      const target = join(tmpdir(), `noxctl-test-unsent-${process.pid}.pdf`);
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: target, markSent: true, confirm: true },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).not.toContain('är nu markerad som skickad');
+      expect(text).toMatch(/Varning/);
       rmSync(target, { force: true });
     });
 
