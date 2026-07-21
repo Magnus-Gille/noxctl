@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-21
+
+### Changed
+
+- **BREAKING: the minimum supported Node.js version is now 22.12.0** (was 20). Node 20 reached end-of-life on 2026-04-30, and `commander@15` — the CLI's argument parser — requires `>=22.12.0`. Continuing to advertise Node 20 support while shipping that dependency would have left Node 20 users with `EBADENGINE` warnings and a support claim we do not honour. CI now tests Node 22 and 24.
+- `commander` 14.0.3 → 15.0.0. No noxctl command, flag or output changed; the CLI surface is identical.
+- `@modelcontextprotocol/sdk` 1.27.1 → 1.29.0, plus in-range refreshes of `zod`, `eslint`, `vitest`, `prettier`, `typescript-eslint`, `@types/node` and `lint-staged`.
+
+### Fixed
+
+- The MCP server reported version `0.4.1` to connected clients after 0.5.0 shipped. Both entry points now derive their version consistently, and a test asserts each matches `package.json` so neither can drift again.
+
+### Internal
+
+- Dependabot now groups minor and patch updates into one pull request per week per dependency type, instead of opening one per dependency.
+
 ## [0.5.0] - 2026-07-21
 
 ### Added

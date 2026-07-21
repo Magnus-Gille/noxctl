@@ -16,7 +16,7 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Dev setup
 
-Prerequisites: Node.js 20+ and (on Linux) `secret-tool` for the keychain-backed tests.
+Prerequisites: Node.js 22.12+ and (on Linux) `secret-tool` for the keychain-backed tests.
 
 ```bash
 git clone https://github.com/Magnus-Gille/fortnox-mcp.git
@@ -37,7 +37,7 @@ npm run format:check  # Prettier (check only, what CI runs)
 npm run build         # tsc
 ```
 
-CI runs `build`, `test`, and `format:check` on Node 20 and 22 — all three must pass.
+CI runs `build`, `test`, and `format:check` on Node 22 and 24 — all three must pass.
 
 ## Project layout
 

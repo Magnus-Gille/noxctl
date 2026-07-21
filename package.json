@@ -1,6 +1,6 @@
 {
   "name": "noxctl",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "mcpName": "io.github.magnus-gille/noxctl",
   "description": "CLI and MCP server for Fortnox accounting — invoices, customers, bookkeeping, and VAT",
   "type": "module",
@@ -36,7 +36,7 @@
   "author": "Magnus Gille",
   "license": "MIT",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12.0"
   },
   "files": [
     "dist/",
