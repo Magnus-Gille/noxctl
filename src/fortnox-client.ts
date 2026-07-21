@@ -398,6 +398,32 @@ export async function fortnoxRequestPdf(
 }
 
 /**
+ * For endpoints where the PDF is a by-product of a state change — Fortnox's
+ * `/print` both returns the document and sets `Sent`.
+ *
+ * Once the server has answered 2xx the mutation has happened, so nothing about
+ * the body may raise: a truncated or malformed payload is reported as "no PDF"
+ * rather than as an error, because throwing here would turn a completed
+ * accounting change into a reported failure. Always treated as a mutation, so
+ * it is never auto-retried.
+ */
+export async function fortnoxRequestPdfFromMutation(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<Buffer | undefined> {
+  return request<Buffer | undefined>(endpoint, { ...options, mutation: true }, async (response) => {
+    try {
+      const buf = Buffer.from(await response.arrayBuffer());
+      return buf.subarray(0, PDF_MAGIC.length).toString('latin1') === PDF_MAGIC ? buf : undefined;
+    } catch {
+      // Body unreadable (truncated stream, aborted transfer). The action
+      // itself already succeeded server-side; report it as such.
+      return undefined;
+    }
+  });
+}
+
+/**
  * Fetch all pages of a paginated Fortnox list endpoint.
  * `dataKey` is the envelope key (e.g. "Invoices", "Customers").
  */

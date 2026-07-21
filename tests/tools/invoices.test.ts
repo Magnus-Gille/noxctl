@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from '../../src/index.js';
@@ -293,6 +293,27 @@ describe('invoice tools', () => {
       expect(result.isError).toBe(true);
       expect(readFileSync(target, 'utf-8')).toBe('important pre-existing content');
       rmSync(target, { force: true });
+    });
+
+    // `w` follows symlinks, so an agent-supplied path pointing at a symlink
+    // could truncate whatever it targets. overwrite must not enable that.
+    it('refuses to write through a symlink even with overwrite set', async () => {
+      mockPdf();
+      const dir = mkdtempSync(join(tmpdir(), 'noxctl-symlink-test-'));
+      const realFile = join(dir, 'real.txt');
+      const link = join(dir, 'link.pdf');
+      writeFileSync(realFile, 'SECRET ORIGINAL');
+      symlinkSync(realFile, link);
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: link, overwrite: true },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(readFileSync(realFile, 'utf-8')).toBe('SECRET ORIGINAL');
+      rmSync(dir, { recursive: true, force: true });
     });
 
     it('replaces an existing file when overwrite is explicitly set', async () => {

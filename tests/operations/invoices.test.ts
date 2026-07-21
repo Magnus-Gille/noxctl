@@ -228,7 +228,44 @@ describe('invoice operations', () => {
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/print');
-      expect(result.Sent).toBe(true);
+      expect(result.invoice.Sent).toBe(true);
+    });
+
+    // Once /print answers 2xx, Fortnox has set Sent. Nothing after that point
+    // may throw on the caller's behalf — including validation of the PDF body,
+    // which this action does not even need.
+    it('still reports success when the printed body is not a readable PDF', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/pdf' }),
+          arrayBuffer: () => Promise.resolve(Buffer.from('truncated garbage').buffer),
+        })
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(JSON.stringify({ Invoice: { DocumentNumber: '1001', Sent: true } })),
+          json: () => Promise.resolve({ Invoice: { DocumentNumber: '1001', Sent: true } }),
+        });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.invoice.Sent).toBe(true);
+      // No usable PDF came back, so none is offered to the caller.
+      expect(result.pdf).toBeUndefined();
+    });
+
+    it('returns the printed PDF so callers can save the version that was marked sent', async () => {
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.pdf?.equals(PDF_BYTES)).toBe(true);
     });
 
     // The print already succeeded at this point; failing the whole call would
@@ -248,10 +285,10 @@ describe('invoice operations', () => {
 
       const result = await markInvoicePrinted('1001');
 
-      expect(result.Sent).toBe(true);
-      expect(result.DocumentNumber).toBe('1001');
+      expect(result.invoice.Sent).toBe(true);
+      expect(result.invoice.DocumentNumber).toBe('1001');
       // The read-back failure must remain visible, not be silently swallowed.
-      expect(String(result.Note)).toMatch(/Boom/);
+      expect(String(result.invoice.Note)).toMatch(/Boom/);
     });
   });
 

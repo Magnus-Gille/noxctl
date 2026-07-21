@@ -1,4 +1,9 @@
-import { fortnoxRequest, fortnoxRequestPdf, fetchAllPages } from '../fortnox-client.js';
+import {
+  fortnoxRequest,
+  fortnoxRequestPdf,
+  fortnoxRequestPdfFromMutation,
+  fetchAllPages,
+} from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
 interface InvoiceResponse {
@@ -105,7 +110,7 @@ export async function sendInvoice(
   }
 
   if (method === 'print') {
-    return markInvoicePrinted(documentNumber);
+    return (await markInvoicePrinted(documentNumber)).invoice;
   }
 
   // Exhaustive on purpose: no silent fallback. 'email' and 'einvoice' both send
@@ -132,30 +137,50 @@ export async function getInvoicePdf(documentNumber: string): Promise<Buffer> {
   return fortnoxRequestPdf(`invoices/${documentSegment(documentNumber)}/preview`);
 }
 
+export interface MarkInvoicePrintedResult {
+  /** The invoice's state after printing. */
+  invoice: Record<string, unknown>;
+  /**
+   * The document Fortnox generated for this print action, when it came back
+   * intact. Callers saving a copy should prefer these bytes over a separately
+   * fetched /preview: the two are distinct requests, so a concurrent edit could
+   * otherwise leave the saved file a version behind the one marked as sent.
+   */
+  pdf?: Buffer;
+}
+
 /**
  * Mark an invoice as sent via Fortnox's /print action, and report its resulting
  * state. /print is a GET that changes data, so it is flagged as a mutation to
  * keep it out of the automatic retry path.
+ *
+ * Once the /print request succeeds the invoice has been changed, so from that
+ * point on this function does not throw: neither a malformed PDF body nor a
+ * failed read-back may turn a completed accounting change into a reported
+ * failure.
  */
-export async function markInvoicePrinted(documentNumber: string): Promise<Record<string, unknown>> {
+export async function markInvoicePrinted(
+  documentNumber: string,
+): Promise<MarkInvoicePrintedResult> {
   const documentId = documentSegment(documentNumber);
 
-  // The response body is the PDF, not JSON. It is discarded here — this action
-  // means "mark as printed"; use getInvoicePdf to keep the file.
-  await fortnoxRequestPdf(`invoices/${documentId}/print`, { mutation: true });
+  const pdf = await fortnoxRequestPdfFromMutation(`invoices/${documentId}/print`);
 
   try {
-    return await getInvoice(documentNumber);
+    return { invoice: await getInvoice(documentNumber), pdf };
   } catch (err) {
     // Fortnox has already flagged the invoice; only reading it back failed.
     // Report the action as the success it was, but keep the read error visible
     // rather than pretending nothing went wrong.
     return {
-      DocumentNumber: documentNumber,
-      Sent: true,
-      Note: `Invoice was marked as sent, but reading it back failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      invoice: {
+        DocumentNumber: documentNumber,
+        Sent: true,
+        Note: `Invoice was marked as sent, but reading it back failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      },
+      pdf,
     };
   }
 }

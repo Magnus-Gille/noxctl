@@ -81,6 +81,17 @@ import {
 
 const program = new Command();
 
+// A closed downstream pipe (`noxctl ... | head`, or a reader that exits early)
+// makes stdout emit EPIPE. That is normal for a CLI, and without this listener
+// Node reports it as an uncaught exception with a stack trace, bypassing the
+// command's own error handling.
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') {
+    process.exit(0);
+  }
+  throw err;
+});
+
 program
   .name('noxctl')
   .description('CLI and MCP server for Fortnox accounting')
@@ -1447,12 +1458,29 @@ Examples:
       writeFileSync(path, pdf);
 
       // Only now that the PDF is safely on disk do we change Fortnox.
-      if (opts.markSent) await markInvoicePrinted(documentNumber);
+      const printed = opts.markSent ? await markInvoicePrinted(documentNumber) : undefined;
+
+      // Prefer the document /print actually produced, so the saved copy matches
+      // the version that was marked as sent. Best-effort: the /preview copy is
+      // already written and the invoice is already flagged, so a failure here is
+      // reported as a note rather than raised as a failed operation.
+      let bytes = pdf.length;
+      let note = printed?.invoice.Note ? ` ${String(printed.invoice.Note)}` : '';
+      if (printed?.pdf) {
+        try {
+          writeFileSync(path, printed.pdf);
+          bytes = printed.pdf.length;
+        } catch (err) {
+          note += ` Saved file is the /preview copy; rewriting it with the printed version failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+        }
+      }
 
       outputConfirmation(
-        `Invoice ${documentNumber} saved to ${path} (${pdf.length} bytes).`,
+        `Invoice ${documentNumber} saved to ${path} (${bytes} bytes).${note}`,
         json(),
-        { DocumentNumber: documentNumber, Path: path, Bytes: pdf.length, Sent: !!opts.markSent },
+        { DocumentNumber: documentNumber, Path: path, Bytes: bytes, Sent: !!opts.markSent },
       );
     },
   );

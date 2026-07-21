@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { closeSync, constants as fsConstants, mkdtempSync, openSync, writeSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -35,6 +35,44 @@ const InvoiceRowSchema = z.object({
 });
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
+
+/**
+ * Write a PDF to `target`, refusing to write through a symlink.
+ *
+ * These paths come from tool arguments, i.e. they are model-generated and can be
+ * influenced by whatever the model just read. `O_EXCL` already refuses to follow
+ * a symlink; `O_NOFOLLOW` gives the overwrite path the same guarantee, so
+ * "replace this file" can never silently truncate a symlink's target instead.
+ * O_NOFOLLOW is POSIX-only and absent on Windows, hence the `?? 0`.
+ */
+function writePdf(target: string, pdf: Buffer, overwrite?: boolean): void {
+  const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
+  const flags = overwrite
+    ? O_WRONLY | O_CREAT | O_TRUNC | (O_NOFOLLOW ?? 0)
+    : O_WRONLY | O_CREAT | O_EXCL;
+
+  try {
+    const fd = openSync(target, flags, 0o600);
+    try {
+      writeSync(fd, pdf);
+    } finally {
+      closeSync(fd);
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      throw new Error(
+        `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
+      );
+    }
+    if (code === 'ELOOP') {
+      throw new Error(
+        `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
+      );
+    }
+    throw err;
+  }
+}
 
 export function registerInvoiceTools(server: McpServer): void {
   server.tool(
@@ -245,27 +283,34 @@ export function registerInvoiceTools(server: McpServer): void {
         : join(mkdtempSync(join(tmpdir(), 'noxctl-')), `invoice-${documentNumber}.pdf`);
 
       const pdf = await getInvoicePdf(documentNumber);
-      try {
-        // 'wx' fails if the path exists and refuses to follow a symlink to an
-        // existing file; 'w' is only used when the caller opted in.
-        writeFileSync(target, pdf, { flag: overwrite ? 'w' : 'wx' });
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-          throw new Error(
-            `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
-          );
-        }
-        throw err;
-      }
+      writePdf(target, pdf, overwrite);
 
       // Only now that the PDF is safely on disk do we change anything in Fortnox.
       const printed = markSent ? await markInvoicePrinted(documentNumber) : undefined;
 
+      // Prefer the document /print actually produced, so the saved copy matches
+      // the version that was marked as sent. Best-effort: the /preview copy is
+      // already on disk, and the invoice is already flagged, so a failure here
+      // must not be raised as if the whole operation failed.
+      let bytes = pdf.length;
+      let refreshNote = '';
+      if (printed?.pdf) {
+        try {
+          writePdf(target, printed.pdf, true);
+          bytes = printed.pdf.length;
+        } catch (err) {
+          refreshNote = ` Den sparade filen är /preview-versionen; kunde inte skriva om den med den utskrivna versionen: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+        }
+      }
+
       return confirmationResponse(
-        `Faktura ${documentNumber} sparad som PDF: ${target} (${pdf.length} bytes).` +
+        `Faktura ${documentNumber} sparad som PDF: ${target} (${bytes} bytes).` +
           (markSent ? ' Fakturan är nu markerad som skickad.' : '') +
-          (printed?.Note ? ` ${String(printed.Note)}` : ''),
-        { DocumentNumber: documentNumber, Path: target, Bytes: pdf.length, Sent: !!markSent },
+          (printed?.invoice.Note ? ` ${String(printed.invoice.Note)}` : '') +
+          refreshNote,
+        { DocumentNumber: documentNumber, Path: target, Bytes: bytes, Sent: !!markSent },
       );
     },
   );
