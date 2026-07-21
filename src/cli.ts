@@ -1462,8 +1462,21 @@ Examples:
       const path = opts.file ?? `invoice-${documentNumber}.pdf`;
       writeFileSync(path, pdf);
 
-      // Only now that the PDF is safely on disk do we change Fortnox.
-      const printed = opts.markSent ? await markInvoicePrinted(documentNumber) : undefined;
+      // Only now that the PDF is safely on disk do we change Fortnox. If that
+      // fails, the download still succeeded — say so, or the user is left
+      // thinking the whole command achieved nothing.
+      let printed;
+      if (opts.markSent) {
+        try {
+          printed = await markInvoicePrinted(documentNumber);
+        } catch (err) {
+          throw new Error(
+            `Invoice ${documentNumber} saved to ${path} (${pdf.length} bytes), but marking it as sent failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
 
       // Prefer the document /print actually produced, so the saved copy matches
       // the version that was marked as sent. Best-effort: the /preview copy is

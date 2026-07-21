@@ -308,7 +308,20 @@ export function registerInvoiceTools(server: McpServer): void {
       writePdf(target, pdf, overwrite);
 
       // Only now that the PDF is safely on disk do we change anything in Fortnox.
-      const printed = markSent ? await markInvoicePrinted(documentNumber) : undefined;
+      // If that fails, the download still succeeded — say so, or the caller has
+      // no idea a usable file is sitting there.
+      let printed;
+      if (markSent) {
+        try {
+          printed = await markInvoicePrinted(documentNumber);
+        } catch (err) {
+          throw new Error(
+            `Faktura ${documentNumber} sparades som PDF: ${target} (${pdf.length} bytes), men kunde inte markeras som skickad: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          );
+        }
+      }
 
       // Prefer the document /print actually produced, so the saved copy matches
       // the version that was marked as sent. Best-effort: the /preview copy is
