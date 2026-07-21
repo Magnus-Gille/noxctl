@@ -2,7 +2,7 @@
   "name": "noxctl",
   "version": "0.6.0",
   "mcpName": "io.github.magnus-gille/noxctl",
-  "description": "CLI and MCP server for Fortnox accounting — invoices, customers, bookkeeping, and VAT",
+  "description": "CLI and MCP server for Fortnox accounting \u2014 invoices, customers, bookkeeping, and VAT",
   "type": "module",
   "bin": {
     "noxctl": "dist/cli.js"
@@ -60,5 +60,8 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.0",
     "vitest": "^4.1.0"
+  },
+  "overrides": {
+    "@hono/node-server": "^2.0.11"
   }
 }
