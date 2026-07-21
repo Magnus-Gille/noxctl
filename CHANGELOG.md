@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Security
+
+- Pinned the transitive `@hono/node-server` to `^2.0.11` via `overrides`, clearing GHSA-frvp-7c67-39w9 (moderate: path traversal in `serve-static` on Windows via an encoded backslash). It reaches us through `@modelcontextprotocol/sdk`, whose declared range `^1.19.9` cannot pick up the fix in 2.0.5.
+
+  **noxctl was never exposed:** the server runs only over `StdioServerTransport` and never imports hono, starts an HTTP server, or calls `serveStatic`. The override is nonetheless worth having so `npm audit` stays a meaningful gate rather than a permanently-red one, and it is safe for the same reason the advisory was unexploitable — the code is never loaded. Remove it once the SDK moves to `@hono/node-server` 2.x.
+
+  The alternative npm proposed, `npm audit fix --force`, would have downgraded the SDK to 1.24.3 — a breaking change to a core dependency to fix an unreachable vulnerability.
+
 ## [0.6.0] - 2026-07-21
 
 ### Changed
