@@ -227,9 +227,88 @@ export interface RequestOptions {
   params?: Record<string, string | number | undefined>;
 }
 
-export async function fortnoxRequest<T>(
+// Issue the HTTP request and translate a non-2xx answer into a FortnoxApiError.
+// Returns the raw Response so callers can decide how to read the body.
+async function sendRequest(
   endpoint: string,
-  options: RequestOptions = {},
+  options: RequestOptions,
+  method: string,
+  timeoutMs: number,
+): Promise<Response> {
+  await waitForRateLimit();
+
+  const token = await getValidToken();
+  const url = new URL(`${BASE_URL}/${endpoint}`);
+
+  if (options.params) {
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, String(value));
+      }
+    }
+  }
+
+  // Accept is always application/json, even for the endpoints that answer with a
+  // PDF. This looks wrong but is not: Fortnox rejects Accept: application/pdf (and
+  // application/octet-stream) on its PDF endpoints with
+  // {"ErrorInformation":{"error":1,"message":"Invalid response type","code":1000030}}.
+  // Do not "fix" this header.
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+  };
+
+  const fetchOptions: RequestInit = {
+    method,
+    headers,
+    signal: AbortSignal.timeout(timeoutMs),
+  };
+
+  if (options.rawBody !== undefined) {
+    // A raw body (e.g. FormData for a multipart file upload): do NOT set
+    // Content-Type — fetch/undici derives it (and the multipart boundary)
+    // from the body itself.
+    fetchOptions.body = options.rawBody;
+  } else {
+    headers['Content-Type'] = 'application/json';
+    if (options.body) {
+      fetchOptions.body = JSON.stringify(options.body);
+    }
+  }
+
+  const response = await fetch(url.toString(), fetchOptions);
+
+  if (!response.ok) {
+    let errorMessage = `HTTP ${response.status}`;
+    let details: string | undefined;
+    try {
+      const errorBody = (await response.json()) as {
+        ErrorInformation?: { message?: string; code?: number };
+      };
+      if (errorBody?.ErrorInformation) {
+        errorMessage = errorBody.ErrorInformation.message || errorMessage;
+        details = `Error code: ${errorBody.ErrorInformation.code}`;
+      }
+    } catch {
+      // ignore parse errors
+    }
+    throw new FortnoxApiError(
+      response.status,
+      errorMessage,
+      details,
+      endpoint,
+      retryAfterDelay(response),
+    );
+  }
+
+  return response;
+}
+
+// Shared retry/timeout envelope; `readBody` turns a successful Response into T.
+async function request<T>(
+  endpoint: string,
+  options: RequestOptions,
+  readBody: (response: Response) => Promise<T>,
 ): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
   const retryable = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
@@ -237,80 +316,74 @@ export async function fortnoxRequest<T>(
   const timeoutMs = options.rawBody === undefined ? REQUEST_TIMEOUT_MS : UPLOAD_TIMEOUT_MS;
 
   try {
-    return await retryWithBackoff(async () => {
-      await waitForRateLimit();
-
-      const token = await getValidToken();
-      const url = new URL(`${BASE_URL}/${endpoint}`);
-
-      if (options.params) {
-        for (const [key, value] of Object.entries(options.params)) {
-          if (value !== undefined) {
-            url.searchParams.set(key, String(value));
-          }
-        }
-      }
-
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      };
-
-      const fetchOptions: RequestInit = {
-        method,
-        headers,
-        signal: AbortSignal.timeout(timeoutMs),
-      };
-
-      if (options.rawBody !== undefined) {
-        // A raw body (e.g. FormData for a multipart file upload): do NOT set
-        // Content-Type — fetch/undici derives it (and the multipart boundary)
-        // from the body itself.
-        fetchOptions.body = options.rawBody;
-      } else {
-        headers['Content-Type'] = 'application/json';
-        if (options.body) {
-          fetchOptions.body = JSON.stringify(options.body);
-        }
-      }
-
-      const response = await fetch(url.toString(), fetchOptions);
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}`;
-        let details: string | undefined;
-        try {
-          const errorBody = (await response.json()) as {
-            ErrorInformation?: { message?: string; code?: number };
-          };
-          if (errorBody?.ErrorInformation) {
-            errorMessage = errorBody.ErrorInformation.message || errorMessage;
-            details = `Error code: ${errorBody.ErrorInformation.code}`;
-          }
-        } catch {
-          // ignore parse errors
-        }
-        throw new FortnoxApiError(
-          response.status,
-          errorMessage,
-          details,
-          endpoint,
-          retryAfterDelay(response),
-        );
-      }
-
-      // Some endpoints return empty responses (e.g., DELETE)
-      const text = await response.text();
-      if (!text) return undefined as T;
-
-      return JSON.parse(text) as T;
-    }, retryable);
+    return await retryWithBackoff(
+      async () => readBody(await sendRequest(endpoint, options, method, timeoutMs)),
+      retryable,
+    );
   } catch (err) {
     if (isTimeoutError(err)) {
       throw new FortnoxRequestTimeoutError(method, endpoint, timeoutMs);
     }
     throw err;
   }
+}
+
+export async function fortnoxRequest<T>(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  return request<T>(endpoint, options, async (response) => {
+    // Some endpoints return empty responses (e.g., DELETE)
+    const text = await response.text();
+    if (!text) return undefined as T;
+
+    return JSON.parse(text) as T;
+  });
+}
+
+// Summarize an unexpected (non-binary) body for an error message, preferring the
+// Fortnox error envelope when the body turns out to be one.
+function describeUnexpectedBody(buf: Buffer): string {
+  const text = buf.toString('utf-8', 0, 2000).trim();
+  try {
+    const parsed = JSON.parse(text) as {
+      ErrorInformation?: { message?: string; code?: number };
+    };
+    const info = parsed?.ErrorInformation;
+    if (info?.message) {
+      return info.code === undefined ? info.message : `${info.message} (code ${info.code})`;
+    }
+  } catch {
+    // not JSON — fall through to the raw excerpt
+  }
+  return text.slice(0, 200) || '<empty body>';
+}
+
+/**
+ * Fetch a binary payload (currently: the PDF that Fortnox's invoice
+ * print/preview endpoints return). Shares rate limiting, retries, timeouts and
+ * error mapping with `fortnoxRequest`.
+ *
+ * Guards against writing a non-PDF body to disk: Fortnox can answer 200 with a
+ * JSON error envelope, and silently saving that as `invoice-1001.pdf` would look
+ * like success until someone opens the file.
+ */
+export async function fortnoxRequestBinary(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<Buffer> {
+  return request<Buffer>(endpoint, options, async (response) => {
+    const contentType = response.headers?.get?.('content-type') ?? '';
+    const buf = Buffer.from(await response.arrayBuffer());
+
+    if (!/application\/(pdf|octet-stream)/i.test(contentType)) {
+      throw new Error(
+        `Fortnox returned ${contentType || 'an unknown content type'} instead of a PDF for ${endpoint}: ${describeUnexpectedBody(buf)}`,
+      );
+    }
+
+    return buf;
+  });
 }
 
 /**

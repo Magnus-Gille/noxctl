@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import {
   isJsonMode,
@@ -1374,6 +1374,74 @@ invoices
         data,
         invoiceConfirmColumns,
         'Invoice',
+      );
+    },
+  );
+
+invoices
+  .command('pdf <documentNumber>')
+  .description('Download an invoice as a PDF')
+  // Note: -o/--output is already taken globally for the output *format*
+  // (json|table), so the destination path is --file.
+  .option('-f, --file <path>', 'Write the PDF here (- for stdout)')
+  .option('--mark-sent', 'Also flag the invoice as sent in Fortnox (uses /print)')
+  .option('-y, --yes', 'Skip confirmation prompt (only needed with --mark-sent)')
+  .option('--dry-run', 'Preview the action without sending it')
+  .addHelpText(
+    'after',
+    `
+By default this uses Fortnox's /preview endpoint, which returns the PDF without
+changing the invoice. --mark-sent switches to /print, which also sets Sent=true.
+
+Without --file the PDF is written to invoice-<documentNumber>.pdf in the current
+directory.
+
+Examples:
+  noxctl invoices pdf 28
+  noxctl invoices pdf 28 --file ~/Desktop/faktura-28.pdf
+  noxctl invoices pdf 28 --file - > faktura.pdf
+  noxctl invoices pdf 28 --mark-sent --yes`,
+  )
+  .action(
+    async (
+      documentNumber: string,
+      opts: { file?: string; markSent?: boolean; yes?: boolean; dryRun?: boolean },
+    ) => {
+      const { getInvoicePdf } = await import('./operations/invoices.js');
+      const toStdout = opts.file === '-';
+
+      // Only an *explicit* --output json conflicts here. json() alone is not the
+      // test: it defaults to true whenever stdout is piped, which is exactly how
+      // `--file -` is meant to be used.
+      if (toStdout && program.opts().output === 'json') {
+        throw new Error(
+          '--file - writes raw PDF bytes to stdout and cannot be combined with --output json.',
+        );
+      }
+
+      // Only --mark-sent mutates the invoice; a plain download needs no confirmation.
+      if (opts.markSent || opts.dryRun) {
+        const action = opts.markSent
+          ? `Download invoice ${documentNumber} as PDF and flag it as sent`
+          : `Download invoice ${documentNumber} as PDF`;
+        if (!(await confirmMutation(action, opts))) {
+          return;
+        }
+      }
+
+      const pdf = await getInvoicePdf(documentNumber, { markSent: opts.markSent });
+
+      if (toStdout) {
+        process.stdout.write(pdf);
+        return;
+      }
+
+      const path = opts.file ?? `invoice-${documentNumber}.pdf`;
+      writeFileSync(path, pdf);
+      outputConfirmation(
+        `Invoice ${documentNumber} saved to ${path} (${pdf.length} bytes).`,
+        json(),
+        { DocumentNumber: documentNumber, Path: path, Bytes: pdf.length, Sent: !!opts.markSent },
       );
     },
   );

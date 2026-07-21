@@ -13,6 +13,38 @@ function mockFetch(response: unknown) {
   });
 }
 
+const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes');
+
+function pdfResponse(bytes: Buffer = PDF_BYTES) {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': 'application/pdf' }),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+    // Faithful to a real fetch Response: .text() is available and yields the
+    // PDF bytes decoded as text, which is what used to reach JSON.parse.
+    text: () => Promise.resolve(bytes.toString('utf-8')),
+  };
+}
+
+function mockPdf(bytes: Buffer = PDF_BYTES) {
+  global.fetch = vi.fn().mockResolvedValue(pdfResponse(bytes));
+}
+
+// /print returns the PDF; the follow-up GET reports the invoice's post-print state.
+function mockPdfThenInvoice(invoice: Record<string, unknown>) {
+  global.fetch = vi
+    .fn()
+    .mockResolvedValueOnce(pdfResponse())
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ Invoice: invoice })),
+      json: () => Promise.resolve({ Invoice: invoice }),
+    });
+}
+
 describe('invoice operations', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -106,13 +138,26 @@ describe('invoice operations', () => {
     });
 
     it('routes to print endpoint', async () => {
-      mockFetch({ Invoice: { DocumentNumber: '1001' } });
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
       const { sendInvoice } = await import('../../src/operations/invoices.js');
 
       await sendInvoice('1001', 'print');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/print');
+    });
+
+    // Regression: /print answers with application/pdf, not JSON. Parsing the PDF
+    // bytes as JSON threw a bare SyntaxError *after* Fortnox had already flagged
+    // the invoice as sent, so the caller saw a crash for an action that succeeded.
+    it('does not choke on the PDF body that /print returns, and reports the sent invoice', async () => {
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      const result = await sendInvoice('1001', 'print');
+
+      expect(result.Sent).toBe(true);
+      expect(result.DocumentNumber).toBe('1001');
     });
 
     it('routes to einvoice endpoint', async () => {
@@ -123,6 +168,38 @@ describe('invoice operations', () => {
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/einvoice');
+    });
+  });
+
+  describe('getInvoicePdf', () => {
+    it('uses /preview by default so downloading a PDF does not flag the invoice as sent', async () => {
+      mockPdf();
+      const { getInvoicePdf } = await import('../../src/operations/invoices.js');
+
+      const bytes = await getInvoicePdf('1001');
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('invoices/1001/preview');
+      expect(calledUrl).not.toContain('/print');
+      expect(bytes.equals(PDF_BYTES)).toBe(true);
+    });
+
+    it('uses /print when the caller opts into marking the invoice as sent', async () => {
+      mockPdf();
+      const { getInvoicePdf } = await import('../../src/operations/invoices.js');
+
+      await getInvoicePdf('1001', { markSent: true });
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('invoices/1001/print');
+    });
+
+    it('rejects a non-numeric document number before calling Fortnox', async () => {
+      mockPdf();
+      const { getInvoicePdf } = await import('../../src/operations/invoices.js');
+
+      await expect(getInvoicePdf('../../customers/1')).rejects.toThrow();
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 

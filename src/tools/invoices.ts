@@ -1,11 +1,15 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
   listInvoices,
   getInvoice,
   createInvoice,
   updateInvoice,
   sendInvoice,
+  getInvoicePdf,
   bookkeepInvoice,
   creditInvoice,
 } from '../operations/invoices.js';
@@ -195,6 +199,45 @@ export function registerInvoiceTools(server: McpServer): void {
         invoice,
         invoiceConfirmColumns,
         includeRaw,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_invoice_pdf',
+    'Hämta en faktura som PDF och spara den på disk. Returnerar sökvägen till filen (inte PDF-innehållet). Använder Fortnox /preview som standard, vilket INTE markerar fakturan som skickad.',
+    {
+      documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
+      outputPath: z
+        .string()
+        .optional()
+        .describe('Sökväg att spara PDF:en till (default: invoice-<nummer>.pdf i temp-katalogen)'),
+      markSent: z
+        .boolean()
+        .optional()
+        .describe('Markera även fakturan som skickad i Fortnox (använder /print)'),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('Bekräfta — krävs endast när markSent är satt, eftersom den ändrar fakturan'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att hämta PDF:en'),
+    },
+    async ({ documentNumber, outputPath, markSent, confirm, dryRun }) => {
+      const action = markSent
+        ? `download invoice ${documentNumber} as PDF and mark it as sent`
+        : `download invoice ${documentNumber} as PDF`;
+      if (dryRun) return dryRunResponse(action);
+      // Only the /print variant changes the invoice; a plain download is read-only.
+      if (markSent && !confirm) requireConfirmation(action);
+
+      const target = resolve(outputPath ?? join(tmpdir(), `invoice-${documentNumber}.pdf`));
+      const pdf = await getInvoicePdf(documentNumber, { markSent });
+      writeFileSync(target, pdf);
+
+      return confirmationResponse(
+        `Faktura ${documentNumber} sparad som PDF: ${target} (${pdf.length} bytes).` +
+          (markSent ? ' Fakturan är nu markerad som skickad.' : ''),
+        { DocumentNumber: documentNumber, Path: target, Bytes: pdf.length, Sent: !!markSent },
       );
     },
   );

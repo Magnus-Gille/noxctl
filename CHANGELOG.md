@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Invoice PDF export** (#66) — `noxctl invoices pdf <docNumber>` and the `fortnox_invoice_pdf` MCP tool download an invoice as a PDF. Writes to `--file <path>`, to stdout with `--file -`, or to `invoice-<docNumber>.pdf` by default (the destination is `--file` because `-o/--output` is globally the output *format*). Uses Fortnox's `/preview` endpoint, which returns the PDF **without** marking the invoice as sent; `--mark-sent` opts into `/print`, which does set `Sent` and therefore prompts for confirmation. Works for credit invoices too.
+
+### Fixed
+
+- `noxctl invoices send <docNumber> --method print` (and `fortnox_send_invoice` with `method: "print"`) crashed with `SyntaxError: Unexpected token '%'`. Fortnox's `/print` endpoint answers with the PDF document rather than JSON, and the response was being parsed as JSON — after Fortnox had already flagged the invoice as sent, so a successful action was reported as a failure. The print path now reads the PDF response correctly and re-reads the invoice to report its true post-print state.
+
 ## [0.4.1] - 2026-07-13
 
 ### Fixed

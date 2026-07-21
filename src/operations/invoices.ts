@@ -1,4 +1,4 @@
-import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
+import { fortnoxRequest, fortnoxRequestBinary, fetchAllPages } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
 interface InvoiceResponse {
@@ -104,10 +104,35 @@ export async function sendInvoice(
     });
   }
 
-  const endpointSuffix =
-    method === 'email' ? 'email' : method === 'einvoice' ? 'einvoice' : 'print';
+  if (method === 'print') {
+    // /print answers with the PDF itself rather than JSON, so it cannot go
+    // through fortnoxRequest. The bytes are discarded here — this action means
+    // "mark as printed"; use getInvoicePdf to keep the file — and the invoice is
+    // re-read so the caller sees its real post-print state (Sent = true).
+    await fortnoxRequestBinary(`invoices/${documentId}/print`);
+    return getInvoice(documentNumber);
+  }
+
+  const endpointSuffix = method === 'einvoice' ? 'einvoice' : 'email';
   const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}/${endpointSuffix}`);
   return data?.Invoice || {};
+}
+
+export interface InvoicePdfOptions {
+  /**
+   * Use /print instead of /preview. Both return the same PDF, but /print also
+   * sets the invoice's `Sent` flag — a side effect you rarely want when you are
+   * just downloading a copy to attach to an email.
+   */
+  markSent?: boolean;
+}
+
+export async function getInvoicePdf(
+  documentNumber: string,
+  options: InvoicePdfOptions = {},
+): Promise<Buffer> {
+  const action = options.markSent ? 'print' : 'preview';
+  return fortnoxRequestBinary(`invoices/${documentSegment(documentNumber)}/${action}`);
 }
 
 export async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {

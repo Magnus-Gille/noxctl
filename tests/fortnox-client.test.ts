@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   fortnoxRequest,
+  fortnoxRequestBinary,
   FortnoxApiError,
   FortnoxRequestTimeoutError,
 } from '../src/fortnox-client.js';
@@ -356,5 +357,92 @@ describe('fortnox-client', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Content-Type']).toBeUndefined();
     expect(headers.Authorization).toBe('Bearer mock-token');
+  });
+
+  describe('fortnoxRequestBinary', () => {
+    const PDF_BYTES = Buffer.from('%PDF-1.4\nbinary\x00\x01bytes');
+
+    function mockPdfResponse(bytes: Buffer = PDF_BYTES, contentType = 'application/pdf') {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': contentType }),
+        arrayBuffer: () =>
+          Promise.resolve(
+            bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+          ),
+      });
+    }
+
+    it('returns the raw bytes unmodified', async () => {
+      mockPdfResponse();
+
+      const result = await fortnoxRequestBinary('invoices/1001/preview');
+
+      expect(Buffer.isBuffer(result)).toBe(true);
+      expect(result.equals(PDF_BYTES)).toBe(true);
+    });
+
+    it('requests Accept: application/json — Fortnox rejects application/pdf with error 1000030', async () => {
+      mockPdfResponse();
+
+      await fortnoxRequestBinary('invoices/1001/preview');
+
+      const init = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(headers.Accept).toBe('application/json');
+      expect(headers.Authorization).toBe('Bearer mock-token');
+    });
+
+    it('raises a FortnoxApiError when Fortnox answers with a JSON error envelope', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 404,
+        headers: new Headers({ 'content-type': 'application/json' }),
+        json: () =>
+          Promise.resolve({ ErrorInformation: { message: 'Can not find invoice', code: 2000428 } }),
+      });
+
+      await expect(fortnoxRequestBinary('invoices/999999/preview')).rejects.toThrow(
+        /Can not find invoice/,
+      );
+    });
+
+    it('rejects a 200 that is not a PDF instead of writing an error page to disk', async () => {
+      const errorEnvelope = Buffer.from(
+        JSON.stringify({ ErrorInformation: { message: 'Invalid response type', code: 1000030 } }),
+      );
+      mockPdfResponse(errorEnvelope, 'application/json');
+
+      await expect(fortnoxRequestBinary('invoices/1001/preview')).rejects.toThrow(
+        /Invalid response type/,
+      );
+    });
+
+    it('retries a transient 500 and returns the bytes from the successful attempt', async () => {
+      const pdfBody = PDF_BYTES;
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          headers: new Headers({ 'content-type': 'application/json' }),
+          json: () => Promise.resolve({ ErrorInformation: { message: 'boom', code: 1 } }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/pdf' }),
+          arrayBuffer: () =>
+            Promise.resolve(
+              pdfBody.buffer.slice(pdfBody.byteOffset, pdfBody.byteOffset + pdfBody.byteLength),
+            ),
+        });
+
+      const result = await fortnoxRequestBinary('invoices/1001/preview');
+
+      expect(result.equals(PDF_BYTES)).toBe(true);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
   });
 });

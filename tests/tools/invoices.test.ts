@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from '../../src/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -14,6 +17,39 @@ function mockFetch(response: unknown, ok = true, status = 200) {
     text: () => Promise.resolve(JSON.stringify(response)),
     json: () => Promise.resolve(response),
   });
+}
+
+const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes');
+
+function pdfResponse() {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': 'application/pdf' }),
+    arrayBuffer: () =>
+      Promise.resolve(
+        PDF_BYTES.buffer.slice(PDF_BYTES.byteOffset, PDF_BYTES.byteOffset + PDF_BYTES.byteLength),
+      ),
+    text: () => Promise.resolve(PDF_BYTES.toString('utf-8')),
+  };
+}
+
+// The print/preview endpoints answer with application/pdf, not JSON.
+function mockPdf() {
+  global.fetch = vi.fn().mockResolvedValue(pdfResponse());
+}
+
+// /print returns the PDF; the follow-up GET reports the post-print invoice.
+function mockPdfThenInvoice(invoice: Record<string, unknown>) {
+  global.fetch = vi
+    .fn()
+    .mockResolvedValueOnce(pdfResponse())
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ Invoice: invoice })),
+      json: () => Promise.resolve({ Invoice: invoice }),
+    });
 }
 
 async function setupClientServer() {
@@ -178,16 +214,18 @@ describe('invoice tools', () => {
     });
 
     it('sends invoice via print', async () => {
-      mockFetch({ Invoice: { DocumentNumber: '1001' } });
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
 
       const { client } = await setupClientServer();
-      await client.callTool({
+      const result = await client.callTool({
         name: 'fortnox_send_invoice',
         arguments: { documentNumber: '1001', method: 'print', confirm: true },
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/print');
+      // The PDF body must not surface as an error to the caller.
+      expect(result.isError).toBeFalsy();
     });
 
     it('sends invoice via e-invoice', async () => {
@@ -201,6 +239,68 @@ describe('invoice tools', () => {
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/einvoice');
+    });
+  });
+
+  describe('fortnox_invoice_pdf', () => {
+    it('saves the PDF and returns the path rather than the bytes', async () => {
+      mockPdf();
+      const target = join(tmpdir(), `noxctl-test-${process.pid}.pdf`);
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: target },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain(target);
+      expect(readFileSync(target).equals(PDF_BYTES)).toBe(true);
+      // The PDF itself must never be inlined into the tool response.
+      expect(text).not.toContain('%PDF');
+      rmSync(target, { force: true });
+    });
+
+    it('uses /preview so a plain download needs no confirmation and does not mark the invoice sent', async () => {
+      mockPdf();
+      const target = join(tmpdir(), `noxctl-test-preview-${process.pid}.pdf`);
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: target },
+      });
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('invoices/1001/preview');
+      expect(result.isError).toBeFalsy();
+      rmSync(target, { force: true });
+    });
+
+    it('requires confirmation for markSent because it mutates the invoice', async () => {
+      mockPdf();
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', markSent: true },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('does not call Fortnox on dryRun', async () => {
+      mockPdf();
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', dryRun: true },
+      });
+
+      expect((result.content as { type: string; text: string }[])[0].text).toContain('Dry run');
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 
