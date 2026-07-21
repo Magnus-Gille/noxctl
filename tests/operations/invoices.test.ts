@@ -160,6 +160,18 @@ describe('invoice operations', () => {
       expect(result.DocumentNumber).toBe('1001');
     });
 
+    // 'email' and 'einvoice' both deliver the invoice to the customer, so an
+    // unrecognised method must not quietly fall through to one of them.
+    it('refuses an unrecognised send method instead of defaulting to one', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1001' } });
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      await expect(
+        sendInvoice('1001', 'sms' as unknown as Parameters<typeof sendInvoice>[1]),
+      ).rejects.toThrow(/Unsupported send method/);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
     it('routes to einvoice endpoint', async () => {
       mockFetch({ Invoice: { DocumentNumber: '1001' } });
       const { sendInvoice } = await import('../../src/operations/invoices.js');

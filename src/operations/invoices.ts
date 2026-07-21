@@ -113,8 +113,14 @@ export async function sendInvoice(
     return getInvoice(documentNumber);
   }
 
-  const endpointSuffix = method === 'einvoice' ? 'einvoice' : 'email';
-  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}/${endpointSuffix}`);
+  // Exhaustive on purpose: no silent fallback. 'email' and 'einvoice' both send
+  // the invoice to the customer, so an unrecognised method must fail loudly
+  // rather than pick one of them.
+  if (method !== 'email' && method !== 'einvoice') {
+    throw new Error(`Unsupported send method: ${String(method)}`);
+  }
+
+  const data = await fortnoxRequest<InvoiceResponse>(`invoices/${documentId}/${method}`);
   return data?.Invoice || {};
 }
 
