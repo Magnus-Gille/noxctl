@@ -16,7 +16,14 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Dev setup
 
-Prerequisites: Node.js 22.12+ and (on Linux) `secret-tool` for the keychain-backed tests.
+Prerequisites: Node.js **22.22.1+** and (on Linux) `secret-tool` for the
+keychain-backed tests.
+
+> The published package only requires Node 22.12+ (`engines` in `package.json`) —
+> that's the runtime contract for users. The higher floor here is a *development*
+> requirement: `lint-staged@17`, which runs in the pre-commit hook, needs
+> 22.22.1. Keep the two numbers distinct; raising `engines` affects everyone who
+> installs noxctl.
 
 ```bash
 git clone https://github.com/Magnus-Gille/fortnox-mcp.git

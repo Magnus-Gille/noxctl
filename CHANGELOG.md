@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Internal
+
+- `@types/node` realigned to `^22` (was `^25.9.5`). The types should track the *minimum* supported Node, not the newest release — typing against a newer Node than `engines` allows lets TypeScript accept APIs that do not exist at runtime for users on the supported floor. The build and full suite pass unchanged on `@types/node@22`, confirming nothing depended on the newer typings. This supersedes the proposed bump to 26.
+- `lint-staged` 16.4.0 → 17.1.0 (dev-only). It requires Node 22.22.1, which is now the documented *development* prerequisite; the published package's `engines` stays at 22.12.0, since that is the runtime contract for users.
+
 ### Security
 
 - Pinned the transitive `@hono/node-server` to `^2.0.11` via `overrides`, clearing GHSA-frvp-7c67-39w9 (moderate: path traversal in `serve-static` on Windows via an encoded backslash). It reaches us through `@modelcontextprotocol/sdk`, whose declared range `^1.19.9` cannot pick up the fix in 2.0.5.
