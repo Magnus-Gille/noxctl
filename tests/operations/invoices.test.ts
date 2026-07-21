@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
+  // Needed by FortnoxApiError, which prefixes messages with the active profile.
+  getResolvedProfile: vi.fn().mockReturnValue('default'),
 }));
 
 function mockFetch(response: unknown) {
@@ -196,14 +198,16 @@ describe('invoice operations', () => {
       expect(bytes.equals(PDF_BYTES)).toBe(true);
     });
 
-    it('uses /print when the caller opts into marking the invoice as sent', async () => {
+    // Downloading must never mutate. Marking the invoice as sent is a separate
+    // step (markInvoicePrinted) that callers run *after* the bytes are on disk.
+    it('never touches /print, even indirectly', async () => {
       mockPdf();
       const { getInvoicePdf } = await import('../../src/operations/invoices.js');
 
-      await getInvoicePdf('1001', { markSent: true });
+      await getInvoicePdf('1001');
 
-      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/print');
+      const urls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
+      expect(urls.some((u) => u.includes('/print'))).toBe(false);
     });
 
     it('rejects a non-numeric document number before calling Fortnox', async () => {
@@ -212,6 +216,42 @@ describe('invoice operations', () => {
 
       await expect(getInvoicePdf('../../customers/1')).rejects.toThrow();
       expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('markInvoicePrinted', () => {
+    it('calls /print and flags it as a mutation so it is never auto-retried', async () => {
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('invoices/1001/print');
+      expect(result.Sent).toBe(true);
+    });
+
+    // The print already succeeded at this point; failing the whole call would
+    // recreate exactly the "successful action reported as a failure" ambiguity
+    // this code path exists to remove.
+    it('still reports success when the confirmation read-back fails', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(pdfResponse())
+        .mockResolvedValue({
+          ok: false,
+          status: 500,
+          headers: new Headers(),
+          json: () => Promise.resolve({ ErrorInformation: { message: 'Boom', code: 0 } }),
+        });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.Sent).toBe(true);
+      expect(result.DocumentNumber).toBe('1001');
+      // The read-back failure must remain visible, not be silently swallowed.
+      expect(String(result.Note)).toMatch(/Boom/);
     });
   });
 

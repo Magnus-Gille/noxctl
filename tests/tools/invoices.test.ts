@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from '../../src/index.js';
@@ -274,6 +274,40 @@ describe('invoice tools', () => {
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/preview');
       expect(result.isError).toBeFalsy();
+      rmSync(target, { force: true });
+    });
+
+    // Tool arguments are agent-generated and can be prompt-injection influenced,
+    // so a stray path must not silently truncate an existing file.
+    it('refuses to clobber an existing file unless overwrite is set', async () => {
+      mockPdf();
+      const target = join(tmpdir(), `noxctl-test-existing-${process.pid}.pdf`);
+      writeFileSync(target, 'important pre-existing content');
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: target },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(readFileSync(target, 'utf-8')).toBe('important pre-existing content');
+      rmSync(target, { force: true });
+    });
+
+    it('replaces an existing file when overwrite is explicitly set', async () => {
+      mockPdf();
+      const target = join(tmpdir(), `noxctl-test-overwrite-${process.pid}.pdf`);
+      writeFileSync(target, 'stale');
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_invoice_pdf',
+        arguments: { documentNumber: '1001', outputPath: target, overwrite: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(readFileSync(target).equals(PDF_BYTES)).toBe(true);
       rmSync(target, { force: true });
     });
 

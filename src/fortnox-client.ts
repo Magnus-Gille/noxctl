@@ -72,8 +72,8 @@ export class FortnoxApiError extends Error {
 export class FortnoxRequestTimeoutError extends Error {
   public readonly outcomeUnknown: boolean;
 
-  constructor(method: string, endpoint: string, timeoutMs: number) {
-    const mutation = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  constructor(method: string, endpoint: string, timeoutMs: number, isMutation?: boolean) {
+    const mutation = isMutation ?? !['GET', 'HEAD', 'OPTIONS'].includes(method);
     const suffix = mutation
       ? ' The outcome is unknown; verify the result in Fortnox before retrying to avoid duplicate side effects.'
       : ' It is safe to retry the read request.';
@@ -225,6 +225,13 @@ export interface RequestOptions {
   body?: unknown;
   rawBody?: BodyInit;
   params?: Record<string, string | number | undefined>;
+  /**
+   * Override the safety classification that would otherwise be derived from the
+   * HTTP verb. Fortnox exposes some state-changing actions as GET — notably
+   * `/invoices/{n}/print`, which sets `Sent` — and those must not be retried
+   * automatically, nor have their timeouts reported as "safe to retry".
+   */
+  mutation?: boolean;
 }
 
 // Issue the HTTP request and translate a non-2xx answer into a FortnoxApiError.
@@ -311,7 +318,9 @@ async function request<T>(
   readBody: (response: Response) => Promise<T>,
 ): Promise<T> {
   const method = (options.method || 'GET').toUpperCase();
-  const retryable = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+  const isMutation =
+    options.mutation ?? !(method === 'GET' || method === 'HEAD' || method === 'OPTIONS');
+  const retryable = !isMutation;
 
   const timeoutMs = options.rawBody === undefined ? REQUEST_TIMEOUT_MS : UPLOAD_TIMEOUT_MS;
 
@@ -322,7 +331,7 @@ async function request<T>(
     );
   } catch (err) {
     if (isTimeoutError(err)) {
-      throw new FortnoxRequestTimeoutError(method, endpoint, timeoutMs);
+      throw new FortnoxRequestTimeoutError(method, endpoint, timeoutMs, isMutation);
     }
     throw err;
   }
@@ -359,26 +368,28 @@ function describeUnexpectedBody(buf: Buffer): string {
   return text.slice(0, 200) || '<empty body>';
 }
 
+const PDF_MAGIC = '%PDF-';
+
 /**
- * Fetch a binary payload (currently: the PDF that Fortnox's invoice
- * print/preview endpoints return). Shares rate limiting, retries, timeouts and
- * error mapping with `fortnoxRequest`.
+ * Fetch a PDF from one of Fortnox's document endpoints. Shares rate limiting,
+ * retries, timeouts and error mapping with `fortnoxRequest`.
  *
- * Guards against writing a non-PDF body to disk: Fortnox can answer 200 with a
- * JSON error envelope, and silently saving that as `invoice-1001.pdf` would look
- * like success until someone opens the file.
+ * The returned bytes are validated by their magic number rather than by the
+ * Content-Type header: Fortnox can answer 200 with a JSON error envelope, and a
+ * proxy can return an HTML error page, either of which would otherwise be saved
+ * as `invoice-1001.pdf` and look like success until someone opened the file.
  */
-export async function fortnoxRequestBinary(
+export async function fortnoxRequestPdf(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<Buffer> {
   return request<Buffer>(endpoint, options, async (response) => {
-    const contentType = response.headers?.get?.('content-type') ?? '';
     const buf = Buffer.from(await response.arrayBuffer());
 
-    if (!/application\/(pdf|octet-stream)/i.test(contentType)) {
+    if (buf.subarray(0, PDF_MAGIC.length).toString('latin1') !== PDF_MAGIC) {
+      const contentType = response.headers?.get?.('content-type') || 'an unknown content type';
       throw new Error(
-        `Fortnox returned ${contentType || 'an unknown content type'} instead of a PDF for ${endpoint}: ${describeUnexpectedBody(buf)}`,
+        `Fortnox returned ${contentType} that is not a PDF for ${endpoint}: ${describeUnexpectedBody(buf)}`,
       );
     }
 

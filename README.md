@@ -261,7 +261,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice (mutation) |
 | `noxctl invoices update <docNumber> --input <file>` | `fortnox_update_invoice` | Update an invoice that has not been bookkeept (mutation) |
 | `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice` | Send via email (default), print, or e-invoice (mutation) |
-| `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]` | `fortnox_invoice_pdf` | Download the invoice PDF. Read-only by default; `--mark-sent` also flags it as sent (mutation) |
+| `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]` | `fortnox_invoice_pdf` | Download the invoice PDF (via `/preview`, no side effect). `--mark-sent` also flags it as sent afterwards (mutation) |
 | `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Bookkeep an invoice (mutation) |
 | `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
 

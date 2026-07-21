@@ -1390,8 +1390,10 @@ invoices
   .addHelpText(
     'after',
     `
-By default this uses Fortnox's /preview endpoint, which returns the PDF without
-changing the invoice. --mark-sent switches to /print, which also sets Sent=true.
+The PDF always comes from Fortnox's /preview endpoint, which does not change the
+invoice. --mark-sent additionally calls /print afterwards to set Sent=true — the
+file is written first, so a failed write never leaves an invoice flagged as sent
+with no PDF to show for it.
 
 Without --file the PDF is written to invoice-<documentNumber>.pdf in the current
 directory.
@@ -1407,7 +1409,7 @@ Examples:
       documentNumber: string,
       opts: { file?: string; markSent?: boolean; yes?: boolean; dryRun?: boolean },
     ) => {
-      const { getInvoicePdf } = await import('./operations/invoices.js');
+      const { getInvoicePdf, markInvoicePrinted } = await import('./operations/invoices.js');
       const toStdout = opts.file === '-';
 
       // Only an *explicit* --output json conflicts here. json() alone is not the
@@ -1429,15 +1431,24 @@ Examples:
         }
       }
 
-      const pdf = await getInvoicePdf(documentNumber, { markSent: opts.markSent });
+      const pdf = await getInvoicePdf(documentNumber);
 
       if (toStdout) {
-        process.stdout.write(pdf);
+        // Wait for the bytes to be flushed before mutating anything: a closed or
+        // broken pipe must not leave the invoice marked as sent.
+        await new Promise<void>((resolve, reject) => {
+          process.stdout.write(pdf, (err) => (err ? reject(err) : resolve()));
+        });
+        if (opts.markSent) await markInvoicePrinted(documentNumber);
         return;
       }
 
       const path = opts.file ?? `invoice-${documentNumber}.pdf`;
       writeFileSync(path, pdf);
+
+      // Only now that the PDF is safely on disk do we change Fortnox.
+      if (opts.markSent) await markInvoicePrinted(documentNumber);
+
       outputConfirmation(
         `Invoice ${documentNumber} saved to ${path} (${pdf.length} bytes).`,
         json(),

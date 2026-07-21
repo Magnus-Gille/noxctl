@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -10,6 +10,7 @@ import {
   updateInvoice,
   sendInvoice,
   getInvoicePdf,
+  markInvoicePrinted,
   bookkeepInvoice,
   creditInvoice,
 } from '../operations/invoices.js';
@@ -211,7 +212,13 @@ export function registerInvoiceTools(server: McpServer): void {
       outputPath: z
         .string()
         .optional()
-        .describe('Sökväg att spara PDF:en till (default: invoice-<nummer>.pdf i temp-katalogen)'),
+        .describe(
+          'Sökväg att spara PDF:en till. Skriver inte över en befintlig fil om inte overwrite är satt. Utelämnas: en ny privat temp-katalog används.',
+        ),
+      overwrite: z
+        .boolean()
+        .optional()
+        .describe('Tillåt att en befintlig fil på outputPath skrivs över'),
       markSent: z
         .boolean()
         .optional()
@@ -222,7 +229,7 @@ export function registerInvoiceTools(server: McpServer): void {
         .describe('Bekräfta — krävs endast när markSent är satt, eftersom den ändrar fakturan'),
       dryRun: z.boolean().optional().describe('Visa åtgärden utan att hämta PDF:en'),
     },
-    async ({ documentNumber, outputPath, markSent, confirm, dryRun }) => {
+    async ({ documentNumber, outputPath, overwrite, markSent, confirm, dryRun }) => {
       const action = markSent
         ? `download invoice ${documentNumber} as PDF and mark it as sent`
         : `download invoice ${documentNumber} as PDF`;
@@ -230,13 +237,34 @@ export function registerInvoiceTools(server: McpServer): void {
       // Only the /print variant changes the invoice; a plain download is read-only.
       if (markSent && !confirm) requireConfirmation(action);
 
-      const target = resolve(outputPath ?? join(tmpdir(), `invoice-${documentNumber}.pdf`));
-      const pdf = await getInvoicePdf(documentNumber, { markSent });
-      writeFileSync(target, pdf);
+      // Arguments here are agent-generated, so a stray path must not silently
+      // truncate an existing file. Without an explicit path we use a fresh
+      // private directory rather than a predictable, clobber-prone temp name.
+      const target = outputPath
+        ? resolve(outputPath)
+        : join(mkdtempSync(join(tmpdir(), 'noxctl-')), `invoice-${documentNumber}.pdf`);
+
+      const pdf = await getInvoicePdf(documentNumber);
+      try {
+        // 'wx' fails if the path exists and refuses to follow a symlink to an
+        // existing file; 'w' is only used when the caller opted in.
+        writeFileSync(target, pdf, { flag: overwrite ? 'w' : 'wx' });
+      } catch (err) {
+        if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+          throw new Error(
+            `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
+          );
+        }
+        throw err;
+      }
+
+      // Only now that the PDF is safely on disk do we change anything in Fortnox.
+      const printed = markSent ? await markInvoicePrinted(documentNumber) : undefined;
 
       return confirmationResponse(
         `Faktura ${documentNumber} sparad som PDF: ${target} (${pdf.length} bytes).` +
-          (markSent ? ' Fakturan är nu markerad som skickad.' : ''),
+          (markSent ? ' Fakturan är nu markerad som skickad.' : '') +
+          (printed?.Note ? ` ${String(printed.Note)}` : ''),
         { DocumentNumber: documentNumber, Path: target, Bytes: pdf.length, Sent: !!markSent },
       );
     },
