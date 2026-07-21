@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
+  // Needed by FortnoxApiError, which prefixes messages with the active profile.
+  getResolvedProfile: vi.fn().mockReturnValue('default'),
 }));
 
 function mockFetch(response: unknown) {
@@ -11,6 +13,38 @@ function mockFetch(response: unknown) {
     text: () => Promise.resolve(JSON.stringify(response)),
     json: () => Promise.resolve(response),
   });
+}
+
+const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes\n%%EOF\n');
+
+function pdfResponse(bytes: Buffer = PDF_BYTES) {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': 'application/pdf' }),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+    // Faithful to a real fetch Response: .text() is available and yields the
+    // PDF bytes decoded as text, which is what used to reach JSON.parse.
+    text: () => Promise.resolve(bytes.toString('utf-8')),
+  };
+}
+
+function mockPdf(bytes: Buffer = PDF_BYTES) {
+  global.fetch = vi.fn().mockResolvedValue(pdfResponse(bytes));
+}
+
+// /print returns the PDF; the follow-up GET reports the invoice's post-print state.
+function mockPdfThenInvoice(invoice: Record<string, unknown>) {
+  global.fetch = vi
+    .fn()
+    .mockResolvedValueOnce(pdfResponse())
+    .mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ Invoice: invoice })),
+      json: () => Promise.resolve({ Invoice: invoice }),
+    });
 }
 
 describe('invoice operations', () => {
@@ -106,13 +140,38 @@ describe('invoice operations', () => {
     });
 
     it('routes to print endpoint', async () => {
-      mockFetch({ Invoice: { DocumentNumber: '1001' } });
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
       const { sendInvoice } = await import('../../src/operations/invoices.js');
 
       await sendInvoice('1001', 'print');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/print');
+    });
+
+    // Regression: /print answers with application/pdf, not JSON. Parsing the PDF
+    // bytes as JSON threw a bare SyntaxError *after* Fortnox had already flagged
+    // the invoice as sent, so the caller saw a crash for an action that succeeded.
+    it('does not choke on the PDF body that /print returns, and reports the sent invoice', async () => {
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      const result = await sendInvoice('1001', 'print');
+
+      expect(result.Sent).toBe(true);
+      expect(result.DocumentNumber).toBe('1001');
+    });
+
+    // 'email' and 'einvoice' both deliver the invoice to the customer, so an
+    // unrecognised method must not quietly fall through to one of them.
+    it('refuses an unrecognised send method instead of defaulting to one', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1001' } });
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      await expect(
+        sendInvoice('1001', 'sms' as unknown as Parameters<typeof sendInvoice>[1]),
+      ).rejects.toThrow(/Unsupported send method/);
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
     it('routes to einvoice endpoint', async () => {
@@ -123,6 +182,153 @@ describe('invoice operations', () => {
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/einvoice');
+    });
+  });
+
+  describe('getInvoicePdf', () => {
+    it('uses /preview by default so downloading a PDF does not flag the invoice as sent', async () => {
+      mockPdf();
+      const { getInvoicePdf } = await import('../../src/operations/invoices.js');
+
+      const bytes = await getInvoicePdf('1001');
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('invoices/1001/preview');
+      expect(calledUrl).not.toContain('/print');
+      expect(bytes.equals(PDF_BYTES)).toBe(true);
+    });
+
+    // Downloading must never mutate. Marking the invoice as sent is a separate
+    // step (markInvoicePrinted) that callers run *after* the bytes are on disk.
+    it('never touches /print, even indirectly', async () => {
+      mockPdf();
+      const { getInvoicePdf } = await import('../../src/operations/invoices.js');
+
+      await getInvoicePdf('1001');
+
+      const urls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0] as string);
+      expect(urls.some((u) => u.includes('/print'))).toBe(false);
+    });
+
+    it('rejects a non-numeric document number before calling Fortnox', async () => {
+      mockPdf();
+      const { getInvoicePdf } = await import('../../src/operations/invoices.js');
+
+      await expect(getInvoicePdf('../../customers/1')).rejects.toThrow();
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('markInvoicePrinted', () => {
+    it('calls /print and flags it as a mutation so it is never auto-retried', async () => {
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('invoices/1001/print');
+      expect(result.invoice.Sent).toBe(true);
+    });
+
+    // Once /print answers 2xx, Fortnox has set Sent. Nothing after that point
+    // may throw on the caller's behalf — including validation of the PDF body,
+    // which this action does not even need.
+    it('still reports success when the printed body is not a readable PDF', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers({ 'content-type': 'application/pdf' }),
+          arrayBuffer: () => Promise.resolve(Buffer.from('truncated garbage').buffer),
+        })
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(JSON.stringify({ Invoice: { DocumentNumber: '1001', Sent: true } })),
+          json: () => Promise.resolve({ Invoice: { DocumentNumber: '1001', Sent: true } }),
+        });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.invoice.Sent).toBe(true);
+      // No usable PDF came back, so none is offered to the caller.
+      expect(result.pdf).toBeUndefined();
+    });
+
+    // A truncated PDF still starts with %PDF-, so the magic number alone is not
+    // enough: offering it to the caller would let a good saved copy be replaced
+    // by a broken one.
+    it('withholds a truncated print PDF rather than letting it replace a good copy', async () => {
+      const truncated = Buffer.from('%PDF-1.4\ninvoice bytes but cut off mid-str');
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(pdfResponse(truncated))
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(JSON.stringify({ Invoice: { DocumentNumber: '1001', Sent: true } })),
+          json: () => Promise.resolve({ Invoice: { DocumentNumber: '1001', Sent: true } }),
+        });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.confirmed).toBe(true);
+      expect(result.invoice.Sent).toBe(true);
+      expect(result.pdf).toBeUndefined();
+    });
+
+    // Fortnox can answer 2xx with an error envelope. Unlike an unreadable body,
+    // that is positive evidence the print did NOT happen — so it must not be
+    // reported as a successful "marked as sent".
+    it('raises when /print answers 200 with a Fortnox error envelope', async () => {
+      const envelope = Buffer.from(
+        JSON.stringify({ ErrorInformation: { message: 'Kan inte skriva ut', code: 2000999 } }),
+      );
+      global.fetch = vi.fn().mockResolvedValue(pdfResponse(envelope));
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      await expect(markInvoicePrinted('1001')).rejects.toThrow(/Kan inte skriva ut/);
+    });
+
+    it('returns the printed PDF so callers can save the version that was marked sent', async () => {
+      mockPdfThenInvoice({ DocumentNumber: '1001', Sent: true });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.pdf?.equals(PDF_BYTES)).toBe(true);
+    });
+
+    // The print already succeeded at this point; failing the whole call would
+    // recreate exactly the "successful action reported as a failure" ambiguity
+    // this code path exists to remove.
+    it('still reports success when the confirmation read-back fails', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(pdfResponse())
+        .mockResolvedValue({
+          ok: false,
+          status: 500,
+          headers: new Headers(),
+          json: () => Promise.resolve({ ErrorInformation: { message: 'Boom', code: 0 } }),
+        });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      // The print was accepted, so this is not an error...
+      expect(result.invoice.DocumentNumber).toBe('1001');
+      // ...but the outcome was never confirmed, so it must NOT claim Sent.
+      expect(result.confirmed).toBe(false);
+      expect(result.invoice.Sent).toBeUndefined();
+      // The read-back failure must remain visible, not be silently swallowed.
+      expect(String(result.invoice.Note)).toMatch(/Boom/);
     });
   });
 

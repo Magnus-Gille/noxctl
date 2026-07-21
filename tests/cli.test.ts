@@ -83,8 +83,31 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('get');
     expect(output).toContain('create');
     expect(output).toContain('send');
+    expect(output).toContain('pdf');
     expect(output).toContain('bookkeep');
     expect(output).toContain('credit');
+  });
+
+  it('noxctl invoices pdf --help documents the destination and --mark-sent options', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'invoices', 'pdf', '--help'],
+      execOpts,
+    ) as string;
+    // The destination is --file: -o/--output is globally the output *format*.
+    expect(output).toContain('--file');
+    expect(output).toContain('--mark-sent');
+    // The default must be the non-mutating endpoint.
+    expect(output).toContain('/preview');
+  });
+
+  it('noxctl invoices pdf --file does not collide with the global --output format flag', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'invoices', 'pdf', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).not.toMatch(/-o, --output <path>/);
   });
 
   it('noxctl tax --help shows tax subcommands', () => {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import {
   isJsonMode,
@@ -80,6 +80,17 @@ import {
 } from './views.js';
 
 const program = new Command();
+
+// A closed downstream pipe (`noxctl ... | head`, or a reader that exits early)
+// makes stdout emit EPIPE. That is normal for a CLI, and without this listener
+// Node reports it as an uncaught exception with a stack trace, bypassing the
+// command's own error handling.
+process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') {
+    process.exit(0);
+  }
+  throw err;
+});
 
 program
   .name('noxctl')
@@ -1374,6 +1385,123 @@ invoices
         data,
         invoiceConfirmColumns,
         'Invoice',
+      );
+    },
+  );
+
+invoices
+  .command('pdf <documentNumber>')
+  .description('Download an invoice as a PDF')
+  // Note: -o/--output is already taken globally for the output *format*
+  // (json|table), so the destination path is --file.
+  .option('-f, --file <path>', 'Write the PDF here (- for stdout)')
+  .option('--mark-sent', 'Also flag the invoice as sent in Fortnox (uses /print)')
+  .option('-y, --yes', 'Skip confirmation prompt (only needed with --mark-sent)')
+  .option('--dry-run', 'Preview the action without sending it')
+  .addHelpText(
+    'after',
+    `
+The PDF always comes from Fortnox's /preview endpoint, which does not change the
+invoice. --mark-sent additionally calls /print afterwards to set Sent=true — the
+file is written first, so a failed write never leaves an invoice flagged as sent
+with no PDF to show for it.
+
+Without --file the PDF is written to invoice-<documentNumber>.pdf in the current
+directory.
+
+When writing to a file, --mark-sent replaces it with the document /print itself
+returned, so the saved copy matches the version that was marked. Streaming to
+stdout cannot do that — bytes already written cannot be recalled — so with
+--file - the streamed document is the /preview render.
+
+Examples:
+  noxctl invoices pdf 28
+  noxctl invoices pdf 28 --file ~/Desktop/faktura-28.pdf
+  noxctl invoices pdf 28 --file - > faktura.pdf
+  noxctl invoices pdf 28 --mark-sent --yes`,
+  )
+  .action(
+    async (
+      documentNumber: string,
+      opts: { file?: string; markSent?: boolean; yes?: boolean; dryRun?: boolean },
+    ) => {
+      const { getInvoicePdf, markInvoicePrinted } = await import('./operations/invoices.js');
+      const toStdout = opts.file === '-';
+
+      // Only an *explicit* --output json conflicts here. json() alone is not the
+      // test: it defaults to true whenever stdout is piped, which is exactly how
+      // `--file -` is meant to be used.
+      if (toStdout && program.opts().output === 'json') {
+        throw new Error(
+          '--file - writes raw PDF bytes to stdout and cannot be combined with --output json.',
+        );
+      }
+
+      // Only --mark-sent mutates the invoice; a plain download needs no confirmation.
+      if (opts.markSent || opts.dryRun) {
+        const action = opts.markSent
+          ? `Download invoice ${documentNumber} as PDF and flag it as sent`
+          : `Download invoice ${documentNumber} as PDF`;
+        if (!(await confirmMutation(action, opts))) {
+          return;
+        }
+      }
+
+      const pdf = await getInvoicePdf(documentNumber);
+
+      if (toStdout) {
+        // Wait for the bytes to be flushed before mutating anything: a closed or
+        // broken pipe must not leave the invoice marked as sent.
+        await new Promise<void>((resolve, reject) => {
+          process.stdout.write(pdf, (err) => (err ? reject(err) : resolve()));
+        });
+        if (opts.markSent) await markInvoicePrinted(documentNumber);
+        return;
+      }
+
+      const path = opts.file ?? `invoice-${documentNumber}.pdf`;
+      writeFileSync(path, pdf);
+
+      // Only now that the PDF is safely on disk do we change Fortnox.
+      const printed = opts.markSent ? await markInvoicePrinted(documentNumber) : undefined;
+
+      // Prefer the document /print actually produced, so the saved copy matches
+      // the version that was marked as sent. Best-effort: the /preview copy is
+      // already written and the invoice is already flagged, so a failure here is
+      // reported as a note rather than raised as a failed operation.
+      let bytes = pdf.length;
+      let note = '';
+      if (printed?.pdf) {
+        try {
+          writeFileSync(path, printed.pdf);
+          bytes = printed.pdf.length;
+        } catch (err) {
+          note += ` Saved file is the /preview copy; rewriting it with the printed version failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`;
+        }
+      }
+
+      // Only claim the invoice is sent if Fortnox actually said so.
+      if (printed && !printed.confirmed) {
+        note += ` ${String(printed.invoice.Note)}`;
+      } else if (printed && printed.invoice.Sent === true) {
+        note += ' Marked as sent.';
+      } else if (printed) {
+        note += ' Warning: Fortnox still reports this invoice as not sent.';
+      }
+
+      outputConfirmation(
+        `Invoice ${documentNumber} saved to ${path} (${bytes} bytes).${note}`,
+        json(),
+        {
+          DocumentNumber: documentNumber,
+          Path: path,
+          Bytes: bytes,
+          // Report what Fortnox says the invoice's state is, not what we asked
+          // for; undefined means "not checked" or "could not be confirmed".
+          Sent: printed?.confirmed ? printed.invoice.Sent : undefined,
+        },
       );
     },
   );

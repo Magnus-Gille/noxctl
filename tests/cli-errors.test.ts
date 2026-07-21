@@ -169,3 +169,19 @@ describe('global --profile validation honors -o json', () => {
     expect(() => JSON.parse(res.stderr.trim())).toThrow();
   });
 });
+
+describe('invoices pdf --file -', () => {
+  // `run` pipes stdout, so isJsonMode() defaults to true here — which is exactly
+  // how `--file -` is used in practice (`... --file - > invoice.pdf`). Guarding
+  // on the resolved mode instead of an explicit -o json made the flag unusable.
+  it('is not refused merely because stdout is piped', () => {
+    const res = run(['invoices', 'pdf', '23', '--file', '-']);
+    expect(res.stderr).not.toMatch(/cannot be combined/i);
+    expect(res.stdout).not.toMatch(/cannot be combined/i);
+  });
+
+  it('is still refused when the caller explicitly asks for -o json', () => {
+    const res = run(['-o', 'json', 'invoices', 'pdf', '23', '--file', '-']);
+    expect(res.stderr).toMatch(/cannot be combined/i);
+  });
+});
