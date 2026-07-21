@@ -36,8 +36,11 @@ Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spe
 11. ~~CLI `dashboard` command~~ ✅ Done
 12. Bilingual MCP descriptions (Swedish primary + English keywords)
 13. MCP capability resource
-14. Bank transactions (requires enabling Bank API scope)
-15. File attachments (underlag) — upload receipts, attach to vouchers
+14. Bank transactions — **blocked upstream, not a scope toggle.** A freshly fetched
+    Fortnox OpenAPI spec (2026-07-21, 233 paths) contains **zero** `/3/bank*`
+    endpoints; this is a separate Fortnox Bank/Finans product surface, so there is
+    nothing to implement against from the standard REST API. See issue #13.
+15. ~~File attachments (underlag) — upload receipts, attach to vouchers~~ ✅ Done (#37) — `noxctl vouchers attach`; live use needs the **archive** scope
 16. Live mutation test coverage — only read paths tested live
 
 ## Adding a New Resource
