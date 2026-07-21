@@ -18,7 +18,7 @@ Use it with your own Fortnox account and developer credentials. **It is provided
 
 ## Prerequisites
 
-- **Node.js** 20+
+- **Node.js** 22.12+
 - **Fortnox account** with API (Application Programming Interface) access
 - **Your own Fortnox developer app** with the required scopes enabled
 - **Linux only:** `secret-tool` available for secure credential storage
