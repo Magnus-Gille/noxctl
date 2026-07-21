@@ -15,7 +15,7 @@ function mockFetch(response: unknown) {
   });
 }
 
-const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes');
+const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes\n%%EOF\n');
 
 function pdfResponse(bytes: Buffer = PDF_BYTES) {
   return {
@@ -257,6 +257,42 @@ describe('invoice operations', () => {
       expect(result.invoice.Sent).toBe(true);
       // No usable PDF came back, so none is offered to the caller.
       expect(result.pdf).toBeUndefined();
+    });
+
+    // A truncated PDF still starts with %PDF-, so the magic number alone is not
+    // enough: offering it to the caller would let a good saved copy be replaced
+    // by a broken one.
+    it('withholds a truncated print PDF rather than letting it replace a good copy', async () => {
+      const truncated = Buffer.from('%PDF-1.4\ninvoice bytes but cut off mid-str');
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(pdfResponse(truncated))
+        .mockResolvedValue({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(JSON.stringify({ Invoice: { DocumentNumber: '1001', Sent: true } })),
+          json: () => Promise.resolve({ Invoice: { DocumentNumber: '1001', Sent: true } }),
+        });
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      const result = await markInvoicePrinted('1001');
+
+      expect(result.invoice.Sent).toBe(true);
+      expect(result.pdf).toBeUndefined();
+    });
+
+    // Fortnox can answer 2xx with an error envelope. Unlike an unreadable body,
+    // that is positive evidence the print did NOT happen — so it must not be
+    // reported as a successful "marked as sent".
+    it('raises when /print answers 200 with a Fortnox error envelope', async () => {
+      const envelope = Buffer.from(
+        JSON.stringify({ ErrorInformation: { message: 'Kan inte skriva ut', code: 2000999 } }),
+      );
+      global.fetch = vi.fn().mockResolvedValue(pdfResponse(envelope));
+      const { markInvoicePrinted } = await import('../../src/operations/invoices.js');
+
+      await expect(markInvoicePrinted('1001')).rejects.toThrow(/Kan inte skriva ut/);
     });
 
     it('returns the printed PDF so callers can save the version that was marked sent', async () => {

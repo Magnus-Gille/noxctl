@@ -369,6 +369,38 @@ function describeUnexpectedBody(buf: Buffer): string {
 }
 
 const PDF_MAGIC = '%PDF-';
+const PDF_TRAILER = '%%EOF';
+
+function startsWithPdfMagic(buf: Buffer): boolean {
+  return buf.subarray(0, PDF_MAGIC.length).toString('latin1') === PDF_MAGIC;
+}
+
+/**
+ * A PDF that both starts with the magic number and carries its end-of-file
+ * trailer, i.e. one that was not cut short in transit. Used where a *partial*
+ * document would be worse than none — replacing an already-saved copy, say.
+ * The trailer may be followed by whitespace, so search the tail rather than
+ * requiring it at the very end.
+ */
+function isCompletePdf(buf: Buffer): boolean {
+  if (!startsWithPdfMagic(buf)) return false;
+  const tail = buf.subarray(Math.max(0, buf.length - 1024)).toString('latin1');
+  return tail.includes(PDF_TRAILER);
+}
+
+/** Fortnox can answer 2xx with an error envelope; detect one in a raw body. */
+function fortnoxErrorInBody(buf: Buffer): { message: string; code?: number } | undefined {
+  if (startsWithPdfMagic(buf)) return undefined;
+  try {
+    const parsed = JSON.parse(buf.toString('utf-8', 0, 4096)) as {
+      ErrorInformation?: { message?: string; code?: number };
+    };
+    const info = parsed?.ErrorInformation;
+    return info?.message ? { message: info.message, code: info.code } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Fetch a PDF from one of Fortnox's document endpoints. Shares rate limiting,
@@ -386,7 +418,7 @@ export async function fortnoxRequestPdf(
   return request<Buffer>(endpoint, options, async (response) => {
     const buf = Buffer.from(await response.arrayBuffer());
 
-    if (buf.subarray(0, PDF_MAGIC.length).toString('latin1') !== PDF_MAGIC) {
+    if (!startsWithPdfMagic(buf)) {
       const contentType = response.headers?.get?.('content-type') || 'an unknown content type';
       throw new Error(
         `Fortnox returned ${contentType} that is not a PDF for ${endpoint}: ${describeUnexpectedBody(buf)}`,
@@ -412,14 +444,35 @@ export async function fortnoxRequestPdfFromMutation(
   options: RequestOptions = {},
 ): Promise<Buffer | undefined> {
   return request<Buffer | undefined>(endpoint, { ...options, mutation: true }, async (response) => {
+    let buf: Buffer;
     try {
-      const buf = Buffer.from(await response.arrayBuffer());
-      return buf.subarray(0, PDF_MAGIC.length).toString('latin1') === PDF_MAGIC ? buf : undefined;
+      buf = Buffer.from(await response.arrayBuffer());
     } catch {
-      // Body unreadable (truncated stream, aborted transfer). The action
-      // itself already succeeded server-side; report it as such.
+      // Body unreadable (truncated stream, aborted transfer). The status line
+      // already said the action succeeded; report it as such.
       return undefined;
     }
+
+    if (isCompletePdf(buf)) return buf;
+
+    // A well-formed Fortnox error envelope is positive evidence that the action
+    // did NOT happen — unlike an unreadable body, which is merely inconclusive.
+    // Fortnox can send these with a 2xx status, so this has to be checked here
+    // rather than left to the status code.
+    const failure = fortnoxErrorInBody(buf);
+    if (failure) {
+      throw new FortnoxApiError(
+        response.status,
+        failure.message,
+        `Error code: ${failure.code}`,
+        endpoint,
+      );
+    }
+
+    // Something else came back — an incomplete PDF, or a payload we cannot
+    // interpret. Inconclusive, so treat the action as done but offer no
+    // document: callers must not overwrite a good file with this.
+    return undefined;
   });
 }
 

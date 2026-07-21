@@ -1,6 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { closeSync, constants as fsConstants, mkdtempSync, openSync, writeSync } from 'node:fs';
+import {
+  closeSync,
+  constants as fsConstants,
+  lstatSync,
+  mkdtempSync,
+  openSync,
+  writeSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
@@ -43,7 +50,7 @@ const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be 
  * influenced by whatever the model just read. `O_EXCL` already refuses to follow
  * a symlink; `O_NOFOLLOW` gives the overwrite path the same guarantee, so
  * "replace this file" can never silently truncate a symlink's target instead.
- * O_NOFOLLOW is POSIX-only and absent on Windows, hence the `?? 0`.
+ * O_NOFOLLOW is POSIX-only, so Windows falls back to an explicit lstat check.
  */
 function writePdf(target: string, pdf: Buffer, overwrite?: boolean): void {
   const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
@@ -51,10 +58,25 @@ function writePdf(target: string, pdf: Buffer, overwrite?: boolean): void {
     ? O_WRONLY | O_CREAT | O_TRUNC | (O_NOFOLLOW ?? 0)
     : O_WRONLY | O_CREAT | O_EXCL;
 
+  // Windows has no O_NOFOLLOW, so the flag above degrades to a no-op there.
+  // Check explicitly instead. This is a TOCTOU-racy fallback rather than an
+  // atomic guarantee, but it closes the ordinary case on the one platform the
+  // kernel flag cannot cover.
+  if (overwrite && !O_NOFOLLOW && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) {
+    throw new Error(
+      `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
+    );
+  }
+
   try {
     const fd = openSync(target, flags, 0o600);
     try {
-      writeSync(fd, pdf);
+      // writeSync may return a short count; keep going until the whole buffer
+      // has landed. writeFileSync used to do this loop internally.
+      let written = 0;
+      while (written < pdf.length) {
+        written += writeSync(fd, pdf, written, pdf.length - written);
+      }
     } finally {
       closeSync(fd);
     }
@@ -310,7 +332,13 @@ export function registerInvoiceTools(server: McpServer): void {
           (markSent ? ' Fakturan är nu markerad som skickad.' : '') +
           (printed?.invoice.Note ? ` ${String(printed.invoice.Note)}` : '') +
           refreshNote,
-        { DocumentNumber: documentNumber, Path: target, Bytes: bytes, Sent: !!markSent },
+        {
+          DocumentNumber: documentNumber,
+          Path: target,
+          Bytes: bytes,
+          // Report what Fortnox says, not what we asked for.
+          Sent: printed ? printed.invoice.Sent : undefined,
+        },
       );
     },
   );

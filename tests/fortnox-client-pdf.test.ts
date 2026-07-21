@@ -6,7 +6,7 @@ vi.mock('../src/auth.js', () => ({
   getResolvedProfile: vi.fn().mockReturnValue('default'),
 }));
 
-const PDF_BYTES = Buffer.from('%PDF-1.4\nbinary\x00\x01bytes');
+const PDF_BYTES = Buffer.from('%PDF-1.4\nbinary\x00\x01bytes\n%%EOF\n');
 
 function mockPdfResponse(bytes: Buffer = PDF_BYTES, contentType = 'application/pdf') {
   global.fetch = vi.fn().mockResolvedValue({

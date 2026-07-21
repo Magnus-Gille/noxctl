@@ -19,7 +19,7 @@ function mockFetch(response: unknown, ok = true, status = 200) {
   });
 }
 
-const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes');
+const PDF_BYTES = Buffer.from('%PDF-1.4\ninvoice bytes\n%%EOF\n');
 
 function pdfResponse() {
   return {

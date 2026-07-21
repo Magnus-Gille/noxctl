@@ -1409,6 +1409,11 @@ with no PDF to show for it.
 Without --file the PDF is written to invoice-<documentNumber>.pdf in the current
 directory.
 
+When writing to a file, --mark-sent replaces it with the document /print itself
+returned, so the saved copy matches the version that was marked. Streaming to
+stdout cannot do that — bytes already written cannot be recalled — so with
+--file - the streamed document is the /preview render.
+
 Examples:
   noxctl invoices pdf 28
   noxctl invoices pdf 28 --file ~/Desktop/faktura-28.pdf
@@ -1480,7 +1485,13 @@ Examples:
       outputConfirmation(
         `Invoice ${documentNumber} saved to ${path} (${bytes} bytes).${note}`,
         json(),
-        { DocumentNumber: documentNumber, Path: path, Bytes: bytes, Sent: !!opts.markSent },
+        {
+          DocumentNumber: documentNumber,
+          Path: path,
+          Bytes: bytes,
+          // Report what Fortnox says the invoice's state is, not what we asked for.
+          Sent: printed ? printed.invoice.Sent : undefined,
+        },
       );
     },
   );
