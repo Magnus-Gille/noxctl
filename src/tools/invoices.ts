@@ -206,7 +206,7 @@ export function registerInvoiceTools(server: McpServer): void {
 
   server.tool(
     'fortnox_invoice_pdf',
-    'Hämta en faktura som PDF och spara den på disk. Returnerar sökvägen till filen (inte PDF-innehållet). Använder Fortnox /preview som standard, vilket INTE markerar fakturan som skickad.',
+    'Hämta en faktura som PDF och spara den på disk. Returnerar sökvägen till filen (inte PDF-innehållet). PDF:en hämtas alltid via Fortnox /preview, vilket INTE ändrar fakturan. Med markSent anropas /print efteråt, efter att filen skrivits.',
     {
       documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
       outputPath: z
