@@ -14,6 +14,11 @@ noxctl invoices list
 noxctl invoices list --output json
 noxctl customers get 25
 
+# Invoice PDFs (read-only — uses /preview, does not mark the invoice as sent)
+noxctl invoices pdf 28                       # -> invoice-28.pdf
+noxctl invoices pdf 28 --file /tmp/f.pdf
+noxctl invoices pdf 28 --mark-sent --yes     # ALSO flags it as sent (mutation)
+
 # Writing data (prompts for confirmation on TTY; use --yes to skip)
 echo '{"InvoiceRows": [...]}' | noxctl invoices update 28 --input - --yes
 noxctl invoices send 28              # prompts: Continue? [y/N]
