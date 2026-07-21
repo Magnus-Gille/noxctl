@@ -330,13 +330,26 @@ describe('CLI smoke tests', () => {
 });
 
 describe('version consistency', () => {
-  // The CLI hardcodes its version string, so it can silently drift from
-  // package.json across releases — it already shipped one version behind once.
+  // Both entry points hardcode their version string, so each can silently drift
+  // from package.json across releases. Both have already done so: the CLI
+  // shipped 0.5.0 announcing 0.4.1, and the MCP server was still reporting
+  // 0.4.1 to clients after that was fixed. Cover both, not just the one that
+  // was noticed first.
+  const packageVersion = () =>
+    (JSON.parse(readFileSync(path.resolve('package.json'), 'utf-8')) as { version: string })
+      .version;
+
   it('noxctl --version matches the package version', () => {
-    const pkg = JSON.parse(readFileSync(path.resolve('package.json'), 'utf-8')) as {
-      version: string;
-    };
     const output = execFileSync('node', [CLI_PATH, '--version'], execOpts) as string;
-    expect(output.trim()).toBe(pkg.version);
+    expect(output.trim()).toBe(packageVersion());
+  });
+
+  it('the MCP server reports the package version to clients', async () => {
+    const { createServer } = await import('../src/index.js');
+    // McpServer keeps the registered implementation info on the inner server.
+    const info = (
+      createServer().server as unknown as { _serverInfo: { name: string; version: string } }
+    )._serverInfo;
+    expect(info.version).toBe(packageVersion());
   });
 });

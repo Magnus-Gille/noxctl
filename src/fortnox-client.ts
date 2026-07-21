@@ -498,8 +498,7 @@ export async function fetchAllPages<T extends Record<string, unknown>>(
     all.push(...items);
 
     const meta = data.MetaInformation as
-      | { '@TotalPages': number; '@CurrentPage': number; '@TotalResources': number }
-      | undefined;
+      { '@TotalPages': number; '@CurrentPage': number; '@TotalResources': number } | undefined;
     totalPages = meta?.['@TotalPages'] ?? 1;
     totalResources = meta?.['@TotalResources'] ?? all.length;
     page++;

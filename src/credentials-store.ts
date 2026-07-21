@@ -39,12 +39,7 @@ function windowsCredentialsFile(profile: string): string {
 export const LEGACY_DUAL_WRITE = false;
 
 export type LoadSource =
-  | 'new'
-  | 'legacy'
-  | 'both-new-preferred'
-  | 'both-legacy-preferred'
-  | 'legacy-plaintext'
-  | null;
+  'new' | 'legacy' | 'both-new-preferred' | 'both-legacy-preferred' | 'legacy-plaintext' | null;
 
 export interface LoadCredentialBlobResult {
   blob: string | null;

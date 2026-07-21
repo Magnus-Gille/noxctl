@@ -78,11 +78,9 @@ export function formatMeta(meta?: Record<string, unknown>): string {
 export function formatTaxReport(report: Record<string, unknown>): string {
   const period = report.period as { from: string; to: string } | undefined;
   const vatAccounts = report.vatAccounts as
-    | Record<string, { debit: number; credit: number; description: string }>
-    | undefined;
+    Record<string, { debit: number; credit: number; description: string }> | undefined;
   const accountBalances = report.accountBalances as
-    | Array<{ account: number; description: string; balance: number }>
-    | undefined;
+    Array<{ account: number; description: string; balance: number }> | undefined;
   const summary = report.summary as { note: string } | undefined;
 
   const lines: string[] = [];

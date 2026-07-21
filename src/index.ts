@@ -33,7 +33,7 @@ import { registerScheduleTimeTools } from './tools/scheduletimes.js';
 export function createServer(): McpServer {
   const server = new McpServer({
     name: 'fortnox-mcp',
-    version: '0.4.1',
+    version: '0.5.0',
   });
 
   registerCustomerTools(server);
@@ -82,10 +82,7 @@ export interface StartMcpServerOptions {
 export class StartupProfileError extends Error {
   constructor(
     public readonly code:
-      | 'invalid-pointer-content'
-      | 'pointer-read-error'
-      | 'pointer-timeout'
-      | 'invalid-env',
+      'invalid-pointer-content' | 'pointer-read-error' | 'pointer-timeout' | 'invalid-env',
     message: string,
   ) {
     super(message);
