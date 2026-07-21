@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-21
+
 ### Internal
 
 - `@types/node` realigned to `^22` (was `^25.9.5`). The types should track the *minimum* supported Node, not the newest release — typing against a newer Node than `engines` allows lets TypeScript accept APIs that do not exist at runtime for users on the supported floor. The build and full suite pass unchanged on `@types/node@22`, confirming nothing depended on the newer typings. This supersedes the proposed bump to 26.
