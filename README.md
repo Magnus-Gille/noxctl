@@ -559,7 +559,7 @@ Another process is using the OAuth callback port. Close it or wait for a previou
 ## Development
 
 ```bash
-npm install
+npm ci             # reproducible install; does not rewrite package-lock.json
 npm run build        # compile TypeScript
 npm test             # run tests
 npm run test:watch   # watch mode
