@@ -18,20 +18,24 @@ describe('checkout reconciliation guidance', () => {
 
     const safetyCriticalSequence = [
       'set -euo pipefail',
+      'cd "$(git rev-parse --show-toplevel)"',
+      'git fetch origin',
       'dirty_count="$(git status --porcelain=v1 --untracked-files=all | wc -l | tr -d',
       'lockfile_dirty_count="$(git status --porcelain=v1 --untracked-files=all -- package-lock.json | wc -l | tr -d',
       'dirty_path="$(git status --porcelain=v1 --untracked-files=all | cut -c4-)"',
       'test "$dirty_count" -eq 1',
       'test "$lockfile_dirty_count" -eq 1',
       'test "$dirty_path" = package-lock.json',
-      'git diff --binary -- package-lock.json >',
+      'git diff HEAD --check -- package-lock.json',
+      'git diff HEAD -- package-lock.json',
+      'git diff --binary HEAD -- package-lock.json >',
       'test -s ../noxctl-package-lock-before-reconciliation.patch',
-      'git restore --source=HEAD -- package-lock.json',
-      'git diff --exit-code',
+      'git restore --source=HEAD --staged --worktree -- package-lock.json',
+      'git diff HEAD --exit-code',
       'test -z "$(git status --porcelain=v1 --untracked-files=all)"',
       'git merge --ff-only origin/main',
       'npm ci',
-      'git diff --exit-code',
+      'git diff HEAD --exit-code',
       'test -z "$(git status --porcelain=v1 --untracked-files=all)"',
     ];
 

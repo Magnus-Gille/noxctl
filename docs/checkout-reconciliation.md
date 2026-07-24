@@ -41,6 +41,7 @@ shell options.
 (
 set -euo pipefail
 
+cd "$(git rev-parse --show-toplevel)"
 git fetch origin
 git status --short
 
@@ -52,23 +53,24 @@ test "$dirty_count" -eq 1
 test "$lockfile_dirty_count" -eq 1
 test "$dirty_path" = package-lock.json
 
-# Inspect and preserve the meaningful diff.
-git diff --check
-git diff -- package-lock.json
-git diff --binary -- package-lock.json > ../noxctl-package-lock-before-reconciliation.patch
+# Inspect and preserve the complete meaningful diff against HEAD, including
+# changes that may already have been staged.
+git diff HEAD --check -- package-lock.json
+git diff HEAD -- package-lock.json
+git diff --binary HEAD -- package-lock.json > ../noxctl-package-lock-before-reconciliation.patch
 test -s ../noxctl-package-lock-before-reconciliation.patch
 
 # Only after reviewing the patch, restore the accidental rewrite against the
 # checkout's own revision and prove the whole working tree is clean.
-git restore --source=HEAD -- package-lock.json
-git diff --exit-code
+git restore --source=HEAD --staged --worktree -- package-lock.json
+git diff HEAD --exit-code
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
 # Now advance the complete canonical checkout atomically to reviewed main.
 # Never combine a new lockfile with an old package.json.
 git merge --ff-only origin/main
 npm ci
-git diff --exit-code
+git diff HEAD --exit-code
 test -z "$(git status --porcelain=v1 --untracked-files=all)"
 )
 ```
