@@ -47,8 +47,10 @@ git status --short
 # Refuse mechanically unless package-lock.json is the one and only dirty path.
 dirty_count="$(git status --porcelain=v1 --untracked-files=all | wc -l | tr -d '[:space:]')"
 lockfile_dirty_count="$(git status --porcelain=v1 --untracked-files=all -- package-lock.json | wc -l | tr -d '[:space:]')"
+dirty_path="$(git status --porcelain=v1 --untracked-files=all | cut -c4-)"
 test "$dirty_count" -eq 1
 test "$lockfile_dirty_count" -eq 1
+test "$dirty_path" = package-lock.json
 
 # Inspect and preserve the meaningful diff.
 git diff --check
