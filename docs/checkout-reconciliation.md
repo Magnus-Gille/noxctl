@@ -33,13 +33,24 @@ does not need, and must not be run inside, a tracked source checkout. Reserve
 After the fix is merged, reconcile a canonical checkout only when its
 `package-lock.json` diff is understood and no unrelated work is present. These
 commands preserve the accidental diff as a portable patch **before** changing
-the checkout:
+the checkout. Run the block as a whole in Bash or Zsh: its strict-mode
+subshell stops at the first failed safety check without changing the caller's
+shell options.
 
 ```bash
+(
+set -euo pipefail
+
 git fetch origin
 git status --short
 
-# Inspect and preserve the meaningful diff. Stop if other paths are dirty.
+# Refuse mechanically unless package-lock.json is the one and only dirty path.
+dirty_count="$(git status --porcelain=v1 --untracked-files=all | wc -l | tr -d '[:space:]')"
+lockfile_dirty_count="$(git status --porcelain=v1 --untracked-files=all -- package-lock.json | wc -l | tr -d '[:space:]')"
+test "$dirty_count" -eq 1
+test "$lockfile_dirty_count" -eq 1
+
+# Inspect and preserve the meaningful diff.
 git diff --check
 git diff -- package-lock.json
 git diff --binary -- package-lock.json > ../noxctl-package-lock-before-reconciliation.patch
@@ -49,12 +60,15 @@ test -s ../noxctl-package-lock-before-reconciliation.patch
 # checkout's own revision and prove the whole working tree is clean.
 git restore --source=HEAD -- package-lock.json
 git diff --exit-code
+test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
 # Now advance the complete canonical checkout atomically to reviewed main.
 # Never combine a new lockfile with an old package.json.
 git merge --ff-only origin/main
 npm ci
-git status --short
+git diff --exit-code
+test -z "$(git status --porcelain=v1 --untracked-files=all)"
+)
 ```
 
 Keep `../noxctl-package-lock-before-reconciliation.patch` with the incident
