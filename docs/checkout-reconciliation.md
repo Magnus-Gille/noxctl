@@ -45,13 +45,19 @@ git diff -- package-lock.json
 git diff --binary -- package-lock.json > ../noxctl-package-lock-before-reconciliation.patch
 test -s ../noxctl-package-lock-before-reconciliation.patch
 
-# Only after reviewing the patch, restore this one tracked file to merged main.
-git restore --source=origin/main -- package-lock.json
-git diff --exit-code origin/main -- package-lock.json
+# Only after reviewing the patch, restore the accidental rewrite against the
+# checkout's own revision and prove the whole working tree is clean.
+git restore --source=HEAD -- package-lock.json
+git diff --exit-code
+
+# Now advance the complete canonical checkout atomically to reviewed main.
+# Never combine a new lockfile with an old package.json.
+git merge --ff-only origin/main
 npm ci
 git status --short
 ```
 
 Keep `../noxctl-package-lock-before-reconciliation.patch` with the incident
 record until the change has been reviewed. Do not use `reset --hard`, cleanup
-commands, or an unreviewed `npm install` as part of this reconciliation.
+commands, a partial source-file update, or an unreviewed `npm install` as part
+of this reconciliation.
