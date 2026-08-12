@@ -73,6 +73,12 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('reset-day');
   });
 
+  it('noxctl recurrings --help shows recurring-billing subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'recurrings', '--help'], execOpts) as string;
+    expect(output).toContain('list-invoice-requests');
+    expect(output).toContain('create-invoice-request');
+  });
+
   it('noxctl init --help shows the --with-salary flag', () => {
     const output = execFileSync('node', [CLI_PATH, 'init', '--help'], execOpts) as string;
     expect(output).toContain('--with-salary');

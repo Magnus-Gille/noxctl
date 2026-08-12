@@ -65,6 +65,10 @@ import {
   lockedPeriodDetailColumns,
   contractListColumns,
   contractDetailColumns,
+  recurringListColumns,
+  recurringDetailColumns,
+  invoiceRequestListColumns,
+  invoiceRequestDetailColumns,
   topCustomerColumns,
   monthlyRevenueColumns,
   voucherAttachmentColumns,
@@ -3758,6 +3762,177 @@ contracts
       data,
       contractDetailColumns,
       'Contract',
+    );
+  });
+
+// --- recurrings (new Recurring Billing API) ---
+const recurrings = program
+  .command('recurrings')
+  .description('Recurring Billing operations (nya API:t för återkommande fakturering)');
+
+const csvOption = (value: string): string[] =>
+  value
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+const recurringResult = (result: {
+  recurring: Record<string, unknown>;
+  etag?: string;
+  lastModified?: string;
+}) => ({
+  ...result.recurring,
+  ...(result.etag ? { etag: result.etag } : {}),
+  ...(result.lastModified ? { last_modified: result.lastModified } : {}),
+});
+
+recurrings
+  .command('list')
+  .description('List recurring billing contracts')
+  .option('--customer-numbers <numbers>', 'Comma-separated customer numbers', csvOption)
+  .option('--statuses <statuses>', 'Comma-separated statuses', csvOption)
+  .option('--invoice-handlings <handlings>', 'Comma-separated invoice handling types', csvOption)
+  .option('--error-status <status>', 'Filter by error status')
+  .option('--offset <number>', 'Number of results to skip', parseInt)
+  .option('--limit <number>', 'Results per page (1–100)', parseInt)
+  .option('--sort-by <field>', 'Field to sort by')
+  .option('--order <direction>', 'Sort direction: ASC or DESC')
+  .action(async (opts) => {
+    const { listRecurrings } = await import('./operations/recurrings.js');
+    const data = await listRecurrings({
+      customerNumbers: opts.customerNumbers,
+      statuses: opts.statuses,
+      invoiceHandlings: opts.invoiceHandlings,
+      errorStatus: opts.errorStatus,
+      offset: opts.offset,
+      limit: opts.limit,
+      sortBy: opts.sortBy,
+      order: opts.order,
+    });
+    outputList(data, recurringListColumns, json(), data);
+  });
+
+recurrings
+  .command('get <recurringId>')
+  .description('Get a recurring billing contract and its ETag')
+  .action(async (recurringId: string) => {
+    const { getRecurring } = await import('./operations/recurrings.js');
+    const data = recurringResult(await getRecurring(recurringId));
+    outputDetail(data, recurringDetailColumns, json(), 'Recurring');
+  });
+
+recurrings
+  .command('create')
+  .description('Create a recurring billing contract')
+  .requiredOption('--input <file>', 'Recurring JSON data (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createRecurring } = await import('./operations/recurrings.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation('Create recurring billing contract', opts, input))) return;
+    const data = recurringResult(await createRecurring(input));
+    outputDetail(data, recurringDetailColumns, json(), 'Recurring');
+  });
+
+recurrings
+  .command('replace <recurringId>')
+  .description('Replace a recurring billing contract (requires ETag)')
+  .requiredOption('--etag <etag>', 'ETag returned by recurrings get')
+  .requiredOption('--input <file>', 'Complete recurring JSON data (or - for stdin)')
+  .option('--if-unmodified-since <value>', 'Optional Last-Modified value from recurrings get')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (recurringId: string, opts) => {
+    const { replaceRecurring } = await import('./operations/recurrings.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Replace recurring ${recurringId}`, opts, input))) return;
+    const data = recurringResult(
+      await replaceRecurring(recurringId, opts.etag, input, opts.ifUnmodifiedSince),
+    );
+    outputDetail(data, recurringDetailColumns, json(), 'Recurring');
+  });
+
+recurrings
+  .command('patch <recurringId>')
+  .description('Update selected recurring fields with JSON Patch (requires ETag)')
+  .requiredOption('--etag <etag>', 'ETag returned by recurrings get')
+  .requiredOption('--input <file>', 'JSON Patch operations (or - for stdin)')
+  .option('--if-unmodified-since <value>', 'Optional Last-Modified value from recurrings get')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (recurringId: string, opts) => {
+    const { patchRecurring } = await import('./operations/recurrings.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const operations = JSON.parse(raw) as Record<string, unknown>[];
+    if (!Array.isArray(operations)) throw new Error('Recurring patch input must be a JSON array.');
+    if (!(await confirmMutation(`Patch recurring ${recurringId}`, opts, operations))) return;
+    const data = recurringResult(
+      await patchRecurring(recurringId, opts.etag, operations, opts.ifUnmodifiedSince),
+    );
+    outputDetail(data, recurringDetailColumns, json(), 'Recurring');
+  });
+
+recurrings
+  .command('list-deviations <recurringId>')
+  .description('List deviations for a recurring billing contract')
+  .action(async (recurringId: string) => {
+    const { listRecurringDeviations } = await import('./operations/recurrings.js');
+    const data = await listRecurringDeviations(recurringId);
+    outputList(data, recurringListColumns, json(), data);
+  });
+
+recurrings
+  .command('get-deviation <recurringId> <deviationId>')
+  .description('Get one recurring billing deviation')
+  .action(async (recurringId: string, deviationId: string) => {
+    const { getRecurringDeviation } = await import('./operations/recurrings.js');
+    const data = await getRecurringDeviation(recurringId, deviationId);
+    outputDetail(data, recurringDetailColumns, json(), 'Recurring deviation');
+  });
+
+recurrings
+  .command('list-invoice-requests')
+  .description('List invoice-generation requests for recurring billing contracts')
+  .requiredOption('--recurring-ids <ids>', 'Comma-separated recurring UUIDs', csvOption)
+  .option('--statuses <statuses>', 'Comma-separated request statuses', csvOption)
+  .action(async (opts) => {
+    const { listInvoiceRequests } = await import('./operations/recurrings.js');
+    const data = await listInvoiceRequests(opts.recurringIds, opts.statuses);
+    outputList(data, invoiceRequestListColumns, json(), data);
+  });
+
+recurrings
+  .command('get-invoice-request <invoiceRequestId>')
+  .description('Get a recurring invoice-generation request')
+  .action(async (invoiceRequestId: string) => {
+    const { getInvoiceRequest } = await import('./operations/recurrings.js');
+    const data = await getInvoiceRequest(invoiceRequestId);
+    outputDetail(data, invoiceRequestDetailColumns, json(), 'Recurring invoice request');
+  });
+
+recurrings
+  .command('create-invoice-request')
+  .description('Create invoices for recurring billing contracts')
+  .requiredOption('--recurring-ids <ids>', 'Comma-separated recurring UUIDs', csvOption)
+  .option('--processing-mode <mode>', 'SYNC (default) or ASYNC', 'SYNC')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createInvoiceRequest } = await import('./operations/recurrings.js');
+    const mode = String(opts.processingMode).toUpperCase();
+    if (mode !== 'SYNC' && mode !== 'ASYNC')
+      throw new Error('processing-mode must be SYNC or ASYNC.');
+    const payload = { recurring_ids: opts.recurringIds, processing_mode: mode };
+    if (!(await confirmMutation('Create recurring invoice request', opts, payload))) return;
+    const data = await createInvoiceRequest(opts.recurringIds, mode);
+    outputConfirmation(
+      'Recurring invoice request created.',
+      json(),
+      data,
+      invoiceRequestDetailColumns,
+      'Recurring invoice request',
     );
   });
 
