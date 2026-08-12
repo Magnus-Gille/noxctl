@@ -442,6 +442,38 @@ export const contractDetailColumns: Column[] = [
   { key: 'Comments', header: 'Comments', width: 40 },
 ];
 
+// --- Recurring billing views ---
+
+export const recurringListColumns: Column[] = [
+  { key: 'serial_number', header: '#', width: 7, align: 'right' },
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'status', header: 'Status', width: 12 },
+  { key: 'invoice_handling', header: 'Handling', width: 12 },
+  { key: 'created_at', header: 'Created', width: 20 },
+];
+
+export const recurringDetailColumns: Column[] = [
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'serial_number', header: 'Serial #', width: 10, align: 'right' },
+  { key: 'status', header: 'Status', width: 12 },
+  { key: 'invoice_handling', header: 'Invoice handling', width: 16 },
+  { key: 'amount_per_invoicing', header: 'Periods/invoice', width: 10, align: 'right' },
+  { key: 'created_at', header: 'Created', width: 20 },
+  { key: 'modified_at', header: 'Modified', width: 20 },
+  { key: 'etag', header: 'ETag', width: 36 },
+  { key: 'last_modified', header: 'Last-Modified', width: 29 },
+];
+
+export const invoiceRequestListColumns: Column[] = [
+  { key: 'id', header: 'ID', width: 36 },
+  { key: 'status', header: 'Status', width: 12 },
+  { key: 'processing_mode', header: 'Mode', width: 8 },
+  { key: 'created_at', header: 'Created', width: 20 },
+  { key: 'processed_at', header: 'Processed', width: 20 },
+];
+
+export const invoiceRequestDetailColumns: Column[] = invoiceRequestListColumns;
+
 // --- Analytics views ---
 
 export const topCustomerColumns: Column[] = [

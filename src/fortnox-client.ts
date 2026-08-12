@@ -1,7 +1,8 @@
 import { getResolvedProfile, getValidToken } from './auth.js';
 import { DEFAULT_PROFILE } from './profile-name.js';
 
-const BASE_URL = 'https://api.fortnox.se/3';
+const API_ROOT_URL = 'https://api.fortnox.se';
+const BASE_URL = `${API_ROOT_URL}/3`;
 const REQUEST_TIMEOUT_MS = 30_000;
 const UPLOAD_TIMEOUT_MS = 120_000;
 const MAX_RETRIES = 3;
@@ -225,6 +226,8 @@ export interface RequestOptions {
   body?: unknown;
   rawBody?: BodyInit;
   params?: Record<string, string | number | undefined>;
+  /** Additional request headers, e.g. conditional ETags for APIs that require them. */
+  headers?: Record<string, string | undefined>;
   /**
    * Override the safety classification that would otherwise be derived from the
    * HTTP verb. Fortnox exposes some state-changing actions as GET — notably
@@ -245,7 +248,11 @@ async function sendRequest(
   await waitForRateLimit();
 
   const token = await getValidToken();
-  const url = new URL(`${BASE_URL}/${endpoint}`);
+  // The original REST API is rooted at /3, while newer product APIs are rooted
+  // directly at /api. A leading slash deliberately selects the API root.
+  const url = endpoint.startsWith('/')
+    ? new URL(endpoint, API_ROOT_URL)
+    : new URL(`${BASE_URL}/${endpoint}`);
 
   if (options.params) {
     for (const [key, value] of Object.entries(options.params)) {
@@ -264,6 +271,9 @@ async function sendRequest(
     Authorization: `Bearer ${token}`,
     Accept: 'application/json',
   };
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    if (value !== undefined) headers[name] = value;
+  }
 
   const fetchOptions: RequestInit = {
     method,
@@ -347,6 +357,27 @@ export async function fortnoxRequest<T>(
     if (!text) return undefined as T;
 
     return JSON.parse(text) as T;
+  });
+}
+
+/** JSON response together with the conditional metadata returned by newer APIs. */
+export interface FortnoxResponse<T> {
+  data: T;
+  etag?: string;
+  lastModified?: string;
+}
+
+export async function fortnoxRequestWithMetadata<T>(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<FortnoxResponse<T>> {
+  return request<FortnoxResponse<T>>(endpoint, options, async (response) => {
+    const text = await response.text();
+    return {
+      data: text ? (JSON.parse(text) as T) : (undefined as T),
+      etag: response.headers?.get?.('etag') ?? undefined,
+      lastModified: response.headers?.get?.('last-modified') ?? undefined,
+    };
   });
 }
 

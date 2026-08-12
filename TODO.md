@@ -5,7 +5,7 @@
 - Published to npm as `noxctl@0.6.0` (2026-07-21)
 - Invoice PDF export: `noxctl invoices pdf` / `fortnox_invoice_pdf`
 - Requires Node.js >=22.12.0; uses Commander 15
-- 26 operations modules: invoices, customers, suppliers, supplier invoices, articles, vouchers, accounts, financial reports, financial years/locked period, tax, company, invoice payments, supplier invoice payments, offers, orders, contracts, projects, cost centers, tax reductions (ROT/RUT), price lists, analytics, employees, salary transactions, attendance transactions, absence transactions, schedule times
+- 27 operations modules: invoices, customers, suppliers, supplier invoices, articles, vouchers, accounts, financial reports, financial years/locked period, tax, company, invoice payments, supplier invoice payments, offers, orders, contracts, recurrings, projects, cost centers, tax reductions (ROT/RUT), price lists, analytics, employees, salary transactions, attendance transactions, absence transactions, schedule times
 - Full sales pipeline: offer → order → invoice → payment
 - Payroll (Lön): employees + salary/attendance/absence transactions + schedule times (opt-in `salary` scope via `init --with-salary`)
 - 759 unit tests across 67 files
