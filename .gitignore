@@ -9,7 +9,11 @@ credentials.json
 credentials.dpapi
 ~/.fortnox-mcp/
 PLAN.md
-.claude/
+# Local Claude Code config stays out of the repo, but the skills directory is
+# shared project content — it only lives here because that is where Claude Code
+# looks; the originals are in skills/ and these are symlinks to them.
+.claude/*
+!.claude/skills/
 debate/
 .playwright-mcp/
 
