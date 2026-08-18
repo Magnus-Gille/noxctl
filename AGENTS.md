@@ -10,6 +10,10 @@ locations and each tool gets a pointer rather than its own copy.
 commands, the CLI-first rule, and the TDD expectation for substantive changes.
 It applies to every agent regardless of the filename.
 
+[`docs/shadow-run.md`](./docs/shadow-run.md) is the live thread: Fortnox is being
+evaluated against a self-hosted open-source replacement, with a decision due in
+December 2026. It opens with where the work stands and what to do next.
+
 ## Skills
 
 Reusable procedures live in [`skills/`](./skills), one directory per skill with a

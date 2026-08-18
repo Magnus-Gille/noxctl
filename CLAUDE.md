@@ -28,6 +28,17 @@ noxctl invoices send 28 --yes        # skip prompt (non-interactive/scripting)
 noxctl invoices create --customer 25 --input data.json --dry-run
 ```
 
+## Ongoing: shadow-running an open-source replacement
+
+Fortnox is being evaluated against [erp-mafia/accounted](https://github.com/erp-mafia/accounted),
+self-hosted on `huginmunin`, with a decision due in December 2026. Read
+**`docs/shadow-run.md`** before picking this thread up — it carries the plan, the
+current state, and the next actions.
+
+The first thing to do in a shell with real credentials: `noxctl sie export` has
+never been run against the live API. Verify it before relying on anything built
+on top of it.
+
 ## Backlog
 
 See `TODO.md` for the prioritized backlog and instructions for adding new resources.
@@ -47,11 +58,17 @@ See `TODO.md` for the prioritized backlog and instructions for adding new resour
 
 ```bash
 npm run build       # TypeScript compile
-npm test            # Vitest (759 unit tests)
+npm test            # Vitest (791 unit tests)
 npm run test:live   # Live API tests (needs credentials)
 npm run lint        # ESLint
 npm run format      # Prettier
 ```
+
+`tests/mcp-integration-profile.test.ts` has one timing-sensitive case
+(`surfaces [profile: staging] …`): it mocks a 500 and waits out the retry backoff
+against a 10-second timeout. On a loaded machine it times out, then passes on a
+rerun — confirmed to fail on `main` too, so a single red run is not evidence of a
+regression. Rerun it before investigating.
 
 ## Conventions
 

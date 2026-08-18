@@ -4,6 +4,68 @@ Plan och verktyg för att köra ett open source-bokföringssystem parallellt med
 Fortnox under hösten 2026, för att kunna avgöra inför räkenskapsåret 2027 om det
 håller att byta.
 
+## Var arbetet står (2026-08-18)
+
+Allt nedan ligger på branchen `claude/open-source-accounting-p9lhy4`.
+
+**Klart och verifierat**
+
+- `src/sie.ts` — SIE-läsare och diff. 22 enhetstester, körda mot CP437-kodade
+  filer. Hanterar CP437/latin1/UTF-8 och avkodar svenska kontonamn rätt.
+- `noxctl sie diff` — verifierad offline mot riktiga SIE-filer, både tabell- och
+  JSON-utdata, och `--exit-code`.
+- `skills/shadow-close/` — månadsrutinen som delad skill, symlänkad till
+  `.claude/skills/` och listad i `AGENTS.md` för Codex och Pi.
+
+**Byggt men otestat**
+
+- `noxctl sie export` — mot `/3/sie/{Type}`, som finns i Fortnox OpenAPI-spec.
+  **Inget skarpt anrop har gjorts.** Kräver `bookkeeping`-scope. Kör
+  `noxctl sie export --file - | head -c 200` som allra första åtgärd; ser det ut
+  som en SIE-header (`#FLAGGA`, `#PROGRAM`) är resten av kedjan trovärdig.
+
+**Inte påbörjat**
+
+- Instansen på `huginmunin`. Ingenting är installerat, konfigurerat eller startat.
+
+### Nästa åtgärder, i ordning
+
+1. Rök-testa `noxctl sie export` skarpt (se ovan).
+2. Exportera RÅ 2025 och 2026 till `~/skugga/` som utgångsläge och säkerhetskopia.
+3. Sätt upp Accounted på `huginmunin` enligt deras `docs/SELF-HOSTING.md`,
+   sektionen *"Fully Self-Hosted (No Supabase Cloud)"*.
+4. Importera de två SIE-filerna i instansen.
+5. Från september: bokför oberoende i båda systemen, kör `shadow-close` varje
+   månadsskifte.
+
+### Fällor som redan är kartlagda
+
+Deras compose-filer validerar (`docker compose config` rent för basen och
+`resources`-overlayn; `caddy`-overlayn kräver `DOMAIN` satt i `.env`). Men:
+
+- **Klon-instruktionen i deras doc är trasig** — `git clone .../gnubok.git`
+  följt av `cd Accounted` matchar inte katalogen som skapas. Projektet håller på
+  att byta namn från gnubok till Accounted och docs har inte hunnit med.
+- **Migrationerna körs med `psql`, inte `supabase db push`** — CLI:t antar ett
+  molnprojekt. Loopa `supabase/migrations/*.sql` in i `supabase-db`-containern.
+- **GoTrue måste ha callback-URL:erna i `ADDITIONAL_REDIRECT_URLS`** och
+  auth-containern startas om, annars fungerar inte inloggningen.
+- **App-containern och Supabases `kong` måste dela ett externt Docker-nätverk**
+  för att reverse-proxyn ska nå båda.
+- **`pg_cron`** (migration 048) fungerar i den self-hostade stacken men kräver
+  betald plan i Supabase moln. Går den inte igenom: hoppa över den, cron-sidecaren
+  gör samma jobb över HTTP.
+
+### Öppna frågor
+
+- Är digital inlämning av årsredovisning faktiskt lagstadgad för räkenskapsår som
+  inleds efter 2025-12-31? Kunde inte verifieras mot primärkälla. Avgör om iXBRL
+  är ett krav eller ett val för RÅ 2026.
+- Klarar Accounted Bolagsverkets iXBRL-inlämning? Belägg finns för INK2/SRU till
+  Skatteverket, inget för iXBRL.
+- Har projektet taggat en release? Vid kartläggningen: noll releaser, noll taggar,
+  ~6 månader gammalt, 2–3 personer bakom över 90 % av koden.
+
 ## Varför skuggkörning och inte bara byte
 
 Bolaget kör kontantmetoden, har två räkenskapsår i systemet och ett fyrtiotal
