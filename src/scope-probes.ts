@@ -3,10 +3,10 @@
  * `fortnox_status` to check what the current credentials are actually
  * authorized for.
  *
- * Shared by both callers so the two cannot drift: a scope with no probe here is
- * silently skipped by the validation loop, which previously let doctor report
- * "all N scopes authorized" while never checking five of them. `scope-probes`
- * test coverage asserts this map matches the requestable scope sets exactly.
+ * Shared by both callers so the two cannot drift. A scope with no probe here
+ * used to be skipped silently while still counting toward "all N scopes
+ * authorized"; both callers now report it as "not checked" instead, and the
+ * scope-probes test asserts this map matches the requestable scope sets exactly.
  */
 export const scopeProbeEndpoints: Record<string, string> = {
   article: 'articles?limit=1',

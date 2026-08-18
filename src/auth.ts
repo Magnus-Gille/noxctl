@@ -37,13 +37,18 @@ export const SCOPES =
 export const ORDER_SCOPES = 'offer order';
 
 // The scope set as it stood before offers/orders/projects/cost centers/prices
-// were added. Credentials written before the `scopes` field existed recorded no
-// scope string, and renewing those against the current SCOPES would silently ask
-// for scopes their Fortnox app was never granted. A rejected client-credentials
-// renewal falls back to the refresh token, which service-account installs do not
-// rotate and which Fortnox expires after 45 days — so widening the fallback can
-// break an untouched installation. Never change this constant; it records
-// history, not intent.
+// were added — i.e. what noxctl 0.3.0–0.6.1 requested. Credentials written before
+// the `scopes` field existed (pre-0.4.0) recorded no scope string, and renewing
+// those against the current SCOPES would silently ask for scopes their Fortnox app
+// was never granted. A rejected client-credentials renewal falls back to the
+// refresh token, which service-account installs do not rotate and which Fortnox
+// expires after 45 days — so widening the fallback can break an untouched
+// installation. Never change this constant; it records history, not intent.
+//
+// Known gap: 0.2.0 predates `inbox`/`connectfile` too, so a credential that old is
+// still widened by those two. That is unchanged behaviour — it has been true since
+// 0.3.0 shipped — and is not worth a speculative rejection-and-retry path; such an
+// installation should re-run `noxctl init`.
 export const LEGACY_SCOPES =
   'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
 
@@ -77,8 +82,8 @@ export interface FortnoxCredentials {
   tenant_id?: string;
   company_name?: string;
   // The OAuth scope string granted at authorization time. Optional for
-  // backward compatibility: credentials written before this field existed (or
-  // by the default `init`) fall back to SCOPES. Recorded so the
+  // backward compatibility: credentials written before this field existed fall
+  // back to LEGACY_SCOPES, not the current set. Recorded so the
   // client-credentials refresh re-requests exactly what was granted (e.g. the
   // opt-in `salary` scope).
   scopes?: string;

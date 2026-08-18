@@ -317,7 +317,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Offers (offerter)
 
-> **Requires the `offer`/`order` scopes**, which are **opt-in** and need the Fortnox **Order** licence. Enable **Offert** and **Order** on your Fortnox app, then run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1` in non-interactive setups). Without them, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
+> **Requires the `offer` scope**, which is **opt-in** and needs the Fortnox **Order** licence. Run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1`), which requests `offer` and `order` together. Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
 
 | CLI | MCP tool | Description |
 |-----|----------|-------------|
@@ -330,7 +330,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Orders (ordrar)
 
-> **Requires the `offer`/`order` scopes**, which are **opt-in** and need the Fortnox **Order** licence. Enable **Offert** and **Order** on your Fortnox app, then run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1` in non-interactive setups). Without them, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
+> **Requires the `order` scope**, which is **opt-in** and needs the Fortnox **Order** licence. Run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1`), which requests `offer` and `order` together. Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
 
 | CLI | MCP tool | Description |
 |-----|----------|-------------|

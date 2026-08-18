@@ -27,3 +27,21 @@ jobs:
       - run: npm run format:check
       - run: npm audit --omit=dev
       - run: npm pack --dry-run --ignore-scripts
+
+  # Every bug in #95 was Windows-only (cmd.exe splitting the OAuth URL on `&`,
+  # DPAPI missing its assembly) and Linux-only CI could not have caught any of
+  # them. This leg runs the same suite on Windows; it is not a matrix entry
+  # because `npm audit` / `npm pack` only need to run once.
+  windows-test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
