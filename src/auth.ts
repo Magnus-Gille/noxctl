@@ -18,13 +18,34 @@ function authFetch(input: string | URL, init: RequestInit = {}): Promise<Respons
   });
 }
 
-// Every endpoint family noxctl implements must appear here: Fortnox only grants
-// what the authorize request asks for, so a missing token means `403 Har inte
-// behörighet för scope` at call time even when the app has the permission
-// enabled (#95). `offer`, `order`, `payment`, `project`, `costcenter` and
-// `price` are scopes of their own — they are not covered by `invoice`.
+// Every endpoint family noxctl implements must appear here or in one of the
+// opt-in sets below: Fortnox only grants what the authorize request asks for, so
+// a missing token means `403 Har inte behörighet för scope` at call time even
+// when the app has the permission enabled (#95). `payment`, `project`,
+// `costcenter` and `price` are scopes of their own — they are not covered by
+// `invoice`. Every scope here is satisfied by the Bokföring, Kundfaktura or
+// Order licences the pre-existing defaults already required, so adding them
+// cannot make authorization impossible for a company that could authorize before.
 export const SCOPES =
-  'article customer invoice payment offer order supplier supplierinvoice bookkeeping companyinformation settings project costcenter price inbox connectfile';
+  'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings project costcenter price inbox connectfile';
+
+// Offers and orders. Opt-in for the same reason as salary: Fortnox's scope table
+// requires the *Order* licence for both, which a Bokföring + Kundfaktura company
+// does not have — requesting them unconditionally would make `noxctl init`
+// impossible for those companies rather than merely degrading two features.
+// `noxctl init --with-orders` (or FORTNOX_WITH_ORDERS=1) appends them.
+export const ORDER_SCOPES = 'offer order';
+
+// The scope set as it stood before offers/orders/projects/cost centers/prices
+// were added. Credentials written before the `scopes` field existed recorded no
+// scope string, and renewing those against the current SCOPES would silently ask
+// for scopes their Fortnox app was never granted. A rejected client-credentials
+// renewal falls back to the refresh token, which service-account installs do not
+// rotate and which Fortnox expires after 45 days — so widening the fallback can
+// break an untouched installation. Never change this constant; it records
+// history, not intent.
+export const LEGACY_SCOPES =
+  'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
 
 // The "Lön" (salary/payroll) scope. Opt-in only: requesting it at authorize
 // time fails for users whose Fortnox app integration does not have the Lön
@@ -34,11 +55,15 @@ export const SCOPES =
 // client-credentials refresh re-requests the same set.
 export const SALARY_SCOPE = 'salary';
 
-/** Effective scope string for a profile: the granted set if recorded, else the base SCOPES. */
+/**
+ * Effective scope string for a profile: the granted set if recorded, else the
+ * frozen LEGACY_SCOPES — what a credential predating the `scopes` field was
+ * actually consented to. Re-running `noxctl init` records the current set.
+ */
 export function effectiveScopes(
   creds: Pick<FortnoxCredentials, 'scopes'> | null | undefined,
 ): string {
-  return creds?.scopes ?? SCOPES;
+  return creds?.scopes ?? LEGACY_SCOPES;
 }
 
 export const CREDENTIAL_SCHEMA_VERSION = 2;

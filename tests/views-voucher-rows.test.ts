@@ -38,4 +38,11 @@ describe('voucher row rendering', () => {
     const bare = [{ Account: 4000, Debit: 100, Removed: true }];
     expect(formatTable(bare, voucherRowColumns)).toContain('[REMOVED]');
   });
+
+  it('strips terminal control sequences from a removed row description', () => {
+    const nasty = [{ Account: 4000, Description: 'safe\u001b]52;c;Zm9v\u0007tail', Removed: true }];
+    const out = formatTable(nasty, voucherRowColumns);
+    expect(out).toContain('[REMOVED]');
+    expect(out).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
+  });
 });

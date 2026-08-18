@@ -80,27 +80,18 @@ export function registerStatusTools(server: McpServer): void {
       const { effectiveScopes } = await import('../auth.js');
       const { fortnoxRequest, FortnoxApiError } = await import('../fortnox-client.js');
 
-      const scopeEndpoints: Record<string, string> = {
-        article: 'articles?limit=1',
-        customer: 'customers?limit=1',
-        invoice: 'invoices?limit=1',
-        payment: 'invoicepayments?limit=1',
-        supplier: 'suppliers?limit=1',
-        supplierinvoice: 'supplierinvoices?limit=1',
-        bookkeeping: 'vouchers?limit=1',
-        companyinformation: 'companyinformation',
-        settings: 'settings/company',
-        inbox: 'inbox',
-        connectfile: 'voucherfileconnections?limit=1',
-        salary: 'employees?limit=1',
-      };
+      const { scopeProbeEndpoints } = await import('../scope-probes.js');
 
       const required = effectiveScopes(creds).split(' ');
       const missing: string[] = [];
+      const unchecked: string[] = [];
 
       for (const scope of required) {
-        const endpoint = scopeEndpoints[scope];
-        if (!endpoint) continue;
+        const endpoint = scopeProbeEndpoints[scope];
+        if (!endpoint) {
+          unchecked.push(scope);
+          continue;
+        }
         try {
           await fortnoxRequest(endpoint);
         } catch (err) {
@@ -116,7 +107,13 @@ export function registerStatusTools(server: McpServer): void {
       }
 
       if (missing.length === 0) {
-        pass('Scopes', `all ${required.length} scopes authorized`);
+        const checked = required.length - unchecked.length;
+        pass(
+          'Scopes',
+          unchecked.length === 0
+            ? `all ${checked} scopes authorized`
+            : `${checked} scopes authorized; not checked: ${unchecked.join(', ')}`,
+        );
       } else {
         fail(
           'Scopes',

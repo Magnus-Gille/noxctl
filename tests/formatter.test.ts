@@ -393,3 +393,25 @@ describe('row-aware column formatting', () => {
     expect(format).toHaveBeenCalledWith(1, { a: 1, b: 2 });
   });
 });
+
+describe('custom formatter output is sanitized', () => {
+  // Regression: a column with a `format` callback used to bypass the control
+  // -character stripping that plain cells go through, letting a server-supplied
+  // string emit ANSI/OSC escapes straight to the user's terminal.
+  const nasty = 'safe\u001b]52;c;Zm9v\u0007tail\u001b[31mred';
+
+  it('strips control sequences returned by a table formatter', () => {
+    const out = formatTable(
+      [{ a: nasty }],
+      [{ key: 'a', header: 'A', width: 60, format: (v) => String(v) }],
+    );
+    expect(out).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
+  });
+
+  it('strips control sequences returned by a detail formatter', () => {
+    const out = formatDetail({ a: nasty }, [
+      { key: 'a', header: 'A', width: 60, format: (v) => String(v) },
+    ]);
+    expect(out).not.toMatch(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/);
+  });
+});

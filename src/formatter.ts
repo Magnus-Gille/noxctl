@@ -45,7 +45,9 @@ export function formatTable(rows: Record<string, unknown>[], columns: Column[]):
     columns
       .map((c) => {
         const raw = row[c.key];
-        const str = c.format ? c.format(raw, row) : toString(raw);
+        // stripControl applies to formatter output too: a custom formatter
+        // returns server-supplied text and must not be a way around it.
+        const str = c.format ? stripControl(c.format(raw, row)) : toString(raw);
         return pad(str, c.width, c.align ?? 'left');
       })
       .join('  '),
@@ -60,7 +62,7 @@ export function formatDetail(record: Record<string, unknown>, columns: Column[])
     .map((c) => {
       const raw = record[c.key];
       if (raw === null || raw === undefined || raw === '') return null;
-      const str = c.format ? c.format(raw, record) : toString(raw);
+      const str = c.format ? stripControl(c.format(raw, record)) : toString(raw);
       return `  ${c.header.padEnd(maxLabel)}  ${str}`;
     })
     .filter(Boolean)

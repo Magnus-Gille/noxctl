@@ -123,6 +123,72 @@ describe('supplier tools', () => {
       Active: true,
     };
 
+    // The claim is full coverage of the Supplier resource, so assert the schema's
+    // property list itself — sending a subset of values cannot detect a field
+    // quietly dropped from the schema.
+    const writableSupplierFields = [
+      'Active',
+      'Address1',
+      'Address2',
+      'BG',
+      'BIC',
+      'Bank',
+      'BankAccountNumber',
+      'BranchCode',
+      'City',
+      'ClearingNumber',
+      'Comments',
+      'CostCenter',
+      'Country',
+      'CountryCode',
+      'Currency',
+      'DisablePaymentFile',
+      'Email',
+      'Fax',
+      'IBAN',
+      'Name',
+      'OrganisationNumber',
+      'OurCustomerNumber',
+      'OurReference',
+      'PG',
+      'Phone1',
+      'Phone2',
+      'PreDefinedAccount',
+      'Project',
+      'TermsOfPayment',
+      'VATNumber',
+      'VATType',
+      'VisitingAddress',
+      'VisitingCity',
+      'VisitingCountry',
+      'VisitingCountryCode',
+      'VisitingZipCode',
+      'WWW',
+      'WorkPlace',
+      'YourReference',
+      'ZipCode',
+    ];
+
+    it('declares every writable Supplier field on create', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_create_supplier')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      for (const field of [...writableSupplierFields, 'SupplierNumber']) {
+        expect(declared).toContain(field);
+      }
+    });
+
+    it('declares every writable Supplier field on update', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_update_supplier')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      for (const field of writableSupplierFields) {
+        expect(declared).toContain(field);
+      }
+    });
+
     it('forwards extended fields on create', async () => {
       mockFetch({ Supplier: { SupplierNumber: '3' } });
       const { client } = await setupClientServer();
