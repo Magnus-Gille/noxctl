@@ -14,6 +14,56 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
+// The full writable Supplier field set (Fortnox `SupplierSinglePayloadItem`).
+// The MCP SDK silently strips any argument the schema does not declare, so a
+// field missing here never reaches Fortnox and never raises an error — it just
+// vanishes (#96). The operations layer forwards whatever it is given.
+const supplierWritableFields = {
+  Name: z.string().optional().describe('Leverantörsnamn'),
+  OrganisationNumber: z.string().optional().describe('Organisationsnummer'),
+  Email: z.string().optional().describe('E-postadress'),
+  Phone1: z.string().optional().describe('Telefonnummer'),
+  Phone2: z.string().optional().describe('Alternativt telefonnummer'),
+  Fax: z.string().optional().describe('Faxnummer'),
+  WWW: z.string().optional().describe('Webbplats'),
+  Address1: z.string().optional().describe('Adressrad 1'),
+  Address2: z.string().optional().describe('Adressrad 2'),
+  ZipCode: z.string().optional().describe('Postnummer'),
+  City: z.string().optional().describe('Ort'),
+  Country: z.string().optional().describe('Land'),
+  CountryCode: z.string().optional().describe('Landskod (t.ex. "SE")'),
+  VisitingAddress: z.string().optional().describe('Besöksadress'),
+  VisitingZipCode: z.string().optional().describe('Besöksadress postnummer'),
+  VisitingCity: z.string().optional().describe('Besöksadress ort'),
+  VisitingCountry: z.string().optional().describe('Besöksadress land'),
+  VisitingCountryCode: z.string().optional().describe('Besöksadress landskod'),
+  OurReference: z.string().optional().describe('Vår referens'),
+  YourReference: z.string().optional().describe('Er referens'),
+  OurCustomerNumber: z.string().optional().describe('Vårt kundnummer hos leverantören'),
+  Comments: z.string().optional().describe('Kommentarer'),
+  Currency: z.string().optional().describe('Valuta (t.ex. "SEK")'),
+  TermsOfPayment: z.string().optional().describe('Betalningsvillkor (kod)'),
+  VATNumber: z.string().optional().describe('Momsregistreringsnummer'),
+  VATType: z
+    .string()
+    .optional()
+    .describe('Momstyp (t.ex. "SEVAT", "SEREVERSEDVAT", "EUREVERSEDVAT")'),
+  PreDefinedAccount: z.string().optional().describe('Fördefinierat konto'),
+  CostCenter: z.string().optional().describe('Kostnadsställe'),
+  Project: z.string().optional().describe('Projektnummer'),
+  BankAccountNumber: z.string().optional().describe('Bankkontonummer'),
+  Bank: z.string().optional().describe('Bank'),
+  BG: z.string().optional().describe('Bankgiro'),
+  PG: z.string().optional().describe('Plusgiro'),
+  BIC: z.string().optional().describe('BIC/SWIFT'),
+  IBAN: z.string().optional().describe('IBAN'),
+  ClearingNumber: z.string().optional().describe('Clearingnummer'),
+  BranchCode: z.string().optional().describe('Bankkod (utländska betalningar)'),
+  DisablePaymentFile: z.boolean().optional().describe('Uteslut från betalningsfil'),
+  WorkPlace: z.string().optional().describe('Arbetsplats'),
+  Active: z.boolean().optional().describe('Aktiv leverantör'),
+};
+
 export function registerSupplierTools(server: McpServer): void {
   server.tool(
     'fortnox_list_suppliers',
@@ -54,16 +104,9 @@ export function registerSupplierTools(server: McpServer): void {
     'fortnox_create_supplier',
     'Skapa en ny leverantör i Fortnox',
     {
+      ...supplierWritableFields,
       Name: z.string().describe('Leverantörsnamn'),
-      OrganisationNumber: z.string().optional().describe('Organisationsnummer'),
-      Email: z.string().optional().describe('E-postadress'),
-      Phone1: z.string().optional().describe('Telefonnummer'),
-      Address1: z.string().optional().describe('Adressrad 1'),
-      ZipCode: z.string().optional().describe('Postnummer'),
-      City: z.string().optional().describe('Ort'),
-      BankAccountNumber: z.string().optional().describe('Bankkontonummer'),
-      BG: z.string().optional().describe('Bankgiro'),
-      PG: z.string().optional().describe('Plusgiro'),
+      SupplierNumber: z.string().optional().describe('Leverantörsnummer (default: nästa lediga)'),
       confirm: z.boolean().optional().describe('Bekräfta att leverantören ska skapas'),
       dryRun: z
         .boolean()
@@ -87,16 +130,7 @@ export function registerSupplierTools(server: McpServer): void {
     'Uppdatera en befintlig leverantör i Fortnox',
     {
       supplierNumber: z.string().describe('Leverantörsnummer att uppdatera'),
-      Name: z.string().optional().describe('Leverantörsnamn'),
-      OrganisationNumber: z.string().optional().describe('Organisationsnummer'),
-      Email: z.string().optional().describe('E-postadress'),
-      Phone1: z.string().optional().describe('Telefonnummer'),
-      Address1: z.string().optional().describe('Adressrad 1'),
-      ZipCode: z.string().optional().describe('Postnummer'),
-      City: z.string().optional().describe('Ort'),
-      BankAccountNumber: z.string().optional().describe('Bankkontonummer'),
-      BG: z.string().optional().describe('Bankgiro'),
-      PG: z.string().optional().describe('Plusgiro'),
+      ...supplierWritableFields,
       confirm: z.boolean().optional().describe('Bekräfta att leverantören ska uppdateras'),
       dryRun: z
         .boolean()

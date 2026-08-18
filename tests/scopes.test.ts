@@ -19,6 +19,12 @@ describe('OAuth SCOPES', () => {
       'settings',
       'inbox', // POST /3/inbox — voucher file upload (#37)
       'connectfile', // POST /3/voucherfileconnections — link file to voucher (#37)
+      'payment', // /3/invoicepayments, /3/supplierinvoicepayments
+      'offer', // /3/offers — a scope of its own, not covered by `invoice` (#95)
+      'order', // /3/orders — a scope of its own, not covered by `invoice` (#95)
+      'project', // /3/projects (#95)
+      'costcenter', // /3/costcenters (#95)
+      'price', // /3/pricelists, /3/prices (#95)
     ]) {
       expect(requested).toContain(scope);
     }

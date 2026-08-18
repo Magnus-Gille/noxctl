@@ -558,6 +558,33 @@ describe('Windows DPAPI backend', () => {
     expect(commands.some((s) => s.includes('credentials.default.dpapi'))).toBe(true);
   });
 
+  // Issue #95: [System.Security.Cryptography.ProtectedData] lives in the
+  // System.Security assembly, which is not preloaded in every PowerShell
+  // configuration. Without Add-Type the call fails with "Unable to find type".
+  it('loads the System.Security assembly before using ProtectedData on read', async () => {
+    childProcess.execFileSync.mockReturnValue('');
+    await loadCredentialBlob('demo');
+
+    const call = childProcess.execFileSync.mock.calls.find(([cmd]) => cmd === 'powershell');
+    const script = (call![1] as string[]).join(' ');
+    expect(script).toContain('Add-Type -AssemblyName System.Security');
+    expect(script.indexOf('Add-Type -AssemblyName System.Security')).toBeLessThan(
+      script.indexOf('[System.Security.Cryptography.ProtectedData]'),
+    );
+  });
+
+  it('loads the System.Security assembly before using ProtectedData on write', async () => {
+    childProcess.spawnSync.mockReturnValue({ status: 0, stderr: '', stdout: '' });
+    await saveCredentialBlob('{"x":1}', 'demo');
+
+    const call = childProcess.spawnSync.mock.calls.find(([cmd]) => cmd === 'powershell');
+    const script = (call![1] as string[]).join(' ');
+    expect(script).toContain('Add-Type -AssemblyName System.Security');
+    expect(script.indexOf('Add-Type -AssemblyName System.Security')).toBeLessThan(
+      script.indexOf('[System.Security.Cryptography.ProtectedData]'),
+    );
+  });
+
   it('lowercases mixed-case names in the filename', async () => {
     childProcess.spawnSync.mockReturnValue({ status: 0, stderr: '', stdout: '' });
     await saveCredentialBlob('{"x":1}', 'Demo');

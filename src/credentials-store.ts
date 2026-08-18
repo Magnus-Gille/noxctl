@@ -243,6 +243,9 @@ function loadWindowsSecret(file: string): string | null {
         '-NonInteractive',
         '-Command',
         [
+          // ProtectedData lives in System.Security, which is not preloaded in
+          // every PowerShell configuration (#95).
+          'Add-Type -AssemblyName System.Security',
           `if (-not (Test-Path '${file}')) { exit 0 }`,
           `$protected = [Convert]::FromBase64String([IO.File]::ReadAllText('${file}'))`,
           '$bytes = [System.Security.Cryptography.ProtectedData]::Unprotect($protected, $null, [System.Security.Cryptography.DataProtectionScope]::CurrentUser)',
@@ -266,6 +269,9 @@ function saveWindowsSecret(file: string, secret: string): void {
       '-NonInteractive',
       '-Command',
       [
+        // ProtectedData lives in System.Security, which is not preloaded in
+        // every PowerShell configuration (#95).
+        'Add-Type -AssemblyName System.Security',
         `[IO.Directory]::CreateDirectory('${configDir()}') | Out-Null`,
         '$plain = [Console]::In.ReadToEnd()',
         '$bytes = [Text.Encoding]::UTF8.GetBytes($plain)',

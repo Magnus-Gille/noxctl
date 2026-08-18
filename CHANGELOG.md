@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows: the OAuth browser launch sent Fortnox a truncated URL.** `openBrowser()` ran `cmd /c start <url>`, and cmd.exe treats every unescaped `&` in the query string as a command separator — Fortnox only ever received the fragment before the first `&`, with no `redirect_uri`, `scope`, `state`, `response_type` or `access_type`, and correctly rejected it. The remaining parameters were run as commands and printed "not recognized" errors over the fallback URL, and the rejection could tear down the callback listener before that URL could be used. Windows now launches the browser through PowerShell `Start-Process` with the URL as a single quoted argument, and `noxctl init` prints the URL unconditionally on every platform. Thanks to @hedborg for the report and diagnosis (#95).
+- **Windows: saving credentials failed with `Unable to find type [System.Security.Cryptography.ProtectedData]`.** The DPAPI helpers used `ProtectedData` without loading the assembly it lives in, which fails on any PowerShell configuration that does not preload `System.Security`. Both the read and write scripts now `Add-Type -AssemblyName System.Security` first (#95).
+- **Six scopes were documented and implemented but never requested.** `noxctl` only receives what the authorize request asks for, so `offer`, `order`, `project`, `costcenter` and `price` calls failed with `403 Har inte behörighet för scope` even when the Fortnox app had the permissions enabled. All are now in the default `SCOPES`. `offer` and `order` are scopes of their own and are _not_ covered by `invoice`; the same applies to `payment`, which was already requested but which the 403 hint misattributed to `invoice`/`supplierinvoice`. The endpoint→scope map used for those hints has been corrected accordingly, and `financialyears` (→ `bookkeeping`) added (#95).
+- **`fortnox_create_supplier` / `fortnox_update_supplier` accepted only 10 of the Supplier resource's 41 writable fields.** The MCP SDK silently strips arguments a tool's schema does not declare, so setting e.g. `YourReference` did nothing at all — no error, the field simply never reached Fortnox. Both schemas now cover the full `SupplierSinglePayloadItem` field set (references, comments, visiting address, VAT, bank/IBAN/BIC, cost center, project, terms of payment, and the rest). Thanks to @hedborg (#96).
+- **Voided voucher rows rendered identically to live ones.** Fortnox lets a single voucher row be voided (`Removed: true`) without deleting it, leaving the void and its replacement side by side in the same voucher — which read as a double-booking. Voided rows are now prefixed `[REMOVED]` in both `fortnox_get_voucher` and `noxctl vouchers get` (#96).
+
+### Changed
+
+- **`noxctl init` may require enabling more permissions on an existing Fortnox app.** The scope set above is requested at authorize time, and Fortnox rejects an authorization that asks for a scope the app has not been granted. Existing installations keep working on their recorded scopes until you re-run `noxctl init`; before you do, enable Offert, Order, Betalning, Projekt, Kostnadsställe and Priser on the app. See the scope table in the README.
+- `noxctl init` now prints the scope list from the `SCOPES` constant itself rather than a hand-maintained copy, which had drifted from what noxctl actually requests (#95).
+- `Column.format` in the table/detail formatter now also receives the whole row, for cells whose rendering depends on a sibling field.
+
 ## [0.6.1] - 2026-07-21
 
 ### Internal

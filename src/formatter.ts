@@ -3,7 +3,8 @@ export interface Column {
   header: string;
   width: number;
   align?: 'left' | 'right';
-  format?: (value: unknown) => string;
+  /** Receives the whole row/record too, for cells that depend on a sibling field. */
+  format?: (value: unknown, row: Record<string, unknown>) => string;
 }
 
 function stripControl(str: string): string {
@@ -44,7 +45,7 @@ export function formatTable(rows: Record<string, unknown>[], columns: Column[]):
     columns
       .map((c) => {
         const raw = row[c.key];
-        const str = c.format ? c.format(raw) : toString(raw);
+        const str = c.format ? c.format(raw, row) : toString(raw);
         return pad(str, c.width, c.align ?? 'left');
       })
       .join('  '),
@@ -59,7 +60,7 @@ export function formatDetail(record: Record<string, unknown>, columns: Column[])
     .map((c) => {
       const raw = record[c.key];
       if (raw === null || raw === undefined || raw === '') return null;
-      const str = c.format ? c.format(raw) : toString(raw);
+      const str = c.format ? c.format(raw, record) : toString(raw);
       return `  ${c.header.padEnd(maxLabel)}  ${str}`;
     })
     .filter(Boolean)

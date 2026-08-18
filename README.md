@@ -49,22 +49,29 @@ So you control the credentials, the scopes, and which company is connected end t
    - Copy your **Client ID** and **Client Secret**
 4. On the **Integration** tab, enable these scopes under **Behörigheter** / **Permissions**:
 
-   | Swedish (SV)         | English (EN)        | Needed for                                     |
-   |----------------------|---------------------|------------------------------------------------|
-   | Artikel              | Article             | Articles, prices, price lists                  |
-   | Bokföring            | Bookkeeping         | Vouchers, accounts, financial reports          |
-   | Faktura              | Invoice             | Invoices, invoice payments, offers, orders, tax reductions |
-   | Företagsinformation  | Company Information | Company info                                   |
-   | Inställningar        | Settings            | Financial year, locked period                  |
-   | Kund                 | Customer            | Customers                                      |
-   | Leverantör           | Supplier            | Suppliers                                      |
-   | Leverantörsfaktura   | Supplier Invoice    | Supplier invoices, supplier invoice payments   |
-   | Projekt              | Project             | Projects                                       |
-   | Kostnadsställe       | Cost Center         | Cost centers                                   |
-   | Priser               | Price               | Price lists, prices                            |
-   | Lön                  | Salary              | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
+   | Scope                | Swedish (SV)         | English (EN)        | Needed for                                     |
+   |----------------------|----------------------|---------------------|------------------------------------------------|
+   | `article`            | Artikel              | Article             | Articles                                       |
+   | `bookkeeping`        | Bokföring            | Bookkeeping         | Vouchers, accounts, financial reports, financial years |
+   | `companyinformation` | Företagsinformation  | Company Information | Company info                                   |
+   | `connectfile`        | —                    | File Connection     | Attaching uploaded files to vouchers           |
+   | `costcenter`         | Kostnadsställe       | Cost Center         | Cost centers                                   |
+   | `customer`           | Kund                 | Customer            | Customers                                      |
+   | `inbox`              | —                    | Inbox               | Uploading receipt/attachment files             |
+   | `invoice`            | Faktura              | Invoice             | Invoices, tax reductions                       |
+   | `offer`              | Offert               | Offer               | Offers                                         |
+   | `order`              | Order                | Order               | Orders                                         |
+   | `payment`            | Betalning            | Payment             | Invoice payments, supplier invoice payments    |
+   | `price`              | Priser               | Price               | Price lists, prices                            |
+   | `project`            | Projekt              | Project             | Projects                                       |
+   | `settings`           | Inställningar        | Settings            | Locked period                                  |
+   | `supplier`           | Leverantör           | Supplier            | Suppliers                                      |
+   | `supplierinvoice`    | Leverantörsfaktura   | Supplier Invoice    | Supplier invoices                              |
+   | `salary`             | Lön                  | Salary              | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
 
-   Enable every scope for the resources you intend to use. Missing scopes surface as `403 Forbidden` with a hint pointing at the right one.
+   **Enable all of them** except the opt-in `salary`. noxctl requests this exact set at authorize time, and Fortnox rejects the whole authorization if the app has not been granted a scope that is asked for — so a partially-enabled app fails at `noxctl init` rather than at first use. `noxctl init` prints the same list.
+
+   Missing scopes surface as `403 Forbidden` with a hint naming the scope (e.g. `Missing "payment" scope`); match that token against the **Scope** column above.
 
    **Payroll (Lön) is opt-in.** The `salary` scope is *not* requested by default, because requesting a scope your app hasn't been granted breaks authorization. To use the payroll commands, enable the **Lön** permission above, then authorize with `noxctl init --with-salary` (or set `FORTNOX_WITH_SALARY=1` for non-interactive setups). The granted scope set is remembered per profile, so token refreshes keep working.
 

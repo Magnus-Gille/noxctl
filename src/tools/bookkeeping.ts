@@ -69,7 +69,7 @@ export function registerBookkeepingTools(server: McpServer): void {
 
   server.tool(
     'fortnox_get_voucher',
-    'Hämta en enskild verifikation med rader från Fortnox. Returnerar: VoucherSeries, VoucherNumber, TransactionDate, Description, samt VoucherRows med Account, Debit, Credit.',
+    'Hämta en enskild verifikation med rader från Fortnox. Returnerar: VoucherSeries, VoucherNumber, TransactionDate, Description, samt VoucherRows med Account, Debit, Credit. Makulerade rader (Removed) märks med [REMOVED] och ska inte räknas med — de är ersatta av en annan rad i samma verifikation.',
     {
       series: z.string().describe('Verifikationsserie (t.ex. "A")'),
       voucherNumber: z.string().describe('Verifikationsnummer'),

@@ -15,6 +15,7 @@ vi.mock('../src/credentials-store.js', () => credentialStore);
 vi.mock('../src/profiles.js', () => profilesModule);
 
 import {
+  browserOpenCommand,
   loadCredentials,
   saveCredentials,
   exchangeCodeForTokens,
@@ -691,5 +692,54 @@ describe('auth', () => {
         '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;',
       );
     });
+  });
+});
+
+describe('browserOpenCommand', () => {
+  // The authorization URL always carries several `&`-separated query parameters.
+  const authUrl =
+    'https://apps.fortnox.se/oauth-v1/auth?client_id=cid&redirect_uri=http%3A%2F%2Flocalhost%3A9876%2Fcallback' +
+    '&scope=article+customer&state=abc&response_type=code&access_type=offline';
+
+  it('opens with `open` on macOS', () => {
+    expect(browserOpenCommand('darwin', authUrl)).toEqual({ file: 'open', args: [authUrl] });
+  });
+
+  it('opens with `xdg-open` on Linux', () => {
+    expect(browserOpenCommand('linux', authUrl)).toEqual({ file: 'xdg-open', args: [authUrl] });
+  });
+
+  // Issue #95: `cmd /c start <url>` makes cmd.exe treat every unescaped `&` as a
+  // command separator, so Fortnox only ever received the truncated first
+  // parameter — no redirect_uri, scope, state, response_type or access_type.
+  it('does not hand the URL to cmd.exe on Windows', () => {
+    const cmd = browserOpenCommand('win32', authUrl);
+    expect(cmd).not.toBeNull();
+    expect(cmd!.file).not.toBe('cmd');
+    expect(cmd!.args).not.toContain('/c');
+  });
+
+  it('keeps every query parameter intact on Windows', () => {
+    const cmd = browserOpenCommand('win32', authUrl);
+    const line = cmd!.args.join(' ');
+    for (const param of [
+      'client_id=cid',
+      'redirect_uri=',
+      'scope=',
+      'state=abc',
+      'response_type=code',
+      'access_type=offline',
+    ]) {
+      expect(line).toContain(param);
+    }
+  });
+
+  it('does not leave a bare `&` for the Windows shell to split on', () => {
+    const cmd = browserOpenCommand('win32', authUrl);
+    // Every `&` must be quoted or escaped — never passed through raw.
+    const raw = cmd!.args.filter((a) => a.includes('&'));
+    for (const arg of raw) {
+      expect(/(?<![\^'"])&/.test(arg.replace(/'[^']*'/g, ''))).toBe(false);
+    }
   });
 });

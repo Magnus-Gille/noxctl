@@ -379,11 +379,13 @@ program
     console.log('');
     console.log("You'll need a Fortnox app from developer.fortnox.se with:");
     console.log('  - Redirect URI: http://localhost:9876/callback');
-    console.log(
-      '  - Scopes (Behörigheter): Artikel, Bokföring, Faktura, Företagsinformation, Inställningar, Kund, Leverantör, Leverantörsfaktura',
-    );
+    // Printed from the SCOPES constant itself. A hand-maintained list drifted
+    // from what noxctl actually requests, so following the docs produced an
+    // under-scoped Fortnox app and a confusing rejection at authorize time (#95).
+    console.log('  - Permissions (Behörigheter) for every one of these scopes:');
+    console.log(`      ${scopes.split(' ').join(', ')}`);
     if (withSalary) {
-      console.log('  - Lön (krävs eftersom du kör med --with-salary)');
+      console.log('    (salary is included because you passed --with-salary)');
     }
     console.log('  - Service account enabled (recommended)');
     console.log('');

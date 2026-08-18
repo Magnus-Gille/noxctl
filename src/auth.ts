@@ -18,8 +18,13 @@ function authFetch(input: string | URL, init: RequestInit = {}): Promise<Respons
   });
 }
 
+// Every endpoint family noxctl implements must appear here: Fortnox only grants
+// what the authorize request asks for, so a missing token means `403 Har inte
+// behörighet för scope` at call time even when the app has the permission
+// enabled (#95). `offer`, `order`, `payment`, `project`, `costcenter` and
+// `price` are scopes of their own — they are not covered by `invoice`.
 export const SCOPES =
-  'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
+  'article customer invoice payment offer order supplier supplierinvoice bookkeeping companyinformation settings project costcenter price inbox connectfile';
 
 // The "Lön" (salary/payroll) scope. Opt-in only: requesting it at authorize
 // time fails for users whose Fortnox app integration does not have the Lön
@@ -357,17 +362,42 @@ export async function fetchCompanyNameSafe(accessToken: string): Promise<string 
   }
 }
 
+/**
+ * Command that opens `url` in the platform's default browser.
+ *
+ * Windows deliberately avoids `cmd /c start`: cmd.exe treats every unescaped
+ * `&` in the query string as a command separator, so Fortnox received an
+ * authorization URL truncated at the first parameter — no redirect_uri, scope,
+ * state, response_type or access_type — and rejected it (#95). PowerShell takes
+ * the URL as a single quoted argument instead.
+ */
+export function browserOpenCommand(
+  platform: NodeJS.Platform,
+  url: string,
+): { file: string; args: string[] } {
+  if (platform === 'darwin') return { file: 'open', args: [url] };
+  if (platform === 'win32') {
+    return {
+      file: 'powershell',
+      args: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Start-Process '${url.replace(/'/g, "''")}'`,
+      ],
+    };
+  }
+  return { file: 'xdg-open', args: [url] };
+}
+
 function openBrowser(url: string): void {
+  const { file, args } = browserOpenCommand(process.platform, url);
   try {
-    if (process.platform === 'darwin') {
-      execFileSync('open', [url]);
-    } else if (process.platform === 'win32') {
-      execFileSync('cmd', ['/c', 'start', url]);
-    } else {
-      execFileSync('xdg-open', [url]);
-    }
+    // stdio is discarded: a failed launcher otherwise scribbles over the
+    // manual-copy URL that the caller prints either way.
+    execFileSync(file, args, { stdio: 'ignore' });
   } catch {
-    console.log(`\nOpen this URL in your browser:\n${url}\n`);
+    // Ignored — the caller always prints the URL for manual copy-paste.
   }
 }
 
@@ -528,6 +558,9 @@ export async function runOAuthSetup(
       const authUrl = buildAuthorizationUrl(config, REDIRECT_URI, oauthState, scopes);
       console.log('Opening Fortnox login in your browser...');
       openBrowser(authUrl);
+      // Printed unconditionally: if the browser does not open, the callback
+      // server may already have been torn down by the time a failure surfaces.
+      console.log(`\nIf it does not open, paste this URL into your browser:\n${authUrl}`);
       console.log(`\nWaiting for authentication on http://${CALLBACK_HOST}:${PORT}...`);
     });
 

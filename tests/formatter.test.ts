@@ -377,3 +377,19 @@ describe('outputConfirmation JSON envelope', () => {
     expect(() => JSON.parse(logs.join(''))).toThrow();
   });
 });
+
+describe('row-aware column formatting', () => {
+  // Some columns can only be rendered correctly by looking at a sibling field
+  // (e.g. a voucher row's Removed flag decides how its Description reads).
+  it('passes the full row to a column format callback', () => {
+    const format = vi.fn(() => 'x');
+    formatTable([{ a: 1, b: 2 }], [{ key: 'a', header: 'A', width: 3, format }]);
+    expect(format).toHaveBeenCalledWith(1, { a: 1, b: 2 });
+  });
+
+  it('passes the full record to a detail format callback', () => {
+    const format = vi.fn(() => 'x');
+    formatDetail({ a: 1, b: 2 }, [{ key: 'a', header: 'A', width: 3, format }]);
+    expect(format).toHaveBeenCalledWith(1, { a: 1, b: 2 });
+  });
+});
