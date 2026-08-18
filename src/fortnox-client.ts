@@ -130,6 +130,7 @@ function endpointToScope(endpoint: string): string | undefined {
     supplierinvoicepayments: 'supplierinvoice',
     vouchers: 'bookkeeping',
     accounts: 'bookkeeping',
+    sie: 'bookkeeping',
     companyinformation: 'companyinformation',
     settings: 'settings',
     projects: 'project',
@@ -358,6 +359,20 @@ export async function fortnoxRequest<T>(
 
     return JSON.parse(text) as T;
   });
+}
+
+/**
+ * Fetch an endpoint whose body is a file rather than JSON — SIE exports, for
+ * instance, which arrive as CP437-encoded text rather than UTF-8. The bytes are
+ * returned undecoded so the caller owns that decision.
+ */
+export async function fortnoxRequestRaw(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<Buffer> {
+  return request<Buffer>(endpoint, options, async (response) =>
+    Buffer.from(await response.arrayBuffer()),
+  );
 }
 
 /** JSON response together with the conditional metadata returned by newer APIs. */

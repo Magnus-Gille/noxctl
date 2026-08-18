@@ -1594,6 +1594,168 @@ tax
     }
   });
 
+// --- sie ---
+
+const sie = program
+  .command('sie')
+  .description('SIE export and shadow-ledger comparison (skuggkörning)');
+
+sie
+  .command('export')
+  .description('Download a SIE file from Fortnox')
+  .option('--year <number>', 'Financial year id (defaults to the current year)', parseInt)
+  .option('--type <number>', 'SIE type: 1-4, default 4 (balances + all vouchers)', parseInt)
+  .option('-f, --file <path>', 'Write here (- for stdout); default sie<type>-<orgnr>.se')
+  .addHelpText(
+    'after',
+    `
+The bytes Fortnox returns are written verbatim. SIE is CP437-encoded by spec, so
+the file is not UTF-8 and should not be re-encoded before handing it to another
+accounting system or to your accountant.
+
+Examples:
+  noxctl sie export
+  noxctl sie export --year 2 --file bokforing-2026.se
+  noxctl sie export --file - > backup.se`,
+  )
+  .action(async (opts: { year?: number; type?: number; file?: string }) => {
+    const { exportSie } = await import('./operations/sie.js');
+    const type = opts.type ?? 4;
+    if (![1, 2, 3, 4].includes(type)) fail('--type must be 1, 2, 3 or 4.', 2);
+
+    const bytes = await exportSie({ type: type as 1 | 2 | 3 | 4, financialYear: opts.year });
+
+    if (opts.file === '-') {
+      process.stdout.write(bytes);
+      return;
+    }
+    const { parseSie } = await import('./sie.js');
+    const parsed = parseSie(bytes);
+    const target = opts.file ?? `sie${type}-${parsed.orgnr ?? 'export'}.se`;
+    writeFileSync(target, bytes);
+    if (json()) {
+      console.log(
+        JSON.stringify(
+          {
+            file: target,
+            bytes: bytes.length,
+            company: parsed.company,
+            orgnr: parsed.orgnr,
+            vouchers: parsed.vouchers.length,
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      console.log(
+        `Wrote ${target} (${bytes.length} bytes) — ${parsed.company ?? 'okänt bolag'}, ${parsed.vouchers.length} verifikat`,
+      );
+    }
+  });
+
+sie
+  .command('diff <shadowFile>')
+  .description('Compare a shadow ledger SIE export against Fortnox')
+  .option('--against <file>', 'Compare against a local SIE file instead of pulling from Fortnox')
+  .option('--year <number>', 'Fortnox financial year id', parseInt)
+  .option('--fiscal-year <index>', 'SIE fiscal year index to compare (0 = current)', parseInt)
+  .option(
+    '--tolerance <amount>',
+    'Ignore differences smaller than this (default 0.005)',
+    parseFloat,
+  )
+  .option('--exit-code', 'Exit 1 when the ledgers disagree (for scripted month-close checks)')
+  .addHelpText(
+    'after',
+    `
+Left side is Fortnox (the incumbent), right side is the shadow ledger, so a
+positive delta means Fortnox carries more on that account than the shadow does.
+
+Examples:
+  noxctl sie diff accounted-2026.se
+  noxctl sie diff accounted-2026.se --year 2 --exit-code
+  noxctl sie diff shadow.se --against fortnox-backup.se`,
+  )
+  .action(
+    async (
+      shadowFile: string,
+      opts: {
+        against?: string;
+        year?: number;
+        fiscalYear?: number;
+        tolerance?: number;
+        exitCode?: boolean;
+      },
+    ) => {
+      const { parseSie, diffSie } = await import('./sie.js');
+      const shadow = parseSie(readFileSync(shadowFile));
+
+      let left;
+      if (opts.against) {
+        left = parseSie(readFileSync(opts.against));
+      } else {
+        const { exportSie } = await import('./operations/sie.js');
+        left = parseSie(await exportSie({ financialYear: opts.year }));
+      }
+
+      const diff = diffSie(left, shadow, {
+        yearIndex: opts.fiscalYear,
+        tolerance: opts.tolerance,
+      });
+
+      if (json()) {
+        console.log(JSON.stringify(diff, null, 2));
+      } else {
+        const money = (n: number) =>
+          n.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const label = opts.against ? opts.against : 'Fortnox';
+
+        for (const warning of diff.warnings) console.log(`VARNING: ${warning}`);
+        if (diff.warnings.length) console.log('');
+
+        console.log(
+          `Verifikat:  ${label} ${diff.voucherCount.left} / skugga ${diff.voucherCount.right}`,
+        );
+        if (diff.unbalancedVouchers.left || diff.unbalancedVouchers.right) {
+          console.log(
+            `OBALANS:    ${label} ${diff.unbalancedVouchers.left} / skugga ${diff.unbalancedVouchers.right} verifikat går inte ihop`,
+          );
+        }
+        console.log('');
+
+        for (const [heading, rows] of [
+          ['Utgående balans (UB)', diff.ub],
+          ['Resultat (RES)', diff.res],
+        ] as const) {
+          if (!rows.length) continue;
+          const nameWidth = 34;
+          console.log(heading);
+          console.log(
+            `  Konto  ${'Benämning'.padEnd(nameWidth)}${label.padStart(16)}${'Skugga'.padStart(16)}${'Diff'.padStart(16)}`,
+          );
+          for (const row of rows) {
+            const only = row.onlyIn ? ` (endast ${row.onlyIn === 'left' ? label : 'skugga'})` : '';
+            // Truncate the account name rather than the "(endast …)" marker
+            // appended after it — losing that marker would hide *why* the row
+            // shows a zero on one side.
+            const room = Math.max(0, nameWidth - only.length);
+            const name =
+              row.name.length > room ? `${row.name.slice(0, Math.max(0, room - 1))}…` : row.name;
+            console.log(
+              `  ${row.account.padEnd(7)}${(name + only).padEnd(nameWidth)}${money(row.left).padStart(16)}${money(row.right).padStart(16)}${money(row.delta).padStart(16)}`,
+            );
+          }
+          console.log('');
+        }
+
+        console.log(diff.clean ? 'Ledgerna stämmer överens.' : 'Ledgerna skiljer sig — se ovan.');
+      }
+
+      if (opts.exitCode && !diff.clean) process.exitCode = 1;
+    },
+  );
+
 // --- reports ---
 const reports = program
   .command('reports')

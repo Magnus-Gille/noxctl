@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **SIE export and shadow-ledger comparison** — `noxctl sie export` downloads a SIE file from Fortnox (`/3/sie/{Type}`, `bookkeeping` scope), and `noxctl sie diff <shadow.se>` compares another system's SIE export against it, reporting per-account differences in closing balances (UB) and results (RES), voucher counts, and unbalanced vouchers.
+
+  Built for running a second accounting system in parallel with Fortnox: book the period independently in both, then let the closing balances say whether the two agree. SIE is the one format every Swedish system speaks, so it works regardless of what the other system is. `--against <file>` compares two local files with no network access at all, and `--exit-code` makes the check scriptable.
+
+  The reader (`src/sie.ts`) handles the encoding mess SIE files arrive in: CP437 per spec, but latin1 and UTF-8 in practice, with the `#FORMAT` line that should settle it frequently missing. See `docs/shadow-run.md` for the operational plan.
+
+  **`sie export` has not been exercised against the live API.** The endpoint is present in the Fortnox OpenAPI spec, but no live call was made. The parser and diff are covered by 22 unit tests.
+
 ## [0.6.1] - 2026-07-21
 
 ### Internal
