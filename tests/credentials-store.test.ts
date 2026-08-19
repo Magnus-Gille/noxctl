@@ -585,6 +585,34 @@ describe('Windows DPAPI backend', () => {
     );
   });
 
+  // fs.rm(..., { force: true }) succeeds when the file does not exist, so the
+  // Windows backend reported a successful delete for credentials that were never
+  // stored — `noxctl logout --all` then claimed "Removed credentials for all
+  // profiles." on a machine that had none. The macOS and Linux backends both
+  // return false in that situation.
+  it('does not force the delete, so an absent file is not reported as removed', async () => {
+    fsPromises.default.rm.mockResolvedValue(undefined);
+
+    await deleteCredentialBlob('demo');
+
+    // `force: true` resolves for a missing file, which is exactly what made the
+    // absent case indistinguishable from a real delete.
+    const options = fsPromises.default.rm.mock.calls.at(-1)?.[1];
+    expect(options).not.toMatchObject({ force: true });
+  });
+
+  it('reports nothing removed when the credential file does not exist', async () => {
+    fsPromises.default.rm.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+    await expect(deleteCredentialBlob('demo')).resolves.toBe(false);
+  });
+
+  it('reports a delete when the credential file was there', async () => {
+    fsPromises.default.rm.mockResolvedValue(undefined);
+
+    await expect(deleteCredentialBlob('demo')).resolves.toBe(true);
+  });
+
   it('lowercases mixed-case names in the filename', async () => {
     childProcess.spawnSync.mockReturnValue({ status: 0, stderr: '', stdout: '' });
     await saveCredentialBlob('{"x":1}', 'Demo');

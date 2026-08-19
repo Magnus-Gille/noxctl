@@ -407,7 +407,11 @@ function deleteLinuxSecret(account: string): boolean {
 
 async function deleteWindowsSecret(file: string): Promise<boolean> {
   try {
-    await fs.rm(file, { force: true });
+    // Deliberately not `{ force: true }`: that resolves for a missing file, so
+    // every delete looked successful and `logout --all` reported removing
+    // credentials that were never stored. The macOS and Linux backends both
+    // report false when there was nothing to remove.
+    await fs.rm(file);
     return true;
   } catch {
     return false;

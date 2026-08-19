@@ -67,12 +67,16 @@ afterEach(() => {
 });
 
 describe('paths', () => {
+  // These are macOS keychain paths, but the builders are pure path joins that run
+  // anywhere — compare on normalized separators so the suite is platform-agnostic.
+  const posix = (p: string) => p.replace(/\\/g, '/');
+
   it('dedicatedKeychainPath ends with fortnox-mcp.keychain-db under Library/Keychains', () => {
-    expect(dedicatedKeychainPath()).toMatch(/Library\/Keychains\/fortnox-mcp\.keychain-db$/);
+    expect(posix(dedicatedKeychainPath())).toMatch(/Library\/Keychains\/fortnox-mcp\.keychain-db$/);
   });
 
   it('loginKeychainPath ends with login.keychain-db under Library/Keychains', () => {
-    expect(loginKeychainPath()).toMatch(/Library\/Keychains\/login\.keychain-db$/);
+    expect(posix(loginKeychainPath())).toMatch(/Library\/Keychains\/login\.keychain-db$/);
   });
 
   it('challengeFilePath ends with keychain-challenge', () => {
