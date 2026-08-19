@@ -8,7 +8,7 @@
 - 27 operations modules: invoices, customers, suppliers, supplier invoices, articles, vouchers, accounts, financial reports, financial years/locked period, tax, company, invoice payments, supplier invoice payments, offers, orders, contracts, recurrings, projects, cost centers, tax reductions (ROT/RUT), price lists, analytics, employees, salary transactions, attendance transactions, absence transactions, schedule times
 - Full sales pipeline: offer → order → invoice → payment
 - Payroll (Lön): employees + salary/attendance/absence transactions + schedule times (opt-in `salary` scope via `init --with-salary`)
-- 826 unit tests across 73 files
+- 832 unit tests across 73 files
 
 ## API Drift Detection
 
