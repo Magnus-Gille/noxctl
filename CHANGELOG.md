@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-19
+
 ### Fixed
 
 - **Windows: the OAuth browser launch sent Fortnox a truncated URL.** `openBrowser()` ran `cmd /c start <url>`, and cmd.exe treats every unescaped `&` in the query string as a command separator — Fortnox only ever received the fragment before the first `&`, with no `redirect_uri`, `scope`, `state`, `response_type` or `access_type`, and correctly rejected it. The remaining parameters were run as commands and printed "not recognized" errors over the fallback URL, and the rejection could tear down the callback listener before that URL could be used. Windows now launches the browser through PowerShell `Start-Process` with the URL as a single quoted argument, and `noxctl init` prints the URL unconditionally on every platform. Thanks to @hedborg for the report and diagnosis (#95).
@@ -182,6 +184,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.7.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.6.1...v0.7.0
 [0.4.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.4.0...v0.4.1
 [0.2.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.1.0
