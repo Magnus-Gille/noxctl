@@ -4,7 +4,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const CLI_PATH = path.resolve('dist/cli.js');
-const execOpts: ExecFileSyncOptions = { encoding: 'utf-8', timeout: 10000 };
+// Windows CI runners spawn Node far slower than a warm local machine; 10s put
+// these subprocess assertions right at the edge and they flaked intermittently.
+const CLI_TIMEOUT_MS = 30_000;
+const execOpts: ExecFileSyncOptions = { encoding: 'utf-8', timeout: CLI_TIMEOUT_MS };
 
 describe('CLI smoke tests', () => {
   it('noxctl --help exits 0 and shows subcommands', () => {

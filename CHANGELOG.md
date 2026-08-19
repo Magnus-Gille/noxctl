@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.7.1] - 2026-08-19
 
+### Internal
+
+- Raised the CLI subprocess timeout in tests from 10s to 30s (and the Vitest per-test timeout to 45s, which has to exceed it). Spawning `node dist/cli.js` on a cold Windows CI runner regularly approached 10s, so these subprocess assertions flaked intermittently — the failure looked like an empty stderr rather than a timeout, which is unhelpfully misleading.
+
 ### Changed
 
 - `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0 (supersedes Dependabot #89).
