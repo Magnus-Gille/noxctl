@@ -34,7 +34,7 @@ import { registerScheduleTimeTools } from './tools/scheduletimes.js';
 export function createServer(): McpServer {
   const server = new McpServer({
     name: 'fortnox-mcp',
-    version: '0.7.1',
+    version: '0.7.2',
   });
 
   registerCustomerTools(server);

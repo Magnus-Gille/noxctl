@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-19
+
 ### Fixed
 
 - **`fortnox_create_voucher` silently dropped per-row fields.** `VoucherRowSchema` declared only `Account`, `Debit`, `Credit` and `Description`, and the MCP SDK strips any argument a schema does not declare — so a per-line note passed as `TransactionInformation` never reached Fortnox, with no error and a voucher that booked fine minus the data. The schema now covers the full `VoucherRowSinglePayloadItem` set: `TransactionInformation`, `CostCenter`, `Project`, `Quantity` and `Removed`. `createVoucher()` already forwarded rows verbatim, so the schema was the only place fields were lost. Same root cause as the Supplier gap in #96; the test asserts the declared property list so it cannot drift again. Thanks to @hedborg (#101).
@@ -206,6 +208,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.7.2]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.6.1...v0.7.0
 [0.4.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.4.0...v0.4.1
