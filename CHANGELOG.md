@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0 (supersedes Dependabot #89).
+- **Dropped the `@hono/node-server` override.** SDK 1.30.0 widens its dependency range to `^1.19.9 || ^2.0.5`, so npm now resolves 2.0.11 on its own — exactly the condition the 0.6.1 entry named for removing the pin. Verified: `npm ls @hono/node-server` still resolves 2.0.11 without the override, and `npm audit --omit=dev` reports 0 vulnerabilities, so GHSA-frvp-7c67-39w9 stays closed. The `fast-uri`, `hono` and `ip-address` overrides are unchanged.
+
+
 ## [0.7.0] - 2026-08-19
 
 ### Fixed
