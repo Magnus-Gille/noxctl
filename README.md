@@ -49,24 +49,46 @@ So you control the credentials, the scopes, and which company is connected end t
    - Copy your **Client ID** and **Client Secret**
 4. On the **Integration** tab, enable these scopes under **Behörigheter** / **Permissions**:
 
-   | Swedish (SV)         | English (EN)        | Needed for                                     |
-   |----------------------|---------------------|------------------------------------------------|
-   | Artikel              | Article             | Articles, prices, price lists                  |
-   | Bokföring            | Bookkeeping         | Vouchers, accounts, financial reports          |
-   | Faktura              | Invoice             | Invoices, invoice payments, offers, orders, tax reductions |
-   | Företagsinformation  | Company Information | Company info                                   |
-   | Inställningar        | Settings            | Financial year, locked period                  |
-   | Kund                 | Customer            | Customers                                      |
-   | Leverantör           | Supplier            | Suppliers                                      |
-   | Leverantörsfaktura   | Supplier Invoice    | Supplier invoices, supplier invoice payments   |
-   | Projekt              | Project             | Projects                                       |
-   | Kostnadsställe       | Cost Center         | Cost centers                                   |
-   | Priser               | Price               | Price lists, prices                            |
-   | Lön                  | Salary              | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
+   | Scope                | Swedish (SV)         | English (EN)        | Fortnox licence needed      | Needed for                                     |
+   |----------------------|----------------------|---------------------|-----------------------------|------------------------------------------------|
+   | `article`            | Artikel              | Article             | Order or Kundfaktura        | Articles                                       |
+   | `bookkeeping`        | Bokföring            | Bookkeeping         | Bokföring or Kundfaktura    | Vouchers, accounts, financial reports, financial years |
+   | `companyinformation` | Företagsinformation  | Company Information | Any                         | Company info                                   |
+   | `connectfile`        | —                    | File Connection     | Bokföring/Anläggning/Arkivplats | Attaching uploaded files to vouchers       |
+   | `costcenter`         | Kostnadsställe       | Cost Center         | Bokföring, Order or Kundfaktura | Cost centers                               |
+   | `customer`           | Kund                 | Customer            | Kundfaktura or Order        | Customers                                      |
+   | `inbox`              | —                    | Inbox               | Any                         | Uploading receipt/attachment files             |
+   | `invoice`            | Faktura              | Invoice             | Order or Kundfaktura        | Invoices, tax reductions                       |
+   | `payment`            | Betalning            | Payment             | Bokföring, Order or Kundfaktura | Invoice payments, supplier invoice payments |
+   | `price`              | Priser               | Price               | Order or Kundfaktura        | Price lists, prices                            |
+   | `project`            | Projekt              | Project             | Bokföring, Order or Kundfaktura | Projects                                   |
+   | `settings`           | Inställningar        | Settings            | Any                         | Locked period                                  |
+   | `supplier`           | Leverantör           | Supplier            | Bokföring                   | Suppliers                                      |
+   | `supplierinvoice`    | Leverantörsfaktura   | Supplier Invoice    | Bokföring                   | Supplier invoices                              |
+   | `offer`              | Offert               | Offer               | **Order**                   | Offers — **opt-in**, see below                 |
+   | `order`              | Order                | Order               | **Order**                   | Orders — **opt-in**, see below                 |
+   | `salary`             | Lön                  | Salary              | **Lön**                     | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
 
-   Enable every scope for the resources you intend to use. Missing scopes surface as `403 Forbidden` with a hint pointing at the right one.
+   Enable every non-opt-in scope. noxctl requests that exact set at authorize time, and
+   Fortnox rejects the whole authorization if the app has not been granted a scope that
+   is asked for — so a partially-enabled app fails at `noxctl init` rather than at first
+   use. `noxctl init` prints the same list.
 
-   **Payroll (Lön) is opt-in.** The `salary` scope is *not* requested by default, because requesting a scope your app hasn't been granted breaks authorization. To use the payroll commands, enable the **Lön** permission above, then authorize with `noxctl init --with-salary` (or set `FORTNOX_WITH_SALARY=1` for non-interactive setups). The granted scope set is remembered per profile, so token refreshes keep working.
+   Missing scopes surface as `403 Forbidden` with a hint naming the scope (e.g.
+   `Missing "payment" scope`); match that token against the **Scope** column above.
+
+   **Two scope groups are opt-in, because they depend on a Fortnox licence** the default
+   set does not require. Requesting a scope the *company* is not licensed for fails the
+   whole authorization, so asking for these unconditionally would lock out companies that
+   simply do not have the module:
+
+   - **Offers and orders (Order licence).** Enable **Offert** and **Order** on the app,
+     then authorize with `noxctl init --with-orders` (or `FORTNOX_WITH_ORDERS=1`).
+   - **Payroll (Lön licence).** Enable **Lön** on the app, then authorize with
+     `noxctl init --with-salary` (or `FORTNOX_WITH_SALARY=1`).
+
+   Both can be combined. The granted scope set is remembered per profile, so token
+   refreshes keep working.
 
 5. Save the integration
 
@@ -295,6 +317,8 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Offers (offerter)
 
+> **Requires the `offer` scope**, which is **opt-in** and needs the Fortnox **Order** licence. Run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1`), which requests `offer` and `order` together. Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
+
 | CLI | MCP tool | Description |
 |-----|----------|-------------|
 | `noxctl offers list [--filter <status>] [--customer <number>]` | `fortnox_list_offers` | List/filter offers. Filters: `cancelled`, `expired`, `ordercreated`, `invoicecreated` |
@@ -305,6 +329,8 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl offers create-order <docNumber>` | `fortnox_create_order_from_offer` | Convert offer → order (mutation) |
 
 ### Orders (ordrar)
+
+> **Requires the `order` scope**, which is **opt-in** and needs the Fortnox **Order** licence. Run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1`), which requests `offer` and `order` together. Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
 
 | CLI | MCP tool | Description |
 |-----|----------|-------------|

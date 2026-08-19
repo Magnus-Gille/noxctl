@@ -18,7 +18,38 @@ function authFetch(input: string | URL, init: RequestInit = {}): Promise<Respons
   });
 }
 
+// Every endpoint family noxctl implements must appear here or in one of the
+// opt-in sets below: Fortnox only grants what the authorize request asks for, so
+// a missing token means `403 Har inte behörighet för scope` at call time even
+// when the app has the permission enabled (#95). `payment`, `project`,
+// `costcenter` and `price` are scopes of their own — they are not covered by
+// `invoice`. Every scope here is satisfied by the Bokföring, Kundfaktura or
+// Order licences the pre-existing defaults already required, so adding them
+// cannot make authorization impossible for a company that could authorize before.
 export const SCOPES =
+  'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings project costcenter price inbox connectfile';
+
+// Offers and orders. Opt-in for the same reason as salary: Fortnox's scope table
+// requires the *Order* licence for both, which a Bokföring + Kundfaktura company
+// does not have — requesting them unconditionally would make `noxctl init`
+// impossible for those companies rather than merely degrading two features.
+// `noxctl init --with-orders` (or FORTNOX_WITH_ORDERS=1) appends them.
+export const ORDER_SCOPES = 'offer order';
+
+// The scope set as it stood before offers/orders/projects/cost centers/prices
+// were added — i.e. what noxctl 0.3.0–0.6.1 requested. Credentials written before
+// the `scopes` field existed (pre-0.4.0) recorded no scope string, and renewing
+// those against the current SCOPES would silently ask for scopes their Fortnox app
+// was never granted. A rejected client-credentials renewal falls back to the
+// refresh token, which service-account installs do not rotate and which Fortnox
+// expires after 45 days — so widening the fallback can break an untouched
+// installation. Never change this constant; it records history, not intent.
+//
+// Known gap: 0.2.0 predates `inbox`/`connectfile` too, so a credential that old is
+// still widened by those two. That is unchanged behaviour — it has been true since
+// 0.3.0 shipped — and is not worth a speculative rejection-and-retry path; such an
+// installation should re-run `noxctl init`.
+export const LEGACY_SCOPES =
   'article customer invoice payment supplier supplierinvoice bookkeeping companyinformation settings inbox connectfile';
 
 // The "Lön" (salary/payroll) scope. Opt-in only: requesting it at authorize
@@ -29,11 +60,15 @@ export const SCOPES =
 // client-credentials refresh re-requests the same set.
 export const SALARY_SCOPE = 'salary';
 
-/** Effective scope string for a profile: the granted set if recorded, else the base SCOPES. */
+/**
+ * Effective scope string for a profile: the granted set if recorded, else the
+ * frozen LEGACY_SCOPES — what a credential predating the `scopes` field was
+ * actually consented to. Re-running `noxctl init` records the current set.
+ */
 export function effectiveScopes(
   creds: Pick<FortnoxCredentials, 'scopes'> | null | undefined,
 ): string {
-  return creds?.scopes ?? SCOPES;
+  return creds?.scopes ?? LEGACY_SCOPES;
 }
 
 export const CREDENTIAL_SCHEMA_VERSION = 2;
@@ -47,8 +82,8 @@ export interface FortnoxCredentials {
   tenant_id?: string;
   company_name?: string;
   // The OAuth scope string granted at authorization time. Optional for
-  // backward compatibility: credentials written before this field existed (or
-  // by the default `init`) fall back to SCOPES. Recorded so the
+  // backward compatibility: credentials written before this field existed fall
+  // back to LEGACY_SCOPES, not the current set. Recorded so the
   // client-credentials refresh re-requests exactly what was granted (e.g. the
   // opt-in `salary` scope).
   scopes?: string;
@@ -357,17 +392,42 @@ export async function fetchCompanyNameSafe(accessToken: string): Promise<string 
   }
 }
 
+/**
+ * Command that opens `url` in the platform's default browser.
+ *
+ * Windows deliberately avoids `cmd /c start`: cmd.exe treats every unescaped
+ * `&` in the query string as a command separator, so Fortnox received an
+ * authorization URL truncated at the first parameter — no redirect_uri, scope,
+ * state, response_type or access_type — and rejected it (#95). PowerShell takes
+ * the URL as a single quoted argument instead.
+ */
+export function browserOpenCommand(
+  platform: NodeJS.Platform,
+  url: string,
+): { file: string; args: string[] } {
+  if (platform === 'darwin') return { file: 'open', args: [url] };
+  if (platform === 'win32') {
+    return {
+      file: 'powershell',
+      args: [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        `Start-Process '${url.replace(/'/g, "''")}'`,
+      ],
+    };
+  }
+  return { file: 'xdg-open', args: [url] };
+}
+
 function openBrowser(url: string): void {
+  const { file, args } = browserOpenCommand(process.platform, url);
   try {
-    if (process.platform === 'darwin') {
-      execFileSync('open', [url]);
-    } else if (process.platform === 'win32') {
-      execFileSync('cmd', ['/c', 'start', url]);
-    } else {
-      execFileSync('xdg-open', [url]);
-    }
+    // stdio is discarded: a failed launcher otherwise scribbles over the
+    // manual-copy URL that the caller prints either way.
+    execFileSync(file, args, { stdio: 'ignore' });
   } catch {
-    console.log(`\nOpen this URL in your browser:\n${url}\n`);
+    // Ignored — the caller always prints the URL for manual copy-paste.
   }
 }
 
@@ -528,6 +588,9 @@ export async function runOAuthSetup(
       const authUrl = buildAuthorizationUrl(config, REDIRECT_URI, oauthState, scopes);
       console.log('Opening Fortnox login in your browser...');
       openBrowser(authUrl);
+      // Printed unconditionally: if the browser does not open, the callback
+      // server may already have been torn down by the time a failure surfaces.
+      console.log(`\nIf it does not open, paste this URL into your browser:\n${authUrl}`);
       console.log(`\nWaiting for authentication on http://${CALLBACK_HOST}:${PORT}...`);
     });
 

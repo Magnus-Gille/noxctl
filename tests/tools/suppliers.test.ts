@@ -97,4 +97,127 @@ describe('supplier tools', () => {
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
+
+  // Issue #96: the MCP SDK silently strips any argument the Zod schema does not
+  // declare, so an undeclared field reaches neither Fortnox nor an error message.
+  describe('supplier write schemas cover the real Supplier resource', () => {
+    const extendedFields = {
+      YourReference: 'Anna Andersson',
+      OurReference: 'Magnus',
+      Comments: 'Preferred supplier',
+      Address2: 'Plan 4',
+      CountryCode: 'SE',
+      Currency: 'SEK',
+      VATNumber: 'SE556677889901',
+      VATType: 'SEVAT',
+      CostCenter: 'CC1',
+      Project: '12',
+      TermsOfPayment: '30',
+      Bank: 'Handelsbanken',
+      BIC: 'HANDSESS',
+      IBAN: 'SE4550000000058398257466',
+      ClearingNumber: '6789',
+      DisablePaymentFile: false,
+      PreDefinedAccount: '2440',
+      WorkPlace: 'Stockholm',
+      Active: true,
+    };
+
+    // The claim is full coverage of the Supplier resource, so assert the schema's
+    // property list itself — sending a subset of values cannot detect a field
+    // quietly dropped from the schema.
+    const writableSupplierFields = [
+      'Active',
+      'Address1',
+      'Address2',
+      'BG',
+      'BIC',
+      'Bank',
+      'BankAccountNumber',
+      'BranchCode',
+      'City',
+      'ClearingNumber',
+      'Comments',
+      'CostCenter',
+      'Country',
+      'CountryCode',
+      'Currency',
+      'DisablePaymentFile',
+      'Email',
+      'Fax',
+      'IBAN',
+      'Name',
+      'OrganisationNumber',
+      'OurCustomerNumber',
+      'OurReference',
+      'PG',
+      'Phone1',
+      'Phone2',
+      'PreDefinedAccount',
+      'Project',
+      'TermsOfPayment',
+      'VATNumber',
+      'VATType',
+      'VisitingAddress',
+      'VisitingCity',
+      'VisitingCountry',
+      'VisitingCountryCode',
+      'VisitingZipCode',
+      'WWW',
+      'WorkPlace',
+      'YourReference',
+      'ZipCode',
+    ];
+
+    it('declares every writable Supplier field on create', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_create_supplier')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      for (const field of [...writableSupplierFields, 'SupplierNumber']) {
+        expect(declared).toContain(field);
+      }
+    });
+
+    it('declares every writable Supplier field on update', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_update_supplier')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      for (const field of writableSupplierFields) {
+        expect(declared).toContain(field);
+      }
+    });
+
+    it('forwards extended fields on create', async () => {
+      mockFetch({ Supplier: { SupplierNumber: '3' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_create_supplier',
+        arguments: { Name: 'New Supplier', confirm: true, ...extendedFields },
+      });
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const sent = JSON.parse(fetchCall[1].body as string).Supplier;
+      for (const [key, value] of Object.entries(extendedFields)) {
+        expect(sent[key]).toEqual(value);
+      }
+    });
+
+    it('forwards extended fields on update', async () => {
+      mockFetch({ Supplier: { SupplierNumber: '3' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_update_supplier',
+        arguments: { supplierNumber: '3', confirm: true, ...extendedFields },
+      });
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const sent = JSON.parse(fetchCall[1].body as string).Supplier;
+      for (const [key, value] of Object.entries(extendedFields)) {
+        expect(sent[key]).toEqual(value);
+      }
+      expect(sent.supplierNumber).toBeUndefined();
+    });
+  });
 });

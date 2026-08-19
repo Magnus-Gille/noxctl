@@ -15,6 +15,8 @@ vi.mock('../src/credentials-store.js', () => credentialStore);
 vi.mock('../src/profiles.js', () => profilesModule);
 
 import {
+  browserOpenCommand,
+  LEGACY_SCOPES,
   loadCredentials,
   saveCredentials,
   exchangeCodeForTokens,
@@ -332,7 +334,12 @@ describe('auth', () => {
       expect(body.get('scope')).toContain('salary');
     });
 
-    it('falls back to the default SCOPES when the credential has no recorded scopes', async () => {
+    // A credential predating the `scopes` field must renew against exactly what
+    // it was granted. Renewing against the current SCOPES would ask for scopes
+    // its Fortnox app was never given; the rejection falls back to a refresh
+    // token that service-account installs do not rotate and that Fortnox expires
+    // after 45 days, so an untouched installation could break on renewal alone.
+    it('renews a scope-less legacy credential against the frozen legacy set', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ access_token: 'cc', expires_in: 3600 }),
@@ -342,8 +349,11 @@ describe('auth', () => {
 
       const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!;
       const body = new URLSearchParams((call[1] as { body: string }).body);
-      expect(body.get('scope')).toBe(SCOPES);
+      expect(body.get('scope')).toBe(LEGACY_SCOPES);
       expect(body.get('scope')).not.toContain('salary');
+      for (const widened of ['project', 'costcenter', 'price', 'offer', 'order']) {
+        expect(body.get('scope')).not.toContain(widened);
+      }
     });
 
     it('throws on failed client credentials request', async () => {
@@ -691,5 +701,73 @@ describe('auth', () => {
         '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;',
       );
     });
+  });
+});
+
+describe('browserOpenCommand', () => {
+  // The authorization URL always carries several `&`-separated query parameters.
+  const authUrl =
+    'https://apps.fortnox.se/oauth-v1/auth?client_id=cid&redirect_uri=http%3A%2F%2Flocalhost%3A9876%2Fcallback' +
+    '&scope=article+customer&state=abc&response_type=code&access_type=offline';
+
+  it('opens with `open` on macOS', () => {
+    expect(browserOpenCommand('darwin', authUrl)).toEqual({ file: 'open', args: [authUrl] });
+  });
+
+  it('opens with `xdg-open` on Linux', () => {
+    expect(browserOpenCommand('linux', authUrl)).toEqual({ file: 'xdg-open', args: [authUrl] });
+  });
+
+  // Issue #95: `cmd /c start <url>` makes cmd.exe treat every unescaped `&` as a
+  // command separator, so Fortnox only ever received the truncated first
+  // parameter — no redirect_uri, scope, state, response_type or access_type.
+  it('does not hand the URL to cmd.exe on Windows', () => {
+    const cmd = browserOpenCommand('win32', authUrl);
+    expect(cmd).not.toBeNull();
+    expect(cmd!.file).not.toBe('cmd');
+    expect(cmd!.args).not.toContain('/c');
+  });
+
+  it('keeps every query parameter intact on Windows', () => {
+    const cmd = browserOpenCommand('win32', authUrl);
+    const line = cmd!.args.join(' ');
+    for (const param of [
+      'client_id=cid',
+      'redirect_uri=',
+      'scope=',
+      'state=abc',
+      'response_type=code',
+      'access_type=offline',
+    ]) {
+      expect(line).toContain(param);
+    }
+  });
+
+  // A URL is normally percent-encoded, but the escaping must not depend on that:
+  // anything that reaches Start-Process has to stay inside one single-quoted
+  // PowerShell literal.
+  it('keeps a hostile URL inside a single PowerShell string literal', () => {
+    const hostile =
+      'https://apps.fortnox.se/oauth-v1/auth?a=1&b=\';Start-Process calc;\'&c=`whoami`&d=$(id)&e="q"&f=#frag';
+    const { args } = browserOpenCommand('win32', hostile);
+    const script = args[args.length - 1]!;
+
+    // Exactly one literal: opening quote, doubled inner quotes, closing quote.
+    expect(script.startsWith("Start-Process '")).toBe(true);
+    expect(script.endsWith("'")).toBe(true);
+    const body = script.slice("Start-Process '".length, -1);
+    // Every apostrophe inside the literal is doubled, so none of them can close it.
+    expect(body.replace(/''/g, '')).not.toContain("'");
+    // Round-trips back to the original URL when PowerShell unescapes it.
+    expect(body.replace(/''/g, "'")).toBe(hostile);
+  });
+
+  it('does not leave a bare `&` for the Windows shell to split on', () => {
+    const cmd = browserOpenCommand('win32', authUrl);
+    // Every `&` must be quoted or escaped — never passed through raw.
+    const raw = cmd!.args.filter((a) => a.includes('&'));
+    for (const arg of raw) {
+      expect(/(?<![\^'"])&/.test(arg.replace(/'[^']*'/g, ''))).toBe(false);
+    }
   });
 });

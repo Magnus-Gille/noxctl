@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-19
+
+### Fixed
+
+- **Windows: the OAuth browser launch sent Fortnox a truncated URL.** `openBrowser()` ran `cmd /c start <url>`, and cmd.exe treats every unescaped `&` in the query string as a command separator — Fortnox only ever received the fragment before the first `&`, with no `redirect_uri`, `scope`, `state`, `response_type` or `access_type`, and correctly rejected it. The remaining parameters were run as commands and printed "not recognized" errors over the fallback URL, and the rejection could tear down the callback listener before that URL could be used. Windows now launches the browser through PowerShell `Start-Process` with the URL as a single quoted argument, and `noxctl init` prints the URL unconditionally on every platform. Thanks to @hedborg for the report and diagnosis (#95).
+- **Windows: saving credentials failed with `Unable to find type [System.Security.Cryptography.ProtectedData]`.** The DPAPI helpers used `ProtectedData` without loading the assembly it lives in, which fails on any PowerShell configuration that does not preload `System.Security`. Both the read and write scripts now `Add-Type -AssemblyName System.Security` first (#95).
+- **Five scopes were implemented and documented but never requested.** noxctl only receives what the authorize request asks for, so `project`, `costcenter` and `price` calls failed with `403 Har inte behörighet för scope` even when the Fortnox app had the permissions enabled. Those three are now in the default `SCOPES`; `offer` and `order` are available via the new opt-in `--with-orders` (see below). The endpoint→scope map behind the 403 hints also named the wrong scope for offers, orders and both payment families — `offer`, `order` and `payment` are scopes of their own, not covered by `invoice`/`supplierinvoice` — and was missing `financialyears` entirely. Corrections verified against Fortnox's published scope table (#95).
+- **`noxctl doctor` and `fortnox_status` reported scopes they never checked.** Both kept their own scope→probe map, and a scope missing from it was skipped by the validation loop while still counted in the "all N scopes authorized" total. The map now lives in one shared module covering every requestable scope, and any scope without a probe is reported as "not checked" rather than counted as authorized.
+- **`fortnox_create_supplier` / `fortnox_update_supplier` accepted only 10 of the Supplier resource's 41 writable fields.** The MCP SDK silently strips arguments a tool's schema does not declare, so setting e.g. `YourReference` did nothing at all — no error, the field simply never reached Fortnox. Both schemas now cover the full `SupplierSinglePayloadItem` field set (references, comments, visiting address, VAT, bank/IBAN/BIC, cost center, project, terms of payment, and the rest). Thanks to @hedborg (#96).
+- **Voided voucher rows rendered identically to live ones.** Fortnox lets a single voucher row be voided (`Removed: true`) without deleting it, leaving the void and its replacement side by side in the same voucher — which read as a double-booking. Voided rows are now prefixed `[REMOVED]` in both `fortnox_get_voucher` and `noxctl vouchers get` (#96).
+- **Windows: `noxctl logout --all` claimed to remove credentials that were never stored.** The Windows credential delete used `fs.rm(file, { force: true })`, which resolves for a missing file, so every delete looked successful; the macOS and Linux backends correctly report that there was nothing to remove. Found by the new Windows CI leg.
+- Column formatters no longer bypass terminal control-character stripping. `Column.format` output is now sanitized like any other cell, so server-supplied text cannot emit ANSI/OSC escape sequences to the terminal through a formatted column.
+
+### Added
+
+- **`noxctl init --with-orders`** (or `FORTNOX_WITH_ORDERS=1`) requests the `offer` and `order` scopes. Like `--with-salary`, these are opt-in because Fortnox gates them on a product licence — the **Order** licence — and requesting a scope the company is not licensed for fails the entire authorization. A Bokföring + Kundfaktura company can therefore still authorize; it just does not get the offer/order tools. Every scope in the default set is covered by the Bokföring, Kundfaktura or Order licences the previous defaults already required.
+
+### Changed
+
+- **`noxctl init` may require enabling more permissions on an existing Fortnox app.** The default set now also asks for `project`, `costcenter` and `price`; Fortnox rejects an authorization that asks for a scope the app has not been granted. Existing installations are unaffected until you re-run `noxctl init` — credentials renew against the scope set they recorded, and credentials predating that field (pre-0.4.0) renew against a frozen historical set rather than the widened default. The one exception is a credential authorized by 0.2.0, which predates `inbox`/`connectfile` as well; those two have been included in its renewals since 0.3.0 and that behaviour is unchanged here. Before re-running `init`, enable Projekt, Kostnadsställe and Priser on the app. See the scope table in the README.
+- `noxctl init` now prints the scope list from the `SCOPES` constant itself rather than a hand-maintained copy, which had drifted from what noxctl actually requests (#95).
+- `Column.format` in the table/detail formatter now also receives the whole row, for cells whose rendering depends on a sibling field.
+- **CI now runs the test suite on `windows-latest`.** Every bug in #95 was Windows-only and Linux-only CI could not have caught any of them; the new leg immediately found the `logout --all` defect above plus three test-environment assumptions (CRLF checkout, path separators).
+
 ## [0.6.1] - 2026-07-21
 
 ### Internal
@@ -160,6 +184,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.7.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.6.1...v0.7.0
 [0.4.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.4.0...v0.4.1
 [0.2.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.2.0
 [0.1.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.1.0

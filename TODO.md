@@ -8,7 +8,7 @@
 - 27 operations modules: invoices, customers, suppliers, supplier invoices, articles, vouchers, accounts, financial reports, financial years/locked period, tax, company, invoice payments, supplier invoice payments, offers, orders, contracts, recurrings, projects, cost centers, tax reductions (ROT/RUT), price lists, analytics, employees, salary transactions, attendance transactions, absence transactions, schedule times
 - Full sales pipeline: offer → order → invoice → payment
 - Payroll (Lön): employees + salary/attendance/absence transactions + schedule times (opt-in `salary` scope via `init --with-salary`)
-- 759 unit tests across 67 files
+- 826 unit tests across 73 files
 
 ## API Drift Detection
 
@@ -38,10 +38,14 @@ Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spe
 11. ~~CLI `dashboard` command~~ ✅ Done
 12. Bilingual MCP descriptions (Swedish primary + English keywords)
 13. MCP capability resource
-14. Bank transactions — **blocked upstream, not a scope toggle.** A freshly fetched
-    Fortnox OpenAPI spec (2026-07-21, 233 paths) contains **zero** `/3/bank*`
-    endpoints; this is a separate Fortnox Bank/Finans product surface, so there is
-    nothing to implement against from the standard REST API. See issue #13.
+14. Bank transactions — **still blocked upstream, but the premise has changed.** As of
+    the 2026-08-17 spec, Fortnox *does* publish bank endpoints — but they are
+    `/api/bank-process-orders/v1`, `/api/bank-process-start-orders/v1` and
+    `/api/bank-process-webhooks/v1`: a company-formation / bank-account-onboarding
+    and KYC document flow for partners, not an accounting surface. There is still
+    **no** bank transaction, statement or feed endpoint anywhere in the spec, so
+    there remains nothing to implement for reading bank transactions. Re-check when
+    the drift workflow reports a genuinely transactional bank path. See issue #13.
 15. ~~File attachments (underlag) — upload receipts, attach to vouchers~~ ✅ Done (#37) — `noxctl vouchers attach`; live use needs the **archive** scope
 16. Live mutation test coverage — only read paths tested live
 

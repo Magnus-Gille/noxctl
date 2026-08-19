@@ -558,6 +558,61 @@ describe('Windows DPAPI backend', () => {
     expect(commands.some((s) => s.includes('credentials.default.dpapi'))).toBe(true);
   });
 
+  // Issue #95: [System.Security.Cryptography.ProtectedData] lives in the
+  // System.Security assembly, which is not preloaded in every PowerShell
+  // configuration. Without Add-Type the call fails with "Unable to find type".
+  it('loads the System.Security assembly before using ProtectedData on read', async () => {
+    childProcess.execFileSync.mockReturnValue('');
+    await loadCredentialBlob('demo');
+
+    const call = childProcess.execFileSync.mock.calls.find(([cmd]) => cmd === 'powershell');
+    const script = (call![1] as string[]).join(' ');
+    expect(script).toContain('Add-Type -AssemblyName System.Security');
+    expect(script.indexOf('Add-Type -AssemblyName System.Security')).toBeLessThan(
+      script.indexOf('[System.Security.Cryptography.ProtectedData]'),
+    );
+  });
+
+  it('loads the System.Security assembly before using ProtectedData on write', async () => {
+    childProcess.spawnSync.mockReturnValue({ status: 0, stderr: '', stdout: '' });
+    await saveCredentialBlob('{"x":1}', 'demo');
+
+    const call = childProcess.spawnSync.mock.calls.find(([cmd]) => cmd === 'powershell');
+    const script = (call![1] as string[]).join(' ');
+    expect(script).toContain('Add-Type -AssemblyName System.Security');
+    expect(script.indexOf('Add-Type -AssemblyName System.Security')).toBeLessThan(
+      script.indexOf('[System.Security.Cryptography.ProtectedData]'),
+    );
+  });
+
+  // fs.rm(..., { force: true }) succeeds when the file does not exist, so the
+  // Windows backend reported a successful delete for credentials that were never
+  // stored — `noxctl logout --all` then claimed "Removed credentials for all
+  // profiles." on a machine that had none. The macOS and Linux backends both
+  // return false in that situation.
+  it('does not force the delete, so an absent file is not reported as removed', async () => {
+    fsPromises.default.rm.mockResolvedValue(undefined);
+
+    await deleteCredentialBlob('demo');
+
+    // `force: true` resolves for a missing file, which is exactly what made the
+    // absent case indistinguishable from a real delete.
+    const options = fsPromises.default.rm.mock.calls.at(-1)?.[1];
+    expect(options).not.toMatchObject({ force: true });
+  });
+
+  it('reports nothing removed when the credential file does not exist', async () => {
+    fsPromises.default.rm.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }));
+
+    await expect(deleteCredentialBlob('demo')).resolves.toBe(false);
+  });
+
+  it('reports a delete when the credential file was there', async () => {
+    fsPromises.default.rm.mockResolvedValue(undefined);
+
+    await expect(deleteCredentialBlob('demo')).resolves.toBe(true);
+  });
+
   it('lowercases mixed-case names in the filename', async () => {
     childProcess.spawnSync.mockReturnValue({ status: 0, stderr: '', stdout: '' });
     await saveCredentialBlob('{"x":1}', 'Demo');

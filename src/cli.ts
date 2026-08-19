@@ -99,7 +99,7 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
 program
   .name('noxctl')
   .description('CLI and MCP server for Fortnox accounting')
-  .version('0.6.1')
+  .version('0.7.0')
   .addOption(
     new Option('-o, --output <format>', 'Output format (default: table on TTY, json when piped)')
       .choices(['json', 'table'])
@@ -318,13 +318,23 @@ program
     '--with-salary',
     'Also request the Lön (salary/payroll) scope — requires the Lön permission enabled on your Fortnox app',
   )
-  .action(async (initOpts: { profile?: string; withSalary?: boolean }) => {
-    const { loadCredentials, runOAuthSetup, SCOPES, SALARY_SCOPE } = await import('./auth.js');
+  .option(
+    '--with-orders',
+    'Also request the offer/order scopes — requires the Order licence on the Fortnox company',
+  )
+  .action(async (initOpts: { profile?: string; withSalary?: boolean; withOrders?: boolean }) => {
+    const { loadCredentials, runOAuthSetup, SCOPES, SALARY_SCOPE, ORDER_SCOPES } =
+      await import('./auth.js');
     const { validateProfileName } = await import('./profile-name.js');
 
-    // Opt-in salary scope: flag for TTY, env var for non-interactive/CI runs.
+    // Opt-in scopes: flag for TTY, env var for non-interactive/CI runs. Both are
+    // licence-gated in Fortnox (Lön / Order), and asking for a scope the company
+    // is not licensed for fails the whole authorization — hence not defaults.
     const withSalary = Boolean(initOpts.withSalary) || process.env.FORTNOX_WITH_SALARY === '1';
-    const scopes = withSalary ? `${SCOPES} ${SALARY_SCOPE}` : SCOPES;
+    const withOrders = Boolean(initOpts.withOrders) || process.env.FORTNOX_WITH_ORDERS === '1';
+    const scopes = [SCOPES, withOrders ? ORDER_SCOPES : '', withSalary ? SALARY_SCOPE : '']
+      .filter(Boolean)
+      .join(' ');
 
     let targetProfile: string;
     try {
@@ -379,11 +389,16 @@ program
     console.log('');
     console.log("You'll need a Fortnox app from developer.fortnox.se with:");
     console.log('  - Redirect URI: http://localhost:9876/callback');
-    console.log(
-      '  - Scopes (Behörigheter): Artikel, Bokföring, Faktura, Företagsinformation, Inställningar, Kund, Leverantör, Leverantörsfaktura',
-    );
+    // Printed from the SCOPES constant itself. A hand-maintained list drifted
+    // from what noxctl actually requests, so following the docs produced an
+    // under-scoped Fortnox app and a confusing rejection at authorize time (#95).
+    console.log('  - Permissions (Behörigheter) for every one of these scopes:');
+    console.log(`      ${scopes.split(' ').join(', ')}`);
+    if (withOrders) {
+      console.log('    (offer/order are included because you passed --with-orders)');
+    }
     if (withSalary) {
-      console.log('  - Lön (krävs eftersom du kör med --with-salary)');
+      console.log('    (salary is included because you passed --with-salary)');
     }
     console.log('  - Service account enabled (recommended)');
     console.log('');
@@ -901,27 +916,20 @@ program
     const { effectiveScopes } = await import('./auth.js');
     const { fortnoxRequest, FortnoxApiError } = await import('./fortnox-client.js');
 
-    const scopeEndpoints: Record<string, string> = {
-      article: 'articles?limit=1',
-      customer: 'customers?limit=1',
-      invoice: 'invoices?limit=1',
-      payment: 'invoicepayments?limit=1',
-      supplier: 'suppliers?limit=1',
-      supplierinvoice: 'supplierinvoices?limit=1',
-      bookkeeping: 'vouchers?limit=1',
-      companyinformation: 'companyinformation',
-      settings: 'settings/company',
-      inbox: 'inbox',
-      connectfile: 'voucherfileconnections?limit=1',
-      salary: 'employees?limit=1',
-    };
+    const { scopeProbeEndpoints } = await import('./scope-probes.js');
 
     const required = effectiveScopes(creds).split(' ');
     const missing: string[] = [];
+    const unchecked: string[] = [];
 
     for (const scope of required) {
-      const endpoint = scopeEndpoints[scope];
-      if (!endpoint) continue;
+      const endpoint = scopeProbeEndpoints[scope];
+      // Report rather than skip: counting an unprobed scope as authorized is
+      // how doctor used to claim a clean bill of health it had not verified.
+      if (!endpoint) {
+        unchecked.push(scope);
+        continue;
+      }
       try {
         await fortnoxRequest(endpoint);
       } catch (err) {
@@ -938,7 +946,13 @@ program
     }
 
     if (missing.length === 0) {
-      pass('Scopes', `all ${required.length} scopes authorized`);
+      const checked = required.length - unchecked.length;
+      pass(
+        'Scopes',
+        unchecked.length === 0
+          ? `all ${checked} scopes authorized`
+          : `${checked} scopes authorized; not checked: ${unchecked.join(', ')}`,
+      );
     } else {
       fail(
         'Scopes',

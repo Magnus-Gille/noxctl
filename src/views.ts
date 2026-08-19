@@ -79,12 +79,21 @@ export const voucherDetailColumns: Column[] = [
   { key: 'Description', header: 'Description', width: 50 },
 ];
 
+// Fortnox can void a single voucher row (`Removed: true`) without deleting it —
+// the replacement row stays in the same voucher. Rendered plainly, a voided line
+// is indistinguishable from a live one and reads as a double-booking, so mark it
+// up front where truncation cannot hide it.
+const voucherRowDescription = (value: unknown, row: Record<string, unknown>) => {
+  const text = String(value ?? '');
+  return row.Removed === true ? `[REMOVED] ${text}`.trimEnd() : text;
+};
+
 // 8 + 2 + 12 + 2 + 12 + 2 + 30 = 68
 export const voucherRowColumns: Column[] = [
   { key: 'Account', header: 'Account', width: 8, align: 'right' },
   { key: 'Debit', header: 'Debit', width: 12, align: 'right', format: currency },
   { key: 'Credit', header: 'Credit', width: 12, align: 'right', format: currency },
-  { key: 'Description', header: 'Description', width: 30 },
+  { key: 'Description', header: 'Description', width: 30, format: voucherRowDescription },
 ];
 
 // --- Article views (target ≤80 cols) ---

@@ -4,14 +4,15 @@ import { describe, expect, it } from 'vitest';
 
 describe('checkout reconciliation guidance', () => {
   it('uses npm ci as the documented development bootstrap', () => {
-    const readme = readFileSync('README.md', 'utf8');
+    // Normalized: git checks these files out with CRLF on Windows.
+    const readme = readFileSync('README.md', 'utf8').replace(/\r\n/g, '\n');
 
     expect(readme).toContain('## Development\n\n```bash\nnpm ci');
     expect(readme).not.toContain('## Development\n\n```bash\nnpm install');
   });
 
   it('documents how to preserve a lockfile diff before reconciliation', () => {
-    const runbook = readFileSync('docs/checkout-reconciliation.md', 'utf8');
+    const runbook = readFileSync('docs/checkout-reconciliation.md', 'utf8').replace(/\r\n/g, '\n');
 
     expect(runbook).not.toContain('git restore --source=origin/main -- package-lock.json');
     expect(runbook).toContain('Node 22.22.0 / npm 11.8.0');
