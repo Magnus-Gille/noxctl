@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-19
+
 ### Changed
 
 - `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0 (supersedes Dependabot #89).
@@ -194,6 +196,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.7.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.6.1...v0.7.0
 [0.4.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.4.0...v0.4.1
 [0.2.0]: https://github.com/Magnus-Gille/noxctl/releases/tag/v0.2.0
