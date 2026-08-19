@@ -6,6 +6,10 @@ import path from 'node:path';
 
 const CLI_PATH = path.resolve('dist/cli.js');
 
+// Windows CI runners spawn Node far slower than a warm local machine; 10s put
+// these subprocess assertions right at the edge and they flaked intermittently.
+const CLI_TIMEOUT_MS = 30_000;
+
 let tmpHome: string;
 let cfgDir: string;
 let activePointerFile: string;
@@ -25,7 +29,7 @@ function run(
 
   const opts: ExecFileSyncOptions = {
     encoding: 'utf-8',
-    timeout: 10000,
+    timeout: CLI_TIMEOUT_MS,
     env: mergedEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   };
