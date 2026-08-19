@@ -1,36 +1,46 @@
 # Project Status
 
-**Updated:** 2026-07-13
-**Branch:** `hardening/reliability-2026-07-13`
-**Base:** `origin/main` at `933631964b12bc07ee70bc1e7e89f77476c17df4`
-**State:** `0.4.1` release candidate is open as draft PR #65; parent Codex approved the initial hardening commit because Claude Opus was unavailable. Awaiting CI and final merge/release approval. Nothing has been published.
+**Last session:** 2026-08-19
+**Branch:** `main` at `17aef1d` (synchronized with `origin/main`)
+**Published:** `v0.7.0`, `v0.7.1`, `v0.7.2` tagged and released on GitHub. **npm still serves `0.6.1`** — see Blockers.
 
-## Hardening completed
+## Completed This Session
 
-- OAuth refreshes are single-flighted per case-insensitive profile, preventing concurrent refresh-token rotation and duplicate credential writes. OAuth calls have a 30-second deadline.
-- Fortnox calls have explicit deadlines (30 seconds; 120 seconds for raw-body uploads). Only reads retry transient network failures and HTTP 429/5xx responses, with three retries and a 30-second delay cap. Mutations remain single-attempt; mutation timeouts explicitly report that the remote outcome may be unknown.
-- Rate-limit admission is serialized so concurrent callers cannot exceed the existing 25-requests-per-5-seconds budget.
-- Default employee detail summaries redact personnummer and exact monthly/hourly pay. Exact fields require explicit CLI JSON or MCP `includeRaw`; MCP descriptions warn about sensitive payroll data. Mutation payload previews remain exact by design.
-- CI/publishing now require lint, formatting, build, tests, production audit, and package dry-run. The lockfile received audit-compatible transitive-only updates; direct dependency ranges did not change.
+Three externally reported issues fixed, plus both open Dependabot PRs, across six merged PRs.
 
-## Verification
+- **#95 — Windows OAuth and scopes** (#97). `openBrowser()` ran `cmd /c start <url>`; cmd.exe splits on the unescaped `&` in the query string, so Fortnox received a truncated authorization URL and rejected it. Now launches via PowerShell `Start-Process`, URL printed unconditionally. DPAPI helpers now `Add-Type -AssemblyName System.Security`. `project`/`costcenter`/`price` added to the default `SCOPES`; `offer`/`order` gated behind the new `--with-orders` because Fortnox requires the **Order licence** for them. `init` now prints the `SCOPES` constant itself rather than a hand-maintained list.
+- **#96 — MCP tool gaps** (#97). Supplier create/update schemas expanded from 10 to all 41 writable fields. Voided voucher rows (`Removed: true`) now render `[REMOVED]`.
+- **#101 — voucher row fields** (#102). `VoucherRowSchema` declared 4 of 9 writable fields, so `TransactionInformation` was silently stripped by the MCP SDK and never reached Fortnox. Now declares the full payload set.
+- **#89 → #98**, **#91 → #99**. MCP SDK 1.30.0 (which allowed dropping the `@hono/node-server` override) and the dev-tooling bumps. Both original PRs were superseded and closed.
+- **#94** closed — drift already cleared by `8c89e98`; verified `npm run check:api` reports no changes and that the flagged recurring-billing changes still match `src/operations/recurrings.ts`.
 
-- `npm run check:release` — passed on Node `v22.17.0`: lint, Prettier check, TypeScript build, **66 test files / 722 tests**, production audit, and package dry-run.
-- `npm audit` — **0 vulnerabilities** across production and development dependencies (277 dependencies total).
-- `npm ls --depth=0` — clean dependency tree.
-- No live Fortnox calls or real accounting/payroll mutations were performed.
+Found and fixed without being reported:
+- 403 hints named the wrong scope for offers, orders and both payment families; `financialyears` was missing from the map entirely.
+- Windows `logout --all` reported removing credentials that never existed (`fs.rm` with `force: true` resolves for a missing file).
+- Column formatters bypassed terminal control-character stripping.
+- CLI subprocess tests used a 10s timeout that flaked on cold Windows CI runners; now 30s (Vitest per-test 45s).
 
-## Review and rollout
+**CI now runs on `windows-latest`.** Every #95 bug was Windows-only; Linux-only CI could not have caught them. The new leg found the `logout --all` bug on its first run.
 
-1. Review the release-version commit and require PR #65's Node 20/22 CI to pass.
-2. Merge only after approval and green CI.
-3. Tag/release `v0.4.1` and publish `noxctl@0.4.1` to npm using the normal release process. This npm patch is the deployment; the repository has no daemon or host rollout, and no Heimdall change is appropriate.
+## In Progress
 
-Rollback after a future npm publish: revert the merge commit; restore `latest` to `noxctl@0.4.0` with `npm dist-tag add noxctl@0.4.0 latest`; deprecate the superseded patch if needed. Existing installations remain on their installed version unless explicitly upgraded.
+Nothing. Working tree clean, no open PRs.
 
-## Residual risks
+## Blockers
 
-- Node 20 was not available locally; the PR's existing Node 20/22 matrix is the remaining compatibility gate.
-- Fixed 30/120-second deadlines may need tuning from field evidence, but retries and delays are now bounded.
-- Explicit CLI JSON, MCP `includeRaw`, mutation confirmations, and dry-run payloads can still contain payroll PII by design; callers must treat them as sensitive.
-- Tests mock Fortnox transport. No mutation was live-tested in this hardening pass because preserving production data was a hard constraint.
+- **`npm publish` has not run.** npm serves `0.6.1` as `latest` while GitHub advertises v0.7.2. It stops at the 2FA one-time password, which needs an interactive terminal — run `npm publish` from the repo root on `main`. A single publish ships all three releases, since 0.7.2 supersedes 0.7.0/0.7.1.
+- Rollback if needed: `npm dist-tag add noxctl@0.6.1 latest`, then `npm deprecate noxctl@0.7.2 "<reason>"`.
+
+## Next Steps
+
+1. **Run `npm publish`** (see Blockers) — the only thing between this work and users.
+2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules. This is the highest-value remaining work.
+3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it. An `npm version` hook or release workflow removes the class.
+4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
+5. `#13` (bank transactions) remains blocked upstream. The 2026-08-17 spec added `/api/bank-process-*`, but those are company-formation/KYC onboarding, not transactions. Revisit only if the drift workflow reports a genuinely transactional bank path.
+
+## Notes
+
+- Two rounds of Codex cross-model review (gpt-5.6-sol, high effort) ran on #97 and caught three real problems, including a terminal-escape regression introduced during the fix and a legacy-credential renewal bug that would have broken untouched installs on refresh. `LEGACY_SCOPES` exists because of that second finding — it is frozen history and must never be edited.
+- Local `backup/pre-rewrite-*` branches must never be pushed publicly (pre-sanitization history).
+- @hedborg has filed three high-quality reports with root-cause analysis and tested patches, and has offered PRs each time.
