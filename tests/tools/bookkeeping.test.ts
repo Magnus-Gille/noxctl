@@ -129,6 +129,81 @@ describe('bookkeeping tools', () => {
     });
   });
 
+  // Issue #101: the MCP SDK strips any key the schema does not declare, so a
+  // per-line note passed as TransactionInformation vanished silently — the
+  // voucher booked fine with the data simply missing. Same root cause as the
+  // Supplier gap in #96, so assert the declared property list, not just a
+  // forwarded subset.
+  describe('voucher row schema covers the real row shape', () => {
+    const rowFields = [
+      'Account',
+      'Debit',
+      'Credit',
+      'Description',
+      'TransactionInformation',
+      'CostCenter',
+      'Project',
+      'Quantity',
+      'Removed',
+    ];
+
+    it('declares every writable VoucherRow field', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_create_voucher')!.inputSchema as {
+        properties: Record<string, { items?: { properties?: Record<string, unknown> } }>;
+      };
+      const declared = Object.keys(schema.properties.VoucherRows?.items?.properties ?? {});
+      for (const field of rowFields) {
+        expect(declared).toContain(field);
+      }
+    });
+
+    it('forwards per-row fields to Fortnox instead of dropping them', async () => {
+      mockFetch({ Voucher: { VoucherNumber: 1, VoucherSeries: 'A' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_create_voucher',
+        arguments: {
+          Description: 'Test',
+          TransactionDate: '2026-03-01',
+          confirm: true,
+          VoucherRows: [
+            {
+              Account: 5460,
+              Debit: 194.32,
+              TransactionInformation: 'Kaffe till kontoret, faktura 1234',
+              CostCenter: '9050',
+              Project: '1002',
+              Quantity: 2,
+            },
+            { Account: 1930, Credit: 194.32 },
+          ],
+        },
+      });
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const sent = JSON.parse(fetchCall[1].body as string).Voucher.VoucherRows[0];
+      expect(sent.TransactionInformation).toBe('Kaffe till kontoret, faktura 1234');
+      expect(sent.CostCenter).toBe('9050');
+      expect(sent.Project).toBe('1002');
+      expect(sent.Quantity).toBe(2);
+    });
+
+    it('steers callers to TransactionInformation for per-line free text', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_create_voucher')!.inputSchema as {
+        properties: Record<
+          string,
+          { items?: { properties?: Record<string, { description?: string }> } }
+        >;
+      };
+      const rowProps = schema.properties.VoucherRows?.items?.properties ?? {};
+      expect(rowProps.Description?.description).toMatch(/TransactionInformation/);
+    });
+  });
+
   describe('fortnox_attach_voucher_files', () => {
     it('returns isError when confirm is missing', async () => {
       mockFetch({});

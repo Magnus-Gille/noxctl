@@ -21,11 +21,35 @@ import {
   textResponse,
 } from '../tool-output.js';
 
+// The full writable VoucherRow field set (Fortnox `VoucherRowSinglePayloadItem`).
+// The MCP SDK strips any key the schema does not declare, so an undeclared field
+// reaches neither Fortnox nor an error message — a per-line note passed as
+// TransactionInformation simply vanished and the voucher booked without it
+// (#101). createVoucher() forwards rows verbatim, so this schema is the only
+// place fields were being lost.
 const VoucherRowSchema = z.object({
   Account: z.number().describe('Kontonummer'),
   Debit: z.number().optional().describe('Debetbelopp'),
   Credit: z.number().optional().describe('Kreditbelopp'),
-  Description: z.string().optional().describe('Beskrivning'),
+  Description: z
+    .string()
+    .optional()
+    .describe(
+      'Radbeskrivning. OBS: Fortnox fyller normalt detta fält med kontots egen registrerade benämning, oavsett vad som skickas. Använd TransactionInformation för fritext per rad.',
+    ),
+  TransactionInformation: z
+    .string()
+    .optional()
+    .describe(
+      'Fritext för just denna rad (vem, vad, varför). Detta är det fria textfältet per rad — till skillnad från Description, som normalt speglar kontots egen benämning.',
+    ),
+  CostCenter: z.string().optional().describe('Kostnadsställe för denna rad'),
+  Project: z.string().optional().describe('Projektnummer för denna rad'),
+  Quantity: z.number().optional().describe('Antal (används av vissa kontotyper)'),
+  Removed: z
+    .boolean()
+    .optional()
+    .describe('Markerar raden som makulerad. Sätts normalt inte vid skapande.'),
 });
 
 const VoucherSeriesSchema = z

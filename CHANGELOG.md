@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`fortnox_create_voucher` silently dropped per-row fields.** `VoucherRowSchema` declared only `Account`, `Debit`, `Credit` and `Description`, and the MCP SDK strips any argument a schema does not declare — so a per-line note passed as `TransactionInformation` never reached Fortnox, with no error and a voucher that booked fine minus the data. The schema now covers the full `VoucherRowSinglePayloadItem` set: `TransactionInformation`, `CostCenter`, `Project`, `Quantity` and `Removed`. `createVoucher()` already forwarded rows verbatim, so the schema was the only place fields were lost. Same root cause as the Supplier gap in #96; the test asserts the declared property list so it cannot drift again. Thanks to @hedborg (#101).
+- Row-level `Description` now documents that Fortnox normally overwrites it with the account's own registered name, and points callers at `TransactionInformation` for per-line free text. **Not independently confirmed against a live account** — reported from real usage and adopted because the guidance is right either way: `TransactionInformation` is unambiguously the per-line free-text field.
+
+
 ## [0.7.1] - 2026-08-19
 
 ### Internal
