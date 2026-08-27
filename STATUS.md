@@ -1,14 +1,16 @@
 # Project Status
 
 **Last session:** 2026-08-27
-**Branch:** `fix/issue-108-report-voucher-concurrency`, with implementation commit `2e8d56d`, based on `main` at `4807d3c`
-**Published:** `v0.7.2` on GitHub and `noxctl@0.7.2` on npm (registry verified 2026-08-27)
+**Branch:** `main` contains release commit `34ebf874c97f887111c428974f13effa95f7f4b2`
+**Published:** `v0.7.3` on GitHub and `noxctl@0.7.3` on npm (both verified 2026-08-27)
 
 ## Completed This Session
 
 - **#108 — slow financial reports.** Voucher detail reads now use a five-worker pool while the shared Fortnox client remains responsible for the 25-request/5-second rate limit. Six-detail regression coverage proves requests overlap and never exceed five in flight.
 - Financial reports now exclude voucher rows with `Removed: true`, matching the bookkeeping tool's existing contract that removed rows were replaced and must not be counted.
 - Red/green verification captured both defects: concurrency was exactly one before the fix, and a removed row inflated the fixture total from 3,500 to 13,500. `npm run check:release` passes for `0.7.3` (73 files, 833 tests, zero production vulnerabilities, package dry-run successful).
+- PR #109 passed Codex review plus Ubuntu Node 22/24 and Windows Node 22 CI, then merged. The exact merge commit was tagged `v0.7.3`; npm `latest` resolves to `0.7.3`, and its registry SHA-1 `695254e7825e4140b3b910b67829940340121c20` matches the verified release tarball.
+- @MountRose76 is credited in the changelog, PR, GitHub release, and the release notification on issue #108.
 
 ## Previous Session (2026-08-19)
 
@@ -30,21 +32,19 @@ Found and fixed without being reported:
 
 ## In Progress
 
-Issue #108 and release candidate `0.7.3` are published for review in PR #109 from `fix/issue-108-report-voucher-concurrency`. Codex review and CI are the remaining merge gates.
+Nothing. Issue #108 is closed and `0.7.3` is released.
 
 ## Blockers
 
-None for PR #109 or the planned `0.7.3` release.
+None.
 
 ## Next Steps
 
-1. Merge PR #109 after Codex review and all CI jobs pass, then tag and publish `v0.7.3` from the exact merge commit.
-2. Verify the npm package and GitHub release, then notify and credit @MountRose76 on issue #108.
-3. Triage open API-drift issue #107 independently of this user fix.
-4. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
-5. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
-6. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
-7. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
+1. Triage open API-drift issue #107 independently of this user fix.
+2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
+3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
+4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
+5. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
 
 ## Notes
 
