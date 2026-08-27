@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-27
+
+### Fixed
+
+- **Income statements and balance sheets no longer fetch every voucher sequentially.** Voucher detail reads now use a five-worker pool while the shared Fortnox client continues to enforce the 25-request-per-5-second limit. This removes round-trip latency as the dominant per-voucher bottleneck for large financial years. Removed voucher rows (`Removed: true`) are also excluded from report totals because Fortnox has replaced those rows. Thanks to @MountRose76 for the report, measurements, diagnosis, and independent result comparison (#108).
+
 ## [0.7.2] - 2026-08-19
 
 ### Fixed
