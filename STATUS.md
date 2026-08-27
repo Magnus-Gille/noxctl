@@ -8,7 +8,7 @@
 
 - **#108 — slow financial reports.** Voucher detail reads now use a five-worker pool while the shared Fortnox client remains responsible for the 25-request/5-second rate limit. Six-detail regression coverage proves requests overlap and never exceed five in flight.
 - Financial reports now exclude voucher rows with `Removed: true`, matching the bookkeeping tool's existing contract that removed rows were replaced and must not be counted.
-- Red/green verification captured both defects: concurrency was exactly one before the fix, and a removed row inflated the fixture total from 3,500 to 13,500. `npm run verify` passes (73 files, 833 tests).
+- Red/green verification captured both defects: concurrency was exactly one before the fix, and a removed row inflated the fixture total from 3,500 to 13,500. `npm run check:release` passes for `0.7.3` (73 files, 833 tests, zero production vulnerabilities, package dry-run successful).
 
 ## Previous Session (2026-08-19)
 
@@ -30,20 +30,21 @@ Found and fixed without being reported:
 
 ## In Progress
 
-Issue #108 is committed locally as `2e8d56d`. The branch has not been pushed and no PR has been opened.
+Issue #108 and release candidate `0.7.3` are published for review in PR #109 from `fix/issue-108-report-voucher-concurrency`. Codex review and CI are the remaining merge gates.
 
 ## Blockers
 
-None for the local #108 fix.
+None for PR #109 or the planned `0.7.3` release.
 
 ## Next Steps
 
-1. Push `fix/issue-108-report-voucher-concurrency` and open a PR for #108 when explicitly requested.
-2. Triage open API-drift issue #107 independently of this user fix.
-3. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
-4. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
-5. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
-6. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
+1. Merge PR #109 after Codex review and all CI jobs pass, then tag and publish `v0.7.3` from the exact merge commit.
+2. Verify the npm package and GitHub release, then notify and credit @MountRose76 on issue #108.
+3. Triage open API-drift issue #107 independently of this user fix.
+4. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
+5. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
+6. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
+7. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
 
 ## Notes
 
