@@ -25,6 +25,53 @@ describe('financial reports operations', () => {
   });
 
   describe('getIncomeStatement', () => {
+    it('fetches voucher details with bounded concurrency', async () => {
+      let activeDetailRequests = 0;
+      let maxActiveDetailRequests = 0;
+
+      global.fetch = vi.fn().mockImplementation(async (input: string | URL | Request) => {
+        const url = String(input);
+        let response: unknown;
+
+        if (url.includes('/3/accounts')) {
+          response = {
+            Accounts: [{ Number: 3001, Description: 'Försäljning', BalanceBroughtForward: 0 }],
+            MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
+          };
+        } else if (url.includes('/3/vouchers?')) {
+          response = {
+            Vouchers: Array.from({ length: 6 }, (_, index) => ({
+              VoucherSeries: 'A',
+              VoucherNumber: index + 1,
+            })),
+            MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
+          };
+        } else {
+          activeDetailRequests++;
+          maxActiveDetailRequests = Math.max(maxActiveDetailRequests, activeDetailRequests);
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          activeDetailRequests--;
+          response = {
+            Voucher: { VoucherRows: [{ Account: 3001, Debit: 0, Credit: 100 }] },
+          };
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(JSON.stringify(response)),
+          json: () => Promise.resolve(response),
+        };
+      });
+
+      const { getIncomeStatement } = await import('../../src/operations/financial-reports.js');
+      const report = await getIncomeStatement();
+
+      expect(maxActiveDetailRequests).toBeGreaterThan(1);
+      expect(maxActiveDetailRequests).toBeLessThanOrEqual(5);
+      expect(report.netResult).toBe(-600);
+    });
+
     it('groups revenue and expense accounts correctly', async () => {
       // Call 1: accounts page 1 (with meta saying 1 page)
       // Call 2: vouchers list (returns 2 vouchers)
@@ -57,6 +104,7 @@ describe('financial reports operations', () => {
           Voucher: {
             VoucherRows: [
               { Account: 5410, Debit: 3000, Credit: 0 },
+              { Account: 5410, Debit: 10000, Credit: 0, Removed: true },
               { Account: 6570, Debit: 500, Credit: 0 },
               { Account: 1930, Debit: 0, Credit: 3500 },
             ],

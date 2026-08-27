@@ -16,7 +16,10 @@ interface VoucherRow {
   Account: number;
   Debit: number;
   Credit: number;
+  Removed?: boolean;
 }
+
+const VOUCHER_DETAIL_CONCURRENCY = 5;
 
 interface VouchersResponse {
   Vouchers: { VoucherRows?: VoucherRow[]; [key: string]: unknown }[];
@@ -151,19 +154,38 @@ async function fetchVoucherSums(
     page++;
   } while (page <= totalPages);
 
-  // Step 2: Fetch each voucher individually to get VoucherRows
+  // Step 2: Fetch voucher details concurrently. The shared client still owns
+  // rate limiting; this pool only keeps network latency from serialising reads.
   const yearParam = financialYear ? `?financialyear=${financialYear}` : '';
-  for (const v of vouchers) {
-    const detail = await fortnoxRequest<VoucherDetailResponse>(
-      `vouchers/${encodeURIComponent(v.series)}/${v.number}${yearParam}`,
-    );
-    for (const row of detail.Voucher.VoucherRows ?? []) {
-      const existing = sums.get(row.Account) ?? { debit: 0, credit: 0 };
-      existing.debit += row.Debit || 0;
-      existing.credit += row.Credit || 0;
-      sums.set(row.Account, existing);
+  let nextVoucherIndex = 0;
+  let failure: unknown;
+
+  async function worker(): Promise<void> {
+    while (failure === undefined) {
+      const voucherIndex = nextVoucherIndex++;
+      if (voucherIndex >= vouchers.length) return;
+      const voucher = vouchers[voucherIndex]!;
+
+      try {
+        const detail = await fortnoxRequest<VoucherDetailResponse>(
+          `vouchers/${encodeURIComponent(voucher.series)}/${voucher.number}${yearParam}`,
+        );
+        for (const row of detail.Voucher.VoucherRows ?? []) {
+          if (row.Removed === true) continue;
+          const existing = sums.get(row.Account) ?? { debit: 0, credit: 0 };
+          existing.debit += row.Debit || 0;
+          existing.credit += row.Credit || 0;
+          sums.set(row.Account, existing);
+        }
+      } catch (error) {
+        failure = error;
+      }
     }
   }
+
+  const workerCount = Math.min(VOUCHER_DETAIL_CONCURRENCY, vouchers.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  if (failure !== undefined) throw failure;
 
   return sums;
 }
