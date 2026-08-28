@@ -11,37 +11,6 @@ const MAX_RETRY_DELAY_MS = 30_000;
 // Rate limiter: max 25 requests per 5 seconds
 const RATE_WINDOW_MS = 5000;
 const RATE_LIMIT = 25;
-const requestTimestamps: number[] = [];
-let rateLimitTail: Promise<void> = Promise.resolve();
-
-async function waitForRateLimit(): Promise<void> {
-  let release!: () => void;
-  const previous = rateLimitTail;
-  rateLimitTail = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-
-  await previous;
-  try {
-    while (true) {
-      const now = Date.now();
-      while (requestTimestamps.length > 0 && requestTimestamps[0]! <= now - RATE_WINDOW_MS) {
-        requestTimestamps.shift();
-      }
-
-      if (requestTimestamps.length < RATE_LIMIT) {
-        requestTimestamps.push(now);
-        return;
-      }
-
-      const oldestInWindow = requestTimestamps[0]!;
-      const waitMs = Math.max(1, oldestInWindow + RATE_WINDOW_MS - now + 50);
-      await new Promise((resolve) => setTimeout(resolve, waitMs));
-    }
-  } finally {
-    release();
-  }
-}
 
 export interface FortnoxError {
   code: number;
@@ -58,16 +27,26 @@ export class FortnoxApiError extends Error {
     public readonly details?: string,
     endpoint?: string,
     public readonly retryAfterMs?: number,
+    diagnosticContext?: { kind: 'context' | 'profile'; label: string },
   ) {
     const hint = getErrorHint(statusCode, fortnoxMessage, endpoint);
-    const profile = getResolvedProfile();
-    const profileTag = profile.toLowerCase() !== DEFAULT_PROFILE ? `[profile: ${profile}] ` : '';
-    const parts = [`${profileTag}Fortnox API error (${statusCode}): ${fortnoxMessage}`];
+    const contextTag = formatDiagnosticContext(diagnosticContext);
+    const parts = [`${contextTag}Fortnox API error (${statusCode}): ${fortnoxMessage}`];
     if (hint) parts.push(`Hint: ${hint}`);
     super(parts.join('\n'));
     this.name = 'FortnoxApiError';
     this.hint = hint;
   }
+}
+
+function formatDiagnosticContext(context?: { kind: 'context' | 'profile'; label: string }): string {
+  if (!context) return '';
+  const label = context.label
+    .trim()
+    .replace(/[\r\n\[\]]+/g, ' ')
+    .slice(0, 128);
+  if (!label || (context.kind === 'profile' && label.toLowerCase() === DEFAULT_PROFILE)) return '';
+  return `[${context.kind}: ${label}] `;
 }
 
 export class FortnoxRequestTimeoutError extends Error {
@@ -238,17 +217,55 @@ export interface RequestOptions {
   mutation?: boolean;
 }
 
+export interface FortnoxRateLimitOptions {
+  /** Maximum number of requests admitted during one window. Defaults to 25. */
+  limit?: number;
+  /** Sliding-window duration in milliseconds. Defaults to 5000. */
+  windowMs?: number;
+}
+
+export interface CreateFortnoxClientOptions {
+  /** Supplies a valid access token for this client instance. */
+  getAccessToken: () => Promise<string>;
+  /** Optional fetch implementation, primarily for hosts and tests. */
+  fetch?: typeof globalThis.fetch;
+  /** Non-secret label used only to distinguish this client's errors. */
+  contextLabel?: string | (() => string | undefined);
+  /** Per-client Fortnox request budget. */
+  rateLimit?: FortnoxRateLimitOptions;
+}
+
+export interface FortnoxTransport {
+  request<T>(endpoint: string, options?: RequestOptions): Promise<T>;
+  requestWithMetadata<T>(endpoint: string, options?: RequestOptions): Promise<FortnoxResponse<T>>;
+  requestPdf(endpoint: string, options?: RequestOptions): Promise<Buffer>;
+  requestPdfFromMutation(endpoint: string, options?: RequestOptions): Promise<Buffer | undefined>;
+  fetchAllPages<T extends Record<string, unknown>>(
+    endpoint: string,
+    dataKey: string,
+    params?: Record<string, string | number | undefined>,
+  ): Promise<{ items: T[]; totalResources: number }>;
+}
+
+interface ClientRuntime {
+  getAccessToken: () => Promise<string>;
+  fetch: typeof globalThis.fetch;
+  waitForRateLimit: () => Promise<void>;
+  getDiagnosticContext: () => { kind: 'context' | 'profile'; label: string } | undefined;
+}
+
 // Issue the HTTP request and translate a non-2xx answer into a FortnoxApiError.
 // Returns the raw Response so callers can decide how to read the body.
 async function sendRequest(
+  runtime: ClientRuntime,
   endpoint: string,
   options: RequestOptions,
   method: string,
   timeoutMs: number,
 ): Promise<Response> {
-  await waitForRateLimit();
+  await runtime.waitForRateLimit();
 
-  const token = await getValidToken();
+  const token = await runtime.getAccessToken();
   // The original REST API is rooted at /3, while newer product APIs are rooted
   // directly at /api. A leading slash deliberately selects the API root.
   const url = endpoint.startsWith('/')
@@ -294,7 +311,7 @@ async function sendRequest(
     }
   }
 
-  const response = await fetch(url.toString(), fetchOptions);
+  const response = await runtime.fetch(url.toString(), fetchOptions);
 
   if (!response.ok) {
     let errorMessage = `HTTP ${response.status}`;
@@ -316,6 +333,7 @@ async function sendRequest(
       details,
       endpoint,
       retryAfterDelay(response),
+      runtime.getDiagnosticContext(),
     );
   }
 
@@ -324,6 +342,7 @@ async function sendRequest(
 
 // Shared retry/timeout envelope; `readBody` turns a successful Response into T.
 async function request<T>(
+  runtime: ClientRuntime,
   endpoint: string,
   options: RequestOptions,
   readBody: (response: Response) => Promise<T>,
@@ -337,7 +356,7 @@ async function request<T>(
 
   try {
     return await retryWithBackoff(
-      async () => readBody(await sendRequest(endpoint, options, method, timeoutMs)),
+      async () => readBody(await sendRequest(runtime, endpoint, options, method, timeoutMs)),
       retryable,
     );
   } catch (err) {
@@ -348,11 +367,12 @@ async function request<T>(
   }
 }
 
-export async function fortnoxRequest<T>(
+async function requestJson<T>(
+  runtime: ClientRuntime,
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  return request<T>(endpoint, options, async (response) => {
+  return request<T>(runtime, endpoint, options, async (response) => {
     // Some endpoints return empty responses (e.g., DELETE)
     const text = await response.text();
     if (!text) return undefined as T;
@@ -368,11 +388,12 @@ export interface FortnoxResponse<T> {
   lastModified?: string;
 }
 
-export async function fortnoxRequestWithMetadata<T>(
+async function requestWithMetadata<T>(
+  runtime: ClientRuntime,
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<FortnoxResponse<T>> {
-  return request<FortnoxResponse<T>>(endpoint, options, async (response) => {
+  return request<FortnoxResponse<T>>(runtime, endpoint, options, async (response) => {
     const text = await response.text();
     return {
       data: text ? (JSON.parse(text) as T) : (undefined as T),
@@ -443,11 +464,12 @@ function fortnoxErrorInBody(buf: Buffer): { message: string; code?: number } | u
  * proxy can return an HTML error page, either of which would otherwise be saved
  * as `invoice-1001.pdf` and look like success until someone opened the file.
  */
-export async function fortnoxRequestPdf(
+async function requestPdf(
+  runtime: ClientRuntime,
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<Buffer> {
-  return request<Buffer>(endpoint, options, async (response) => {
+  return request<Buffer>(runtime, endpoint, options, async (response) => {
     const buf = Buffer.from(await response.arrayBuffer());
 
     if (!startsWithPdfMagic(buf)) {
@@ -471,48 +493,57 @@ export async function fortnoxRequestPdf(
  * accounting change into a reported failure. Always treated as a mutation, so
  * it is never auto-retried.
  */
-export async function fortnoxRequestPdfFromMutation(
+async function requestPdfFromMutation(
+  runtime: ClientRuntime,
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<Buffer | undefined> {
-  return request<Buffer | undefined>(endpoint, { ...options, mutation: true }, async (response) => {
-    let buf: Buffer;
-    try {
-      buf = Buffer.from(await response.arrayBuffer());
-    } catch {
-      // Body unreadable (truncated stream, aborted transfer). The status line
-      // already said the action succeeded; report it as such.
+  return request<Buffer | undefined>(
+    runtime,
+    endpoint,
+    { ...options, mutation: true },
+    async (response) => {
+      let buf: Buffer;
+      try {
+        buf = Buffer.from(await response.arrayBuffer());
+      } catch {
+        // Body unreadable (truncated stream, aborted transfer). The status line
+        // already said the action succeeded; report it as such.
+        return undefined;
+      }
+
+      if (isCompletePdf(buf)) return buf;
+
+      // A well-formed Fortnox error envelope is positive evidence that the action
+      // did NOT happen — unlike an unreadable body, which is merely inconclusive.
+      // Fortnox can send these with a 2xx status, so this has to be checked here
+      // rather than left to the status code.
+      const failure = fortnoxErrorInBody(buf);
+      if (failure) {
+        throw new FortnoxApiError(
+          response.status,
+          failure.message,
+          `Error code: ${failure.code}`,
+          endpoint,
+          undefined,
+          runtime.getDiagnosticContext(),
+        );
+      }
+
+      // Something else came back — an incomplete PDF, or a payload we cannot
+      // interpret. Inconclusive, so treat the action as done but offer no
+      // document: callers must not overwrite a good file with this.
       return undefined;
-    }
-
-    if (isCompletePdf(buf)) return buf;
-
-    // A well-formed Fortnox error envelope is positive evidence that the action
-    // did NOT happen — unlike an unreadable body, which is merely inconclusive.
-    // Fortnox can send these with a 2xx status, so this has to be checked here
-    // rather than left to the status code.
-    const failure = fortnoxErrorInBody(buf);
-    if (failure) {
-      throw new FortnoxApiError(
-        response.status,
-        failure.message,
-        `Error code: ${failure.code}`,
-        endpoint,
-      );
-    }
-
-    // Something else came back — an incomplete PDF, or a payload we cannot
-    // interpret. Inconclusive, so treat the action as done but offer no
-    // document: callers must not overwrite a good file with this.
-    return undefined;
-  });
+    },
+  );
 }
 
 /**
  * Fetch all pages of a paginated Fortnox list endpoint.
  * `dataKey` is the envelope key (e.g. "Invoices", "Customers").
  */
-export async function fetchAllPages<T extends Record<string, unknown>>(
+async function fetchPages<T extends Record<string, unknown>>(
+  runtime: ClientRuntime,
   endpoint: string,
   dataKey: string,
   params: Record<string, string | number | undefined> = {},
@@ -523,7 +554,7 @@ export async function fetchAllPages<T extends Record<string, unknown>>(
   let totalResources = 0;
 
   do {
-    const data = await fortnoxRequest<Record<string, unknown>>(endpoint, {
+    const data = await requestJson<Record<string, unknown>>(runtime, endpoint, {
       params: { ...params, page, limit: 100 },
     });
     const items = (data[dataKey] as T[]) ?? [];
@@ -537,4 +568,149 @@ export async function fetchAllPages<T extends Record<string, unknown>>(
   } while (page <= totalPages);
 
   return { items: all, totalResources };
+}
+
+function positiveInteger(value: number, name: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new TypeError(`${name} must be a positive integer`);
+  }
+  return value;
+}
+
+function createRateLimiter(options: FortnoxRateLimitOptions = {}): () => Promise<void> {
+  const limit = positiveInteger(options.limit ?? RATE_LIMIT, 'rateLimit.limit');
+  const windowMs = positiveInteger(options.windowMs ?? RATE_WINDOW_MS, 'rateLimit.windowMs');
+  const requestTimestamps: number[] = [];
+  let tail: Promise<void> = Promise.resolve();
+
+  return async () => {
+    let release!: () => void;
+    const previous = tail;
+    tail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+    try {
+      while (true) {
+        const now = Date.now();
+        while (requestTimestamps.length > 0 && requestTimestamps[0]! <= now - windowMs) {
+          requestTimestamps.shift();
+        }
+
+        if (requestTimestamps.length < limit) {
+          requestTimestamps.push(now);
+          return;
+        }
+
+        const oldestInWindow = requestTimestamps[0]!;
+        const waitMs = Math.max(1, oldestInWindow + windowMs - now + 50);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+    } finally {
+      release();
+    }
+  };
+}
+
+function createFortnoxClientInternal(
+  options: CreateFortnoxClientOptions,
+  contextKind: 'context' | 'profile',
+): FortnoxTransport {
+  const fetchImpl =
+    options.fetch ??
+    ((input: string | URL | Request, init?: RequestInit) => globalThis.fetch(input, init));
+  const contextLabel = options.contextLabel;
+  const contextProvider: () => string | undefined =
+    typeof contextLabel === 'function' ? contextLabel : () => contextLabel;
+  const runtime: ClientRuntime = {
+    getAccessToken: options.getAccessToken,
+    fetch: fetchImpl,
+    waitForRateLimit: createRateLimiter(options.rateLimit),
+    getDiagnosticContext: () => {
+      try {
+        const label = contextProvider();
+        return label ? { kind: contextKind, label } : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+  };
+
+  return Object.freeze({
+    request<T>(endpoint: string, requestOptions: RequestOptions = {}): Promise<T> {
+      return requestJson<T>(runtime, endpoint, requestOptions);
+    },
+    requestWithMetadata<T>(
+      endpoint: string,
+      requestOptions: RequestOptions = {},
+    ): Promise<FortnoxResponse<T>> {
+      return requestWithMetadata<T>(runtime, endpoint, requestOptions);
+    },
+    requestPdf(endpoint: string, requestOptions: RequestOptions = {}): Promise<Buffer> {
+      return requestPdf(runtime, endpoint, requestOptions);
+    },
+    requestPdfFromMutation(
+      endpoint: string,
+      requestOptions: RequestOptions = {},
+    ): Promise<Buffer | undefined> {
+      return requestPdfFromMutation(runtime, endpoint, requestOptions);
+    },
+    fetchAllPages<T extends Record<string, unknown>>(
+      endpoint: string,
+      dataKey: string,
+      params: Record<string, string | number | undefined> = {},
+    ): Promise<{ items: T[]; totalResources: number }> {
+      return fetchPages<T>(runtime, endpoint, dataKey, params);
+    },
+  });
+}
+
+/** Create an isolated Fortnox transport for one host-authorized context. */
+export function createFortnoxClient(options: CreateFortnoxClientOptions): FortnoxTransport {
+  return createFortnoxClientInternal(options, 'context');
+}
+
+const defaultClient = createFortnoxClientInternal(
+  {
+    getAccessToken: getValidToken,
+    contextLabel: () => getResolvedProfile(),
+  },
+  'profile',
+);
+
+export async function fortnoxRequest<T>(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<T> {
+  return defaultClient.request<T>(endpoint, options);
+}
+
+export async function fortnoxRequestWithMetadata<T>(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<FortnoxResponse<T>> {
+  return defaultClient.requestWithMetadata<T>(endpoint, options);
+}
+
+export async function fortnoxRequestPdf(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<Buffer> {
+  return defaultClient.requestPdf(endpoint, options);
+}
+
+export async function fortnoxRequestPdfFromMutation(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<Buffer | undefined> {
+  return defaultClient.requestPdfFromMutation(endpoint, options);
+}
+
+export async function fetchAllPages<T extends Record<string, unknown>>(
+  endpoint: string,
+  dataKey: string,
+  params: Record<string, string | number | undefined> = {},
+): Promise<{ items: T[]; totalResources: number }> {
+  return defaultClient.fetchAllPages<T>(endpoint, dataKey, params);
 }

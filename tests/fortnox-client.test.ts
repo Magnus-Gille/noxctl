@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
+  createFortnoxClient,
   fortnoxRequest,
   FortnoxApiError,
   FortnoxRequestTimeoutError,
@@ -356,5 +357,161 @@ describe('fortnox-client', () => {
     const headers = init.headers as Record<string, string>;
     expect(headers['Content-Type']).toBeUndefined();
     expect(headers.Authorization).toBe('Bearer mock-token');
+  });
+});
+
+describe('createFortnoxClient', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('keeps concurrent tenant tokens bound to their own client', async () => {
+    const fetchA = vi.fn().mockResolvedValue(new Response('{"CompanyInformation":{"Name":"A"}}'));
+    const fetchB = vi.fn().mockResolvedValue(new Response('{"CompanyInformation":{"Name":"B"}}'));
+    const clientA = createFortnoxClient({
+      getAccessToken: async () => 'tenant-a-token',
+      fetch: fetchA,
+      contextLabel: 'tenant-a',
+    });
+    const clientB = createFortnoxClient({
+      getAccessToken: async () => 'tenant-b-token',
+      fetch: fetchB,
+      contextLabel: 'tenant-b',
+    });
+
+    await Promise.all([
+      clientA.request('companyinformation'),
+      clientB.request('companyinformation'),
+    ]);
+
+    expect(fetchA).toHaveBeenCalledTimes(1);
+    expect(fetchB).toHaveBeenCalledTimes(1);
+    expect(fetchA).toHaveBeenCalledWith(
+      'https://api.fortnox.se/3/companyinformation',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer tenant-a-token' }),
+      }),
+    );
+    expect(fetchB).toHaveBeenCalledWith(
+      'https://api.fortnox.se/3/companyinformation',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer tenant-b-token' }),
+      }),
+    );
+  });
+
+  it('keeps diagnostic error context isolated between clients', async () => {
+    const errorResponse = (message: string) =>
+      new Response(JSON.stringify({ ErrorInformation: { message, code: 0 } }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    const clientA = createFortnoxClient({
+      getAccessToken: async () => 'tenant-a-token',
+      fetch: vi.fn().mockResolvedValue(errorResponse('failure-a')),
+      contextLabel: 'tenant-a',
+    });
+    const clientB = createFortnoxClient({
+      getAccessToken: async () => 'tenant-b-token',
+      fetch: vi.fn().mockResolvedValue(errorResponse('failure-b')),
+      contextLabel: 'tenant-b',
+    });
+
+    const [resultA, resultB] = await Promise.allSettled([
+      clientA.request('companyinformation', { mutation: true }),
+      clientB.request('companyinformation', { mutation: true }),
+    ]);
+
+    expect(resultA.status).toBe('rejected');
+    expect(resultB.status).toBe('rejected');
+    if (resultA.status !== 'rejected' || resultB.status !== 'rejected') expect.unreachable();
+    expect(resultA.reason).toBeInstanceOf(FortnoxApiError);
+    expect(resultB.reason).toBeInstanceOf(FortnoxApiError);
+    expect((resultA.reason as Error).message).toContain('[context: tenant-a]');
+    expect((resultA.reason as Error).message).not.toContain('tenant-b');
+    expect((resultA.reason as Error).message).not.toContain('tenant-a-token');
+    expect((resultB.reason as Error).message).toContain('[context: tenant-b]');
+    expect((resultB.reason as Error).message).not.toContain('tenant-a');
+    expect((resultB.reason as Error).message).not.toContain('tenant-b-token');
+  });
+
+  it('keeps rate-limit queues isolated between clients', async () => {
+    vi.useFakeTimers();
+    const fetchA = vi.fn().mockImplementation(() => Promise.resolve(new Response('{}')));
+    const fetchB = vi.fn().mockImplementation(() => Promise.resolve(new Response('{}')));
+    const rateLimit = { limit: 1, windowMs: 1_000 };
+    const clientA = createFortnoxClient({
+      getAccessToken: async () => 'tenant-a-token',
+      fetch: fetchA,
+      rateLimit,
+    });
+    const clientB = createFortnoxClient({
+      getAccessToken: async () => 'tenant-b-token',
+      fetch: fetchB,
+      rateLimit,
+    });
+
+    const firstA = clientA.request('customers/1');
+    const secondA = clientA.request('customers/2');
+    const firstB = clientB.request('customers/1');
+
+    await Promise.all([firstA, firstB]);
+    expect(fetchA).toHaveBeenCalledTimes(1);
+    expect(fetchB).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1_050);
+    await secondA;
+    expect(fetchA).toHaveBeenCalledTimes(2);
+  });
+
+  it('exposes metadata, PDF, mutation-PDF, and pagination through the instance', async () => {
+    const previewPdf = Buffer.from('%PDF-preview');
+    const printedPdf = Buffer.from('%PDF-printed\n%%EOF');
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response('{"Recurring":{"DocumentNumber":1}}', {
+          headers: { etag: 'revision-1', 'last-modified': 'today' },
+        }),
+      )
+      .mockResolvedValueOnce(new Response(previewPdf))
+      .mockResolvedValueOnce(new Response(printedPdf))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            Customers: [{ CustomerNumber: '1' }],
+            MetaInformation: {
+              '@TotalPages': 1,
+              '@CurrentPage': 1,
+              '@TotalResources': 1,
+            },
+          }),
+        ),
+      );
+    const client = createFortnoxClient({
+      getAccessToken: async () => 'tenant-token',
+      fetch,
+    });
+
+    await expect(client.requestWithMetadata('recurrings/1')).resolves.toMatchObject({
+      data: { Recurring: { DocumentNumber: 1 } },
+      etag: 'revision-1',
+      lastModified: 'today',
+    });
+    await expect(client.requestPdf('invoices/1/preview')).resolves.toEqual(previewPdf);
+    await expect(client.requestPdfFromMutation('invoices/1/print')).resolves.toEqual(printedPdf);
+    await expect(client.fetchAllPages('customers', 'Customers')).resolves.toEqual({
+      items: [{ CustomerNumber: '1' }],
+      totalResources: 1,
+    });
+  });
+
+  it('rejects invalid per-client rate-limit configuration', () => {
+    expect(() =>
+      createFortnoxClient({
+        getAccessToken: async () => 'tenant-token',
+        rateLimit: { limit: 0 },
+      }),
+    ).toThrow('rateLimit.limit must be a positive integer');
   });
 });
