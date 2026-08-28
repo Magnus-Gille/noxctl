@@ -1,7 +1,7 @@
 # Project Status
 
 **Last session:** 2026-08-28
-**Branch:** `docs/release-0.7.4-handoff`
+**Branch:** `main`
 **Published:** `v0.7.4` on GitHub and `noxctl@0.7.4` on npm (both verified 2026-08-28)
 
 ## Completed This Session
