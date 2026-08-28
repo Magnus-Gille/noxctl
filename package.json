@@ -2,7 +2,7 @@
   "name": "noxctl",
   "version": "0.7.3",
   "mcpName": "io.github.magnus-gille/noxctl",
-  "description": "CLI and MCP server for Fortnox accounting \u2014 invoices, customers, bookkeeping, and VAT",
+  "description": "CLI and MCP server for Fortnox \u2014 invoices, bookkeeping, VAT, payroll, and automation",
   "type": "module",
   "bin": {
     "noxctl": "dist/cli.js"
@@ -27,7 +27,10 @@
   },
   "keywords": [
     "mcp",
+    "model-context-protocol",
     "fortnox",
+    "cli",
+    "automation",
     "accounting",
     "invoicing",
     "bookkeeping",
@@ -35,6 +38,14 @@
   ],
   "author": "Magnus Gille",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Magnus-Gille/noxctl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Magnus-Gille/noxctl/issues"
+  },
+  "homepage": "https://github.com/Magnus-Gille/noxctl#readme",
   "engines": {
     "node": ">=22.12.0"
   },

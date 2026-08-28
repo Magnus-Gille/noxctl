@@ -5,7 +5,7 @@
 If you think you have found a security issue in noxctl, please report it privately
 so it can be investigated and fixed before public disclosure.
 
-- **Preferred:** open a [private security advisory](https://github.com/Magnus-Gille/fortnox-mcp/security/advisories/new) on GitHub.
+- **Preferred:** open a [private security advisory](https://github.com/Magnus-Gille/noxctl/security/advisories/new) on GitHub.
 - **Email:** `magnus.gille@outlook.com` with the subject `noxctl security`.
 
 Please include:

@@ -26,8 +26,8 @@ keychain-backed tests.
 > installs noxctl.
 
 ```bash
-git clone https://github.com/Magnus-Gille/fortnox-mcp.git
-cd fortnox-mcp
+git clone https://github.com/Magnus-Gille/noxctl.git
+cd noxctl
 npm install
 npm run build
 ```
@@ -35,7 +35,7 @@ npm run build
 Common scripts:
 
 ```bash
-npm test              # Vitest — 832 unit tests
+npm test              # Vitest — 833 unit tests
 npm run test:watch    # Vitest in watch mode
 npm run test:live     # Live Fortnox tests (requires credentials — opt-in)
 npm run lint          # ESLint (typescript-eslint)

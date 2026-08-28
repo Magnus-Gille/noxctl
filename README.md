@@ -1,31 +1,66 @@
 # noxctl
 
-Command-line interface (CLI) and Model Context Protocol (MCP) server for Fortnox — manage invoices, customers, bookkeeping, and VAT (Value Added Tax) from the terminal or from AI (Artificial Intelligence) agents like Claude Code.
+[![CI](https://github.com/Magnus-Gille/noxctl/actions/workflows/ci.yml/badge.svg)](https://github.com/Magnus-Gille/noxctl/actions/workflows/ci.yml) [![npm](https://img.shields.io/npm/v/noxctl?logo=npm)](https://www.npmjs.com/package/noxctl) [![Node.js](https://img.shields.io/node/v/noxctl?logo=node.js)](https://www.npmjs.com/package/noxctl) [![License: MIT](https://img.shields.io/github/license/Magnus-Gille/noxctl)](LICENSE)
 
-```
+**Fortnox from the terminal — or from an MCP-compatible AI assistant.**
+
+noxctl is a command-line interface (CLI) and Model Context Protocol (MCP) server for
+invoices, customers, suppliers, bookkeeping, VAT, payroll, and more. Fortnox operations
+share the same CLI and MCP command surface, so you can use noxctl interactively, in
+scripts, or through tools such as Claude Code.
+
+You bring your own Fortnox developer app. Credentials stay in your operating system's
+secure store, and requests go directly from your machine to the Fortnox API — there is
+no shared credential and no backend operated by this project.
+
+> [!IMPORTANT]
+> noxctl is an independent, **unofficial** open-source project. It is **not affiliated
+> with, endorsed by, or certified by Fortnox AB.** You remain responsible for reviewing
+> every operation and complying with applicable terms and accounting, tax, payroll, and
+> privacy rules. See the full [Disclaimer](#disclaimer).
+
+## Why noxctl?
+
+- **One interface, two ways to work:** Fortnox operations are available from both the
+  CLI and MCP; local setup and profile utilities stay in the CLI.
+- **Safe writes by default:** mutations prompt for confirmation, fail closed when piped,
+  and support `--dry-run` / `dryRun` previews.
+- **Built for automation:** human-readable tables in a terminal and stable JSON when
+  piped or requested explicitly.
+- **Local credential control:** OAuth credentials are stored in macOS Keychain, Linux
+  Secret Service, or a DPAPI-protected Windows store.
+- **Multiple companies:** named profiles keep Fortnox tenants separate.
+
+## Quick start
+
+You need Node.js 22.12+, a Fortnox account with API access, and your own Fortnox
+developer app. Linux also requires `secret-tool` for secure credential storage.
+
+```bash
+npm install --global noxctl
 noxctl init                          # interactive setup wizard
-noxctl company info                  # verify connection
+noxctl company info                  # verify the connection
+```
+
+Then explore from the terminal:
+
+```bash
 noxctl customers list                # list customers
 noxctl invoices list --filter unpaid # unpaid invoices
 noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 ```
 
-## Status
+Prefer not to install globally? Replace `noxctl` in any command with `npx noxctl`.
 
-noxctl is an independent, **unofficial** open-source project. It is **not affiliated with, endorsed by, or certified by Fortnox AB.**
-
-Use it with your own Fortnox account and developer credentials. **It is provided "as is", with no warranty and no liability — the author takes no responsibility for anything you do with it; you use it entirely at your own risk and are responsible for complying with Fortnox terms, Swedish bookkeeping/tax/payroll rules, and your own privacy obligations.** See the full [Disclaimer](#disclaimer).
-
-## Prerequisites
-
-- **Node.js** 22.12+
-- **Fortnox account** with API (Application Programming Interface) access
-- **Your own Fortnox developer app** with the required scopes enabled
-- **Linux only:** `secret-tool` available for secure credential storage
-
-Fortnox product plans, API activation requirements, and integration licensing can change. Verify the current Fortnox requirements before publishing or relying on this setup for business-critical work.
+**Documentation:** [full setup](#setup) · [profiles](#profiles-multi-tenant) ·
+[commands and MCP tools](#tools) · [mutation safety](#mutation-safety) ·
+[troubleshooting](#troubleshooting) · [contributing](CONTRIBUTING.md)
 
 ## Setup
+
+Fortnox product plans, API activation requirements, and integration licensing can
+change. Verify the current Fortnox requirements before publishing or relying on this
+setup for business-critical work.
 
 ### How it connects to Fortnox
 
