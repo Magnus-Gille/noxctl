@@ -1,11 +1,11 @@
-import { fortnoxRequest, fetchAllPages } from '../fortnox-client.js';
+import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
 interface InvoicePaymentResponse {
   InvoicePayment: Record<string, unknown>;
 }
 
-interface InvoicePaymentsResponse {
+export interface InvoicePaymentsResponse {
   InvoicePayments: Record<string, unknown>[];
   MetaInformation?: { '@TotalResources': number; '@TotalPages': number; '@CurrentPage': number };
 }
@@ -17,61 +17,77 @@ export interface ListInvoicePaymentsParams {
   all?: boolean;
 }
 
-export async function listInvoicePayments(
-  params: ListInvoicePaymentsParams = {},
-): Promise<InvoicePaymentsResponse> {
-  const queryParams: Record<string, string | number | undefined> = {
-    invoicenumber: params.invoiceNumber,
-  };
-
-  if (params.all) {
-    const { items, totalResources } = await fetchAllPages<Record<string, unknown>>(
-      'invoicepayments',
-      'InvoicePayments',
-      queryParams,
-    );
-    return {
-      InvoicePayments: items,
-      MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+export function createInvoicePaymentOperations(transport: FortnoxTransport) {
+  async function listInvoicePayments(
+    params: ListInvoicePaymentsParams = {},
+  ): Promise<InvoicePaymentsResponse> {
+    const queryParams: Record<string, string | number | undefined> = {
+      invoicenumber: params.invoiceNumber,
     };
+
+    if (params.all) {
+      const { items, totalResources } = await transport.fetchAllPages<Record<string, unknown>>(
+        'invoicepayments',
+        'InvoicePayments',
+        queryParams,
+      );
+      return {
+        InvoicePayments: items,
+        MetaInformation: { '@TotalResources': totalResources, '@TotalPages': 1, '@CurrentPage': 1 },
+      };
+    }
+
+    return transport.request<InvoicePaymentsResponse>('invoicepayments', {
+      params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
+    });
   }
 
-  return fortnoxRequest<InvoicePaymentsResponse>('invoicepayments', {
-    params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
-  });
+  async function getInvoicePayment(paymentNumber: string): Promise<Record<string, unknown>> {
+    const data = await transport.request<InvoicePaymentResponse>(
+      `invoicepayments/${documentSegment(paymentNumber)}`,
+    );
+    return data.InvoicePayment;
+  }
+
+  async function createInvoicePayment(
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<InvoicePaymentResponse>('invoicepayments', {
+      method: 'POST',
+      body: { InvoicePayment: params },
+    });
+    return data.InvoicePayment;
+  }
+
+  async function deleteInvoicePayment(paymentNumber: string): Promise<void> {
+    await transport.request(`invoicepayments/${documentSegment(paymentNumber)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async function bookkeepInvoicePayment(paymentNumber: string): Promise<Record<string, unknown>> {
+    const data = await transport.request<InvoicePaymentResponse>(
+      `invoicepayments/${documentSegment(paymentNumber)}/bookkeep`,
+      {
+        method: 'PUT',
+      },
+    );
+    return data?.InvoicePayment || {};
+  }
+
+  return {
+    listInvoicePayments,
+    getInvoicePayment,
+    createInvoicePayment,
+    deleteInvoicePayment,
+    bookkeepInvoicePayment,
+  };
 }
 
-export async function getInvoicePayment(paymentNumber: string): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoicePaymentResponse>(
-    `invoicepayments/${documentSegment(paymentNumber)}`,
-  );
-  return data.InvoicePayment;
-}
-
-export async function createInvoicePayment(
-  params: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoicePaymentResponse>('invoicepayments', {
-    method: 'POST',
-    body: { InvoicePayment: params },
-  });
-  return data.InvoicePayment;
-}
-
-export async function deleteInvoicePayment(paymentNumber: string): Promise<void> {
-  await fortnoxRequest(`invoicepayments/${documentSegment(paymentNumber)}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function bookkeepInvoicePayment(
-  paymentNumber: string,
-): Promise<Record<string, unknown>> {
-  const data = await fortnoxRequest<InvoicePaymentResponse>(
-    `invoicepayments/${documentSegment(paymentNumber)}/bookkeep`,
-    {
-      method: 'PUT',
-    },
-  );
-  return data?.InvoicePayment || {};
-}
+export const {
+  listInvoicePayments,
+  getInvoicePayment,
+  createInvoicePayment,
+  deleteInvoicePayment,
+  bookkeepInvoicePayment,
+} = createInvoicePaymentOperations(defaultFortnoxTransport);

@@ -671,7 +671,7 @@ export function createFortnoxClient(options: CreateFortnoxClientOptions): Fortno
   return createFortnoxClientInternal(options, 'context');
 }
 
-const defaultClient = createFortnoxClientInternal(
+export const defaultFortnoxTransport = createFortnoxClientInternal(
   {
     getAccessToken: getValidToken,
     contextLabel: () => getResolvedProfile(),
@@ -683,28 +683,28 @@ export async function fortnoxRequest<T>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<T> {
-  return defaultClient.request<T>(endpoint, options);
+  return defaultFortnoxTransport.request<T>(endpoint, options);
 }
 
 export async function fortnoxRequestWithMetadata<T>(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<FortnoxResponse<T>> {
-  return defaultClient.requestWithMetadata<T>(endpoint, options);
+  return defaultFortnoxTransport.requestWithMetadata<T>(endpoint, options);
 }
 
 export async function fortnoxRequestPdf(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<Buffer> {
-  return defaultClient.requestPdf(endpoint, options);
+  return defaultFortnoxTransport.requestPdf(endpoint, options);
 }
 
 export async function fortnoxRequestPdfFromMutation(
   endpoint: string,
   options: RequestOptions = {},
 ): Promise<Buffer | undefined> {
-  return defaultClient.requestPdfFromMutation(endpoint, options);
+  return defaultFortnoxTransport.requestPdfFromMutation(endpoint, options);
 }
 
 export async function fetchAllPages<T extends Record<string, unknown>>(
@@ -712,5 +712,5 @@ export async function fetchAllPages<T extends Record<string, unknown>>(
   dataKey: string,
   params: Record<string, string | number | undefined> = {},
 ): Promise<{ items: T[]; totalResources: number }> {
-  return defaultClient.fetchAllPages<T>(endpoint, dataKey, params);
+  return defaultFortnoxTransport.fetchAllPages<T>(endpoint, dataKey, params);
 }

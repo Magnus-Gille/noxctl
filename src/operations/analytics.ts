@@ -5,8 +5,9 @@
 // Amounts are summed in the invoice currency as returned by Fortnox (no FX
 // conversion) — for single-currency (SEK) tenants the totals are exact.
 
-import { listInvoices } from './invoices.js';
-import { generateTaxReport } from './tax.js';
+import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { createInvoiceOperations } from './invoices.js';
+import { createTaxOperations } from './tax.js';
 
 type InvoiceRow = Record<string, unknown>;
 
@@ -135,13 +136,11 @@ export function dashboardWindowStart(today: Date, months: number): string {
 }
 
 export async function getOverdueSummary(): Promise<OverdueSummary> {
-  const data = await listInvoices({ filter: 'unpaidoverdue', all: true });
-  return summarizeOverdue(data.Invoices ?? [], todayIso());
+  return defaultAnalyticsOperations.getOverdueSummary();
 }
 
 export async function getUnpaidTotals(): Promise<UnpaidSummary> {
-  const data = await listInvoices({ filter: 'unpaid', all: true });
-  return summarizeUnpaid(data.Invoices ?? [], todayIso());
+  return defaultAnalyticsOperations.getUnpaidTotals();
 }
 
 export interface TopCustomersParams {
@@ -154,11 +153,7 @@ export async function getTopCustomers(params: TopCustomersParams = {}): Promise<
   period: { from?: string; to?: string };
   customers: CustomerRevenue[];
 }> {
-  const data = await listInvoices({ fromDate: params.fromDate, toDate: params.toDate, all: true });
-  return {
-    period: { from: params.fromDate, to: params.toDate },
-    customers: topCustomersFrom(data.Invoices ?? [], params.limit ?? 10),
-  };
+  return defaultAnalyticsOperations.getTopCustomers(params);
 }
 
 export interface VatSummaryParams {
@@ -182,8 +177,7 @@ export function netVatFromVatAccounts(
 // Thin wrapper over the tax report adding the bottom line scripted callers
 // usually want: net VAT position (negative = owed to Skatteverket).
 export async function getVatSummary(params: VatSummaryParams) {
-  const report = await generateTaxReport(params);
-  return { ...report, netVat: netVatFromVatAccounts(report.vatAccounts) };
+  return defaultAnalyticsOperations.getVatSummary(params);
 }
 
 export interface Dashboard {
@@ -196,30 +190,67 @@ export interface Dashboard {
 // At-a-glance summary composed from a single full invoice fetch (plus one
 // filtered fetch would be redundant — overdue/unpaid are derived locally).
 export async function getDashboard(options: { months?: number } = {}): Promise<Dashboard> {
-  const months = options.months ?? 6;
-  const now = new Date();
-  const today = localIsoDate(now);
-  const from = dashboardWindowStart(now, months);
-
-  // Two fetches: the windowed one for revenue/recent, and the unpaid filter
-  // (which is date-independent — an old unpaid invoice may predate the window).
-  const [windowed, unpaidData] = await Promise.all([
-    listInvoices({ fromDate: from, toDate: today, all: true }),
-    listInvoices({ filter: 'unpaid', all: true }),
-  ]);
-
-  const windowedRows = windowed.Invoices ?? [];
-  const unpaidRows = unpaidData.Invoices ?? [];
-
-  const recentInvoices = [...windowedRows]
-    .filter((inv) => !isCancelled(inv))
-    .sort((a, b) => String(b.InvoiceDate ?? '').localeCompare(String(a.InvoiceDate ?? '')))
-    .slice(0, 5);
-
-  return {
-    unpaid: summarizeUnpaid(unpaidRows, today),
-    overdue: summarizeOverdue(unpaidRows, today),
-    recentInvoices,
-    monthlyRevenue: monthlyRevenueFrom(windowedRows),
-  };
+  return defaultAnalyticsOperations.getDashboard(options);
 }
+
+export function createAnalyticsOperations(transport: FortnoxTransport) {
+  const { listInvoices } = createInvoiceOperations(transport);
+  const { generateTaxReport } = createTaxOperations(transport);
+
+  async function getOverdueSummary(): Promise<OverdueSummary> {
+    const data = await listInvoices({ filter: 'unpaidoverdue', all: true });
+    return summarizeOverdue(data.Invoices ?? [], todayIso());
+  }
+
+  async function getUnpaidTotals(): Promise<UnpaidSummary> {
+    const data = await listInvoices({ filter: 'unpaid', all: true });
+    return summarizeUnpaid(data.Invoices ?? [], todayIso());
+  }
+
+  async function getTopCustomers(params: TopCustomersParams = {}): Promise<{
+    period: { from?: string; to?: string };
+    customers: CustomerRevenue[];
+  }> {
+    const data = await listInvoices({
+      fromDate: params.fromDate,
+      toDate: params.toDate,
+      all: true,
+    });
+    return {
+      period: { from: params.fromDate, to: params.toDate },
+      customers: topCustomersFrom(data.Invoices ?? [], params.limit ?? 10),
+    };
+  }
+
+  async function getVatSummary(params: VatSummaryParams) {
+    const report = await generateTaxReport(params);
+    return { ...report, netVat: netVatFromVatAccounts(report.vatAccounts) };
+  }
+
+  async function getDashboard(options: { months?: number } = {}): Promise<Dashboard> {
+    const months = options.months ?? 6;
+    const now = new Date();
+    const today = localIsoDate(now);
+    const from = dashboardWindowStart(now, months);
+    const [windowed, unpaidData] = await Promise.all([
+      listInvoices({ fromDate: from, toDate: today, all: true }),
+      listInvoices({ filter: 'unpaid', all: true }),
+    ]);
+    const windowedRows = windowed.Invoices ?? [];
+    const unpaidRows = unpaidData.Invoices ?? [];
+    const recentInvoices = [...windowedRows]
+      .filter((inv) => !isCancelled(inv))
+      .sort((a, b) => String(b.InvoiceDate ?? '').localeCompare(String(a.InvoiceDate ?? '')))
+      .slice(0, 5);
+    return {
+      unpaid: summarizeUnpaid(unpaidRows, today),
+      overdue: summarizeOverdue(unpaidRows, today),
+      recentInvoices,
+      monthlyRevenue: monthlyRevenueFrom(windowedRows),
+    };
+  }
+
+  return { getOverdueSummary, getUnpaidTotals, getTopCustomers, getVatSummary, getDashboard };
+}
+
+const defaultAnalyticsOperations = createAnalyticsOperations(defaultFortnoxTransport);
