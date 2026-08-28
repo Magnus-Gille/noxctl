@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listAttendanceTransactions,
-  getAttendanceTransaction,
-  createAttendanceTransaction,
-  deleteAttendanceTransaction,
-} from '../operations/attendancetransactions.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { attendanceTransactionListColumns, attendanceTransactionDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -15,7 +10,16 @@ import {
   textResponse,
 } from '../tool-output.js';
 
-export function registerAttendanceTransactionTools(server: McpServer): void {
+export function registerAttendanceTransactionTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listAttendanceTransactions,
+    getAttendanceTransaction,
+    createAttendanceTransaction,
+    deleteAttendanceTransaction,
+  } = operations;
   server.tool(
     'fortnox_list_attendancetransactions',
     'Lista närvarotransaktioner i Fortnox (kräver Lön-behörigheten). Returnerar: id, EmployeeId, CauseCode, Date, Hours.',

@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listSuppliers,
-  getSupplier,
-  createSupplier,
-  updateSupplier,
-} from '../operations/suppliers.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { supplierListColumns, supplierDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -64,7 +59,11 @@ const supplierWritableFields = {
   Active: z.boolean().optional().describe('Aktiv leverantör'),
 };
 
-export function registerSupplierTools(server: McpServer): void {
+export function registerSupplierTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listSuppliers, getSupplier, createSupplier, updateSupplier } = operations;
   server.tool(
     'fortnox_list_suppliers',
     'Lista/sök leverantörer i Fortnox. Returnerar: SupplierNumber, Name, OrganisationNumber, City, Email.',

@@ -10,17 +10,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import {
-  listInvoices,
-  getInvoice,
-  createInvoice,
-  updateInvoice,
-  sendInvoice,
-  getInvoicePdf,
-  markInvoicePrinted,
-  bookkeepInvoice,
-  creditInvoice,
-} from '../operations/invoices.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { invoiceListColumns, invoiceDetailColumns, invoiceConfirmColumns } from '../views.js';
 import {
   confirmationResponse,
@@ -96,7 +86,21 @@ function writePdf(target: string, pdf: Buffer, overwrite?: boolean): void {
   }
 }
 
-export function registerInvoiceTools(server: McpServer): void {
+export function registerInvoiceTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listInvoices,
+    getInvoice,
+    createInvoice,
+    updateInvoice,
+    sendInvoice,
+    getInvoicePdf,
+    markInvoicePrinted,
+    bookkeepInvoice,
+    creditInvoice,
+  } = operations;
   server.tool(
     'fortnox_list_invoices',
     'Lista/filtrera fakturor i Fortnox. Returnerar: DocumentNumber, CustomerName, InvoiceDate, DueDate, Total, Balance.',

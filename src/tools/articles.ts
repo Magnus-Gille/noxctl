@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { listArticles, getArticle, createArticle, updateArticle } from '../operations/articles.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { articleListColumns, articleDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -9,7 +9,11 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-export function registerArticleTools(server: McpServer): void {
+export function registerArticleTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listArticles, getArticle, createArticle, updateArticle } = operations;
   server.tool(
     'fortnox_list_articles',
     'Lista/sök artiklar i Fortnox. Returnerar: ArticleNumber, Description, SalesPrice, Unit, Active.',

@@ -1,9 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { generateTaxReport } from '../operations/tax.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { taxReportResponse } from '../tool-output.js';
 
-export function registerTaxTools(server: McpServer): void {
+export function registerTaxTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { generateTaxReport } = operations;
   server.tool(
     'fortnox_tax_report',
     'Informativ momssammanstallning for en period. Kontrollera alltid mot Fortnox momsrapport innan deklaration.',

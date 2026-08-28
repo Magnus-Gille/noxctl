@@ -1,16 +1,15 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  getOverdueSummary,
-  getUnpaidTotals,
-  getTopCustomers,
-  getVatSummary,
-} from '../operations/analytics.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { invoiceListColumns, topCustomerColumns } from '../views.js';
 import { formatTable, formatTaxReport } from '../formatter.js';
 import { textResponse } from '../tool-output.js';
 
-export function registerAnalyticsTools(server: McpServer): void {
+export function registerAnalyticsTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { getOverdueSummary, getUnpaidTotals, getTopCustomers, getVatSummary } = operations;
   server.tool(
     'fortnox_overdue_invoices',
     'Sammanfattning av förfallna obetalda fakturor: antal, totalt utestående belopp, äldsta förfallodatum och listan (äldst först). Användbart för snabb ekonomisk överblick.',

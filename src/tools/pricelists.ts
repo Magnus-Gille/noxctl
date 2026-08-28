@@ -1,14 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listPriceLists,
-  getPriceList,
-  createPriceList,
-  updatePriceList,
-  listPrices,
-  getPrice,
-  updatePrice,
-} from '../operations/pricelists.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import {
   priceListListColumns,
   priceListDetailColumns,
@@ -22,7 +14,19 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-export function registerPriceListTools(server: McpServer): void {
+export function registerPriceListTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listPriceLists,
+    getPriceList,
+    createPriceList,
+    updatePriceList,
+    listPrices,
+    getPrice,
+    updatePrice,
+  } = operations;
   server.tool(
     'fortnox_list_pricelists',
     'Lista prislistor i Fortnox. Returnerar: Code, Description, Comments, PreSelected.',

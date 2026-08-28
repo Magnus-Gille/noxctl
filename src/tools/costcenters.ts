@@ -1,12 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listCostCenters,
-  getCostCenter,
-  createCostCenter,
-  updateCostCenter,
-  deleteCostCenter,
-} from '../operations/costcenters.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { costCenterListColumns, costCenterDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -16,7 +10,12 @@ import {
   textResponse,
 } from '../tool-output.js';
 
-export function registerCostCenterTools(server: McpServer): void {
+export function registerCostCenterTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listCostCenters, getCostCenter, createCostCenter, updateCostCenter, deleteCostCenter } =
+    operations;
   server.tool(
     'fortnox_list_costcenters',
     'Lista kostnadsställen i Fortnox. Returnerar: Code, Description, Active.',

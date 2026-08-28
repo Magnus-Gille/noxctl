@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listSalaryTransactions,
-  getSalaryTransaction,
-  createSalaryTransaction,
-  deleteSalaryTransaction,
-} from '../operations/salarytransactions.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { salaryTransactionListColumns, salaryTransactionDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -15,7 +10,16 @@ import {
   textResponse,
 } from '../tool-output.js';
 
-export function registerSalaryTransactionTools(server: McpServer): void {
+export function registerSalaryTransactionTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listSalaryTransactions,
+    getSalaryTransaction,
+    createSalaryTransaction,
+    deleteSalaryTransaction,
+  } = operations;
   server.tool(
     'fortnox_list_salarytransactions',
     'Lista lönetransaktioner i Fortnox (kräver Lön-behörigheten). Returnerar: SalaryRow, EmployeeId, SalaryCode, Date, Amount.',

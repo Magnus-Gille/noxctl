@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listAbsenceTransactions,
-  getAbsenceTransaction,
-  createAbsenceTransaction,
-  deleteAbsenceTransaction,
-} from '../operations/absencetransactions.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { absenceTransactionListColumns, absenceTransactionDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -15,7 +10,16 @@ import {
   textResponse,
 } from '../tool-output.js';
 
-export function registerAbsenceTransactionTools(server: McpServer): void {
+export function registerAbsenceTransactionTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listAbsenceTransactions,
+    getAbsenceTransaction,
+    createAbsenceTransaction,
+    deleteAbsenceTransaction,
+  } = operations;
   server.tool(
     'fortnox_list_absencetransactions',
     'Lista frånvarotransaktioner i Fortnox (kräver Lön-behörigheten). Returnerar: id, EmployeeId, CauseCode, Date, Hours.',

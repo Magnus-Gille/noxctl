@@ -1,10 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  getScheduleTime,
-  updateScheduleTime,
-  resetScheduleTimeDay,
-} from '../operations/scheduletimes.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { scheduleTimeDetailColumns } from '../views.js';
 import { detailResponse, dryRunResponse, requireConfirmation } from '../tool-output.js';
 
@@ -20,7 +16,11 @@ const scheduleTimeWritableFields = {
   IWH5: z.string().optional().describe('OB-tid 5 (obekväm arbetstid)'),
 };
 
-export function registerScheduleTimeTools(server: McpServer): void {
+export function registerScheduleTimeTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { getScheduleTime, updateScheduleTime, resetScheduleTimeDay } = operations;
   server.tool(
     'fortnox_get_scheduletime',
     'Hämta en schematid för en anställd och ett datum från Fortnox (kräver Lön-behörigheten).',

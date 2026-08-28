@@ -1,12 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { listAccounts } from '../operations/accounts.js';
-import {
-  listVouchers,
-  getVoucher,
-  createVoucher,
-  attachVoucherFiles,
-} from '../operations/vouchers.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import {
   accountListColumns,
   voucherDetailColumns,
@@ -57,7 +51,11 @@ const VoucherSeriesSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,9}$/, 'Voucher series must be alphanumeric')
   .optional();
 
-export function registerBookkeepingTools(server: McpServer): void {
+export function registerBookkeepingTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listAccounts, listVouchers, getVoucher, createVoucher, attachVoucherFiles } = operations;
   server.tool(
     'fortnox_list_vouchers',
     'Lista verifikationer i Fortnox. Returnerar: VoucherSeries, VoucherNumber, TransactionDate, Description.',

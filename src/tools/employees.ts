@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listEmployees,
-  getEmployee,
-  createEmployee,
-  updateEmployee,
-} from '../operations/employees.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { employeeListColumns, employeeDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -58,7 +53,11 @@ const employeeWritableFields = {
   PayslipType: z.string().optional().describe('Lönebeskedstyp: pdf, digital eller kivra'),
 };
 
-export function registerEmployeeTools(server: McpServer): void {
+export function registerEmployeeTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listEmployees, getEmployee, createEmployee, updateEmployee } = operations;
   server.tool(
     'fortnox_list_employees',
     'Lista anställda i Fortnox (kräver Lön-behörigheten). Returnerar: EmployeeId, FullName, JobTitle, Inactive.',

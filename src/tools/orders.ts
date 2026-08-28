@@ -1,12 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listOrders,
-  getOrder,
-  createOrder,
-  updateOrder,
-  createInvoiceFromOrder,
-} from '../operations/orders.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { orderListColumns, orderDetailColumns, orderConfirmColumns } from '../views.js';
 import {
   confirmationResponse,
@@ -29,7 +23,11 @@ const OrderRowSchema = z.object({
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
 
-export function registerOrderTools(server: McpServer): void {
+export function registerOrderTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listOrders, getOrder, createOrder, updateOrder, createInvoiceFromOrder } = operations;
   server.tool(
     'fortnox_list_orders',
     'Lista/filtrera ordrar i Fortnox. Returnerar: DocumentNumber, CustomerName, OrderDate, DeliveryDate, Total.',
