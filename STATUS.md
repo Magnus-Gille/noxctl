@@ -1,14 +1,15 @@
 # Project Status
 
 **Last session:** 2026-08-28
-**Branch:** `docs/refresh-readme-front-page` (local, not published)
+**Branch:** `docs/refresh-readme-front-page` (published as PR #112)
 **Published:** `v0.7.3` on GitHub and `noxctl@0.7.3` on npm (both verified 2026-08-27)
 
 ## Completed This Session
 
-- Refreshed the README opening for first-time visitors: trust model, native GitHub badges/callout, accurate value summary, global-install and `npx` quick starts, and navigation into the long-form reference.
+- Refreshed the README opening for first-time visitors: trust model, badges and a GitHub-native callout, accurate value summary, global-install and `npx` quick starts, and navigation into the long-form reference.
 - Corrected stale pre-rename clone and private-security-advisory links, and added canonical repository/bugs/homepage plus discovery keywords to npm package metadata.
-- Verified GitHub Markdown rendering, local links/anchors, package metadata and dry-run contents, lint, TypeScript formatting, build, and all 833 tests across 73 files. The public Open Graph preview is clean but still uses the old Claude-specific GitHub About description until that repository metadata is updated.
+- Verified GitHub Markdown rendering, local links/anchors, package metadata and dry-run contents, lint, TypeScript formatting, build, and all 833 tests across 73 files.
+- Published PR #112 and updated the GitHub About description, npm homepage, and ten discovery topics. The refreshed public Open Graph metadata now uses the broader CLI/MCP positioning.
 
 ## Previous Session (2026-08-27)
 
@@ -39,7 +40,7 @@ Found and fixed without being reported:
 
 ## In Progress
 
-The README/front-page refresh is complete locally. Publishing requires an owner-approved push/PR plus an explicit GitHub About metadata update (description, npm homepage, and topics).
+PR #112 is open for the README/front-page refresh. The GitHub About metadata is live; merge only after required CI passes on the final PR head.
 
 ## Blockers
 
@@ -47,7 +48,7 @@ None.
 
 ## Next Steps
 
-1. Publish `docs/refresh-readme-front-page` through a pull request and update the GitHub About description/homepage/topics after explicit owner approval.
+1. Review and merge PR #112 after required CI passes; no automatic merge is configured.
 2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
 3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
 4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
