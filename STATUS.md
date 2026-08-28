@@ -48,20 +48,19 @@ Found and fixed without being reported:
 
 ## In Progress
 
-The public hosted-core implementation is complete and committed locally as four ordered feature commits plus a final review-fix/status commit. Nothing has been pushed and no PR, release, deployment, or npm publication has been created.
+The public hosted-core implementation and its review history are tracked in PR #123. GitHub is authoritative for its current merge state. This work does not include an npm release, deployment, or production-host publication.
 
 ## Blockers
 
-Publication requires Magnus's explicit approval of the exact branch push and PR target.
+No public-core code blocker is known. The private hosted product still depends on answers from Fortnox about partner/App Market, OAuth, commercial, and data-processing requirements.
 
 ## Next Steps
 
-1. With owner approval, push `feat/122-embedded-api` to `origin` and open one reviewable PR against `main` linking #118 and closing #119–#122. Do not publish npm or deploy anything as part of that step.
-2. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
-3. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
-4. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
-5. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
-6. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
+1. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
+2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
+3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
+4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
+5. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
 
 ## Notes
 
