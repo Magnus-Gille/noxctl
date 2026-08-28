@@ -50,7 +50,7 @@ noxctl invoices list --filter unpaid # unpaid invoices
 noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 ```
 
-Prefer not to install globally? Replace `noxctl` in any command with `npx noxctl`.
+Prefer not to install globally? Skip the install command and run CLI commands as `npx noxctl <command>` instead.
 
 **Documentation:** [full setup](#setup) · [profiles](#profiles-multi-tenant) ·
 [commands and MCP tools](#tools) · [mutation safety](#mutation-safety) ·
