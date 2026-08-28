@@ -20,7 +20,7 @@ async function createTenantServer(authenticatedSession: AuthenticatedSession) {
 }
 ```
 
-The MCP schemas deliberately contain no tenant, profile, or token-routing fields. A server created with `{ transport }` also omits the local `fortnox_status` tool because that tool inspects the machine's local profile and keychain. `createServer()` without arguments preserves the local stdio-compatible tool set.
+The MCP schemas deliberately contain no tenant, profile, or token-routing fields. An embedded server requires `{ transport }` and omits the local `fortnox_status` tool because that tool inspects the machine's local profile and keychain. Only the legacy root API's zero-argument `createServer()` preserves the local stdio-compatible tool set.
 
 ## Lifecycle and concurrency
 
@@ -53,6 +53,8 @@ The `noxctl/embedded` entry point intentionally uses an allowlist. It exports:
 - `createFortnoxOperations` and `FortnoxOperations`;
 - `createServer` and `CreateServerOptions`.
 
-It does not export local auth, profiles, keychain functions, CLI startup, `startMcpServer`, or the local default transport/operations. Consumers should never import internal `dist/...` paths for embedded use.
+It does not export local auth, profiles, keychain functions, CLI startup, `startMcpServer`, or the local default transport/operations. Its `createServer` requires a transport and fails closed if one is missing.
+
+The package retains its older root and `dist/*` entry points for local-CLI and deep-import compatibility. Those paths are not an isolation boundary and must not be used by hosted integrations; embedded hosts must import only `noxctl/embedded`.
 
 The embedded surface is versioned with the `noxctl` npm package. Release checks pack the real tarball and verify both runtime and TypeScript consumption through `noxctl/embedded`.

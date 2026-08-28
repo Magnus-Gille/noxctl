@@ -61,7 +61,7 @@ try {
   }
 
   renameSync(packedPackageDir, join(consumerNodeModules, 'noxctl'));
-  for (const dependency of ['@modelcontextprotocol/sdk', 'zod', '@types/node']) {
+  for (const dependency of ['@modelcontextprotocol/sdk', 'commander', 'zod', '@types/node']) {
     linkDependency(dependency, consumerNodeModules);
   }
 
@@ -81,6 +81,14 @@ const operations = createFortnoxOperations(transport);
 const server = createServer({ transport });
 if (typeof operations.getCompanyInfo !== 'function' || typeof server.connect !== 'function') {
   throw new Error('Embedded runtime exports are incomplete');
+}
+for (const invalid of [undefined, {}]) {
+  try {
+    createServer(invalid);
+    throw new Error('Embedded createServer accepted a missing tenant transport');
+  } catch (error) {
+    if (!String(error).includes('tenant-bound transport')) throw error;
+  }
 }
 `,
   );
@@ -104,11 +112,14 @@ const transport: FortnoxTransport = createFortnoxClient(clientOptions);
 const operations: FortnoxOperations = createFortnoxOperations(transport);
 const serverOptions: CreateServerOptions = { transport };
 createServer(serverOptions);
+// @ts-expect-error Embedded servers must fail closed without a tenant transport.
+createServer();
 void operations;
 `,
   );
 
   run(process.execPath, ['runtime.mjs'], consumerDir);
+  run(process.execPath, [join(consumerNodeModules, 'noxctl', 'dist', 'cli.js'), '--help'], consumerDir);
   run(
     process.execPath,
     [

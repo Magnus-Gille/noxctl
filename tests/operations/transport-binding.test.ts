@@ -60,6 +60,21 @@ describe('client-bound operations', () => {
     expect(transport.requestPdf).toHaveBeenCalledWith('invoices/42/preview');
   });
 
+  it.each(['email', 'einvoice'] as const)(
+    'classifies invoice %s delivery as a non-retryable mutation',
+    async (method) => {
+      const transport = stubTransport('Tenant AB');
+      vi.mocked(transport.request).mockResolvedValue({ Invoice: { DocumentNumber: '42' } });
+      const invoices = createInvoiceOperations(transport);
+
+      await invoices.sendInvoice('42', method);
+
+      expect(transport.request).toHaveBeenCalledWith(`invoices/42/${method}`, {
+        mutation: true,
+      });
+    },
+  );
+
   it('aggregates every operation family into one frozen bound set', () => {
     const operations = createFortnoxOperations(stubTransport('Tenant AB'));
 

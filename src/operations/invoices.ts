@@ -134,7 +134,11 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
       throw new Error(`Unsupported send method: ${String(method)}`);
     }
 
-    const data = await transport.request<InvoiceResponse>(`invoices/${documentId}/${method}`);
+    const data = await transport.request<InvoiceResponse>(`invoices/${documentId}/${method}`, {
+      // Fortnox models these delivery actions as GET, but they send an invoice
+      // to a customer. Never retry them automatically after an ambiguous error.
+      mutation: true,
+    });
     return data?.Invoice || {};
   }
 
