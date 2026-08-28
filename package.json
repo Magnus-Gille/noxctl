@@ -8,6 +8,21 @@
     "noxctl": "dist/cli.js"
   },
   "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./embedded": {
+      "types": "./dist/embedded.d.ts",
+      "import": "./dist/embedded.js",
+      "default": "./dist/embedded.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -20,7 +35,7 @@
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
     "verify": "npm run lint && npm run format:check && npm run build && npm test",
-    "check:release": "npm run verify && npm audit --omit=dev && npm pack --dry-run --ignore-scripts",
+    "check:release": "npm run verify && npm audit --omit=dev && node scripts/check-embedded-consumer.mjs && npm pack --dry-run --ignore-scripts",
     "check:api": "bash scripts/check-api-changes.sh",
     "prepublishOnly": "npm run check:release",
     "prepare": "husky"
@@ -51,6 +66,7 @@
   },
   "files": [
     "dist/",
+    "docs/embedded.md",
     "README.md",
     "LICENSE"
   ],
