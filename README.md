@@ -54,7 +54,8 @@ Prefer not to install globally? Skip the install command and run CLI commands as
 
 **Documentation:** [full setup](#setup) · [profiles](#profiles-multi-tenant) ·
 [commands and MCP tools](#tools) · [mutation safety](#mutation-safety) ·
-[troubleshooting](#troubleshooting) · [contributing](CONTRIBUTING.md)
+[embedded runtimes](docs/embedded.md) · [troubleshooting](#troubleshooting) ·
+[contributing](CONTRIBUTING.md)
 
 ## Setup
 
@@ -218,6 +219,10 @@ To run multiple MCP servers (one per tenant) in parallel, register them with dis
 claude mcp add fortnox-prod     -- npx noxctl serve
 claude mcp add fortnox-staging  -e NOXCTL_PROFILE=staging -- npx noxctl serve
 ```
+
+### Embedded and hosted runtimes
+
+Applications that supply their own authenticated Fortnox tenant context can use the supported `noxctl/embedded` package entry point. It provides an isolated client, typed operation set, and MCP server factory without exporting the local profile, keychain, or CLI startup APIs. See the [embedded runtime API and host responsibility boundary](docs/embedded.md).
 
 Non-default sessions print a `[profile: <name>]` stderr banner on startup and prefix every Fortnox API error and token-refresh failure with the same tag so mis-bound sessions are diagnosable from a single error line.
 

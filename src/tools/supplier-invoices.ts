@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listSupplierInvoices,
-  getSupplierInvoice,
-  createSupplierInvoice,
-  bookkeepSupplierInvoice,
-} from '../operations/supplier-invoices.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import {
   supplierInvoiceListColumns,
   supplierInvoiceDetailColumns,
@@ -25,7 +20,16 @@ const SupplierInvoiceRowSchema = z.object({
   Description: z.string().optional().describe('Beskrivning'),
 });
 
-export function registerSupplierInvoiceTools(server: McpServer): void {
+export function registerSupplierInvoiceTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listSupplierInvoices,
+    getSupplierInvoice,
+    createSupplierInvoice,
+    bookkeepSupplierInvoice,
+  } = operations;
   server.tool(
     'fortnox_list_supplier_invoices',
     'Lista leverantörsfakturor i Fortnox. Returnerar: GivenNumber, SupplierName, InvoiceDate, DueDate, Total, Balance.',

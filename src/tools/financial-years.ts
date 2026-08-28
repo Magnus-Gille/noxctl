@@ -1,10 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listFinancialYears,
-  getFinancialYear,
-  getLockedPeriod,
-} from '../operations/financial-years.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import {
   financialYearListColumns,
   financialYearDetailColumns,
@@ -12,7 +8,11 @@ import {
 } from '../views.js';
 import { detailResponse, listResponse, textResponse } from '../tool-output.js';
 
-export function registerFinancialYearTools(server: McpServer): void {
+export function registerFinancialYearTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listFinancialYears, getFinancialYear, getLockedPeriod } = operations;
   server.tool(
     'fortnox_list_financialyears',
     'Lista räkenskapsår i Fortnox. Returnerar: Id, FromDate, ToDate, AccountingMethod, AccountChartType. Kan filtreras till det räkenskapsår som innehåller ett visst datum.',

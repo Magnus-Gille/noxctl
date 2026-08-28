@@ -3,6 +3,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { setResolvedProfile } from './auth.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
 import { readActivePointerOutcome, resolveProfile } from './profiles.js';
+import type { FortnoxTransport } from './fortnox-client.js';
+import { createFortnoxOperations, defaultFortnoxOperations } from './operations/index.js';
 import { registerCustomerTools } from './tools/customers.js';
 import { registerInvoiceTools } from './tools/invoices.js';
 import { registerBookkeepingTools } from './tools/bookkeeping.js';
@@ -31,39 +33,50 @@ import { registerAttendanceTransactionTools } from './tools/attendancetransactio
 import { registerAbsenceTransactionTools } from './tools/absencetransactions.js';
 import { registerScheduleTimeTools } from './tools/scheduletimes.js';
 
-export function createServer(): McpServer {
+export interface CreateServerOptions {
+  /** Host-authorized transport for exactly one tenant context. */
+  transport?: FortnoxTransport;
+}
+
+export function createServer(options: CreateServerOptions = {}): McpServer {
   const server = new McpServer({
     name: 'fortnox-mcp',
     version: '0.7.4',
   });
+  const operations = options.transport
+    ? createFortnoxOperations(options.transport)
+    : defaultFortnoxOperations;
 
-  registerCustomerTools(server);
-  registerInvoiceTools(server);
-  registerBookkeepingTools(server);
-  registerTaxTools(server);
-  registerCompanyTools(server);
-  registerArticleTools(server);
-  registerSupplierTools(server);
-  registerSupplierInvoiceTools(server);
-  registerFinancialReportTools(server);
-  registerStatusTools(server);
-  registerInvoicePaymentTools(server);
-  registerSupplierInvoicePaymentTools(server);
-  registerOfferTools(server);
-  registerOrderTools(server);
-  registerProjectTools(server);
-  registerCostCenterTools(server);
-  registerTaxReductionTools(server);
-  registerPriceListTools(server);
-  registerFinancialYearTools(server);
-  registerContractTools(server);
-  registerRecurringTools(server);
-  registerAnalyticsTools(server);
-  registerEmployeeTools(server);
-  registerSalaryTransactionTools(server);
-  registerAttendanceTransactionTools(server);
-  registerAbsenceTransactionTools(server);
-  registerScheduleTimeTools(server);
+  registerCustomerTools(server, operations);
+  registerInvoiceTools(server, operations);
+  registerBookkeepingTools(server, operations);
+  registerTaxTools(server, operations);
+  registerCompanyTools(server, operations);
+  registerArticleTools(server, operations);
+  registerSupplierTools(server, operations);
+  registerSupplierInvoiceTools(server, operations);
+  registerFinancialReportTools(server, operations);
+  // The status tool inspects this process's local profile/keychain. It remains
+  // useful for local stdio sessions but must not expose host state in an
+  // embedded tenant-bound server.
+  if (!options.transport) registerStatusTools(server);
+  registerInvoicePaymentTools(server, operations);
+  registerSupplierInvoicePaymentTools(server, operations);
+  registerOfferTools(server, operations);
+  registerOrderTools(server, operations);
+  registerProjectTools(server, operations);
+  registerCostCenterTools(server, operations);
+  registerTaxReductionTools(server, operations);
+  registerPriceListTools(server, operations);
+  registerFinancialYearTools(server, operations);
+  registerContractTools(server, operations);
+  registerRecurringTools(server, operations);
+  registerAnalyticsTools(server, operations);
+  registerEmployeeTools(server, operations);
+  registerSalaryTransactionTools(server, operations);
+  registerAttendanceTransactionTools(server, operations);
+  registerAbsenceTransactionTools(server, operations);
+  registerScheduleTimeTools(server, operations);
 
   return server;
 }

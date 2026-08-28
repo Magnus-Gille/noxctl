@@ -1,10 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getIncomeStatement, getBalanceSheet } from '../operations/financial-reports.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { formatFinancialReport } from '../formatter.js';
 import { textResponse } from '../tool-output.js';
 
-export function registerFinancialReportTools(server: McpServer): void {
+export function registerFinancialReportTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { getIncomeStatement, getBalanceSheet } = operations;
   server.tool(
     'fortnox_income_statement',
     'Resultaträkning — visar intäkter, kostnader och resultat. Kan filtreras på period med fromDate/toDate.',

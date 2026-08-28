@@ -1,4 +1,4 @@
-import { fortnoxRequest } from '../fortnox-client.js';
+import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 
 interface AccountEntry {
   Number: number;
@@ -100,226 +100,231 @@ const BALANCE_SHEET_LIABILITY_GROUPS: { range: [number, number]; label: string }
 ];
 
 /** Fetch all pages of accounts for a financial year. */
-async function fetchAllAccounts(financialYear?: number): Promise<AccountEntry[]> {
-  const all: AccountEntry[] = [];
-  let page = 1;
-  let totalPages = 1;
+export function createFinancialReportOperations(transport: FortnoxTransport) {
+  async function fetchAllAccounts(financialYear?: number): Promise<AccountEntry[]> {
+    const all: AccountEntry[] = [];
+    let page = 1;
+    let totalPages = 1;
 
-  do {
-    const data = await fortnoxRequest<AccountsResponse>('accounts', {
-      params: { financialyear: financialYear, page },
-    });
-    all.push(...data.Accounts);
-    totalPages = data.MetaInformation?.['@TotalPages'] ?? 1;
-    page++;
-  } while (page <= totalPages);
-
-  return all;
-}
-
-interface VoucherDetailResponse {
-  Voucher: { VoucherRows?: VoucherRow[]; [key: string]: unknown };
-}
-
-/** Fetch all vouchers (list + individual details) and sum debit/credit per account. */
-async function fetchVoucherSums(
-  financialYear?: number,
-  fromDate?: string,
-  toDate?: string,
-): Promise<Map<number, { debit: number; credit: number }>> {
-  const sums = new Map<number, { debit: number; credit: number }>();
-
-  // Step 1: List all vouchers to get series/number identifiers
-  const vouchers: { series: string; number: number }[] = [];
-  let page = 1;
-  let totalPages = 1;
-
-  do {
-    const data = await fortnoxRequest<VouchersResponse>('vouchers', {
-      params: {
-        financialyear: financialYear,
-        fromdate: fromDate,
-        todate: toDate,
-        page,
-        limit: 100,
-      },
-    });
-    for (const v of data.Vouchers ?? []) {
-      vouchers.push({
-        series: v.VoucherSeries as string,
-        number: v.VoucherNumber as number,
+    do {
+      const data = await transport.request<AccountsResponse>('accounts', {
+        params: { financialyear: financialYear, page },
       });
-    }
-    totalPages = data.MetaInformation?.['@TotalPages'] ?? 1;
-    page++;
-  } while (page <= totalPages);
+      all.push(...data.Accounts);
+      totalPages = data.MetaInformation?.['@TotalPages'] ?? 1;
+      page++;
+    } while (page <= totalPages);
 
-  // Step 2: Fetch voucher details concurrently. The shared client still owns
-  // rate limiting; this pool only keeps network latency from serialising reads.
-  const yearParam = financialYear ? `?financialyear=${financialYear}` : '';
-  let nextVoucherIndex = 0;
-  let failure: unknown;
+    return all;
+  }
 
-  async function worker(): Promise<void> {
-    while (failure === undefined) {
-      const voucherIndex = nextVoucherIndex++;
-      if (voucherIndex >= vouchers.length) return;
-      const voucher = vouchers[voucherIndex]!;
+  interface VoucherDetailResponse {
+    Voucher: { VoucherRows?: VoucherRow[]; [key: string]: unknown };
+  }
 
-      try {
-        const detail = await fortnoxRequest<VoucherDetailResponse>(
-          `vouchers/${encodeURIComponent(voucher.series)}/${voucher.number}${yearParam}`,
-        );
-        for (const row of detail.Voucher.VoucherRows ?? []) {
-          if (row.Removed === true) continue;
-          const existing = sums.get(row.Account) ?? { debit: 0, credit: 0 };
-          existing.debit += row.Debit || 0;
-          existing.credit += row.Credit || 0;
-          sums.set(row.Account, existing);
+  /** Fetch all vouchers (list + individual details) and sum debit/credit per account. */
+  async function fetchVoucherSums(
+    financialYear?: number,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<Map<number, { debit: number; credit: number }>> {
+    const sums = new Map<number, { debit: number; credit: number }>();
+
+    // Step 1: List all vouchers to get series/number identifiers
+    const vouchers: { series: string; number: number }[] = [];
+    let page = 1;
+    let totalPages = 1;
+
+    do {
+      const data = await transport.request<VouchersResponse>('vouchers', {
+        params: {
+          financialyear: financialYear,
+          fromdate: fromDate,
+          todate: toDate,
+          page,
+          limit: 100,
+        },
+      });
+      for (const v of data.Vouchers ?? []) {
+        vouchers.push({
+          series: v.VoucherSeries as string,
+          number: v.VoucherNumber as number,
+        });
+      }
+      totalPages = data.MetaInformation?.['@TotalPages'] ?? 1;
+      page++;
+    } while (page <= totalPages);
+
+    // Step 2: Fetch voucher details concurrently. The shared client still owns
+    // rate limiting; this pool only keeps network latency from serialising reads.
+    const yearParam = financialYear ? `?financialyear=${financialYear}` : '';
+    let nextVoucherIndex = 0;
+    let failure: unknown;
+
+    async function worker(): Promise<void> {
+      while (failure === undefined) {
+        const voucherIndex = nextVoucherIndex++;
+        if (voucherIndex >= vouchers.length) return;
+        const voucher = vouchers[voucherIndex]!;
+
+        try {
+          const detail = await transport.request<VoucherDetailResponse>(
+            `vouchers/${encodeURIComponent(voucher.series)}/${voucher.number}${yearParam}`,
+          );
+          for (const row of detail.Voucher.VoucherRows ?? []) {
+            if (row.Removed === true) continue;
+            const existing = sums.get(row.Account) ?? { debit: 0, credit: 0 };
+            existing.debit += row.Debit || 0;
+            existing.credit += row.Credit || 0;
+            sums.set(row.Account, existing);
+          }
+        } catch (error) {
+          failure = error;
         }
-      } catch (error) {
-        failure = error;
       }
     }
+
+    const workerCount = Math.min(VOUCHER_DETAIL_CONCURRENCY, vouchers.length);
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    if (failure !== undefined) throw failure;
+
+    return sums;
   }
 
-  const workerCount = Math.min(VOUCHER_DETAIL_CONCURRENCY, vouchers.length);
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  if (failure !== undefined) throw failure;
-
-  return sums;
-}
-
-interface AccountBalance {
-  number: number;
-  description: string;
-  closingBalance: number;
-}
-
-/** Compute closing balances: BalanceBroughtForward + debit - credit for each account. */
-async function computeBalances(
-  financialYear?: number,
-  fromDate?: string,
-  toDate?: string,
-): Promise<AccountBalance[]> {
-  const [accounts, voucherSums] = await Promise.all([
-    fetchAllAccounts(financialYear),
-    fetchVoucherSums(financialYear, fromDate, toDate),
-  ]);
-
-  return accounts
-    .map((a) => {
-      const movement = voucherSums.get(a.Number);
-      const debit = movement?.debit ?? 0;
-      const credit = movement?.credit ?? 0;
-      // For period-scoped income statements (fromDate set), skip BBF
-      // since we only want the period's movements for P&L accounts.
-      // For balance sheets, always include BBF.
-      const bbf = fromDate ? 0 : a.BalanceBroughtForward;
-      const closingBalance = bbf + debit - credit;
-      return {
-        number: a.Number,
-        description: a.Description,
-        closingBalance,
-      };
-    })
-    .filter((a) => a.closingBalance !== 0);
-}
-
-/** Compute balance sheet balances: always includes BBF + movements up to toDate. */
-async function computeBalanceSheetBalances(
-  financialYear?: number,
-  toDate?: string,
-): Promise<AccountBalance[]> {
-  const [accounts, voucherSums] = await Promise.all([
-    fetchAllAccounts(financialYear),
-    fetchVoucherSums(financialYear, undefined, toDate),
-  ]);
-
-  return accounts
-    .map((a) => {
-      const movement = voucherSums.get(a.Number);
-      const debit = movement?.debit ?? 0;
-      const credit = movement?.credit ?? 0;
-      const closingBalance = a.BalanceBroughtForward + debit - credit;
-      return {
-        number: a.Number,
-        description: a.Description,
-        closingBalance,
-      };
-    })
-    .filter((a) => a.closingBalance !== 0);
-}
-
-function buildSection(
-  balances: AccountBalance[],
-  range: [number, number],
-  label: string,
-): ReportSection | null {
-  const lines = balances
-    .filter((a) => a.number >= range[0] && a.number <= range[1])
-    .map((a) => ({
-      account: a.number,
-      description: a.description,
-      balance: a.closingBalance,
-    }));
-
-  if (lines.length === 0) return null;
-
-  return {
-    label,
-    lines,
-    total: lines.reduce((sum, l) => sum + l.balance, 0),
-  };
-}
-
-export async function getIncomeStatement(
-  params: FinancialReportParams = {},
-): Promise<IncomeStatement> {
-  const balances = await computeBalances(params.financialYear, params.fromDate, params.toDate);
-
-  const sections: ReportSection[] = [];
-  for (const group of INCOME_STATEMENT_GROUPS) {
-    const section = buildSection(balances, group.range, group.label);
-    if (section) sections.push(section);
+  interface AccountBalance {
+    number: number;
+    description: string;
+    closingBalance: number;
   }
 
-  const netResult = sections.reduce((sum, s) => sum + s.total, 0);
+  /** Compute closing balances: BalanceBroughtForward + debit - credit for each account. */
+  async function computeBalances(
+    financialYear?: number,
+    fromDate?: string,
+    toDate?: string,
+  ): Promise<AccountBalance[]> {
+    const [accounts, voucherSums] = await Promise.all([
+      fetchAllAccounts(financialYear),
+      fetchVoucherSums(financialYear, fromDate, toDate),
+    ]);
 
-  return {
-    type: 'income-statement',
-    financialYear: params.financialYear,
-    period:
-      params.fromDate || params.toDate
-        ? { from: params.fromDate ?? '', to: params.toDate ?? '' }
-        : undefined,
-    sections,
-    netResult,
-  };
-}
-
-export async function getBalanceSheet(params: FinancialReportParams = {}): Promise<BalanceSheet> {
-  const balances = await computeBalanceSheetBalances(params.financialYear, params.toDate);
-
-  const assets: ReportSection[] = [];
-  for (const group of BALANCE_SHEET_ASSET_GROUPS) {
-    const section = buildSection(balances, group.range, group.label);
-    if (section) assets.push(section);
+    return accounts
+      .map((a) => {
+        const movement = voucherSums.get(a.Number);
+        const debit = movement?.debit ?? 0;
+        const credit = movement?.credit ?? 0;
+        // For period-scoped income statements (fromDate set), skip BBF
+        // since we only want the period's movements for P&L accounts.
+        // For balance sheets, always include BBF.
+        const bbf = fromDate ? 0 : a.BalanceBroughtForward;
+        const closingBalance = bbf + debit - credit;
+        return {
+          number: a.Number,
+          description: a.Description,
+          closingBalance,
+        };
+      })
+      .filter((a) => a.closingBalance !== 0);
   }
 
-  const liabilitiesAndEquity: ReportSection[] = [];
-  for (const group of BALANCE_SHEET_LIABILITY_GROUPS) {
-    const section = buildSection(balances, group.range, group.label);
-    if (section) liabilitiesAndEquity.push(section);
+  /** Compute balance sheet balances: always includes BBF + movements up to toDate. */
+  async function computeBalanceSheetBalances(
+    financialYear?: number,
+    toDate?: string,
+  ): Promise<AccountBalance[]> {
+    const [accounts, voucherSums] = await Promise.all([
+      fetchAllAccounts(financialYear),
+      fetchVoucherSums(financialYear, undefined, toDate),
+    ]);
+
+    return accounts
+      .map((a) => {
+        const movement = voucherSums.get(a.Number);
+        const debit = movement?.debit ?? 0;
+        const credit = movement?.credit ?? 0;
+        const closingBalance = a.BalanceBroughtForward + debit - credit;
+        return {
+          number: a.Number,
+          description: a.Description,
+          closingBalance,
+        };
+      })
+      .filter((a) => a.closingBalance !== 0);
   }
 
-  return {
-    type: 'balance-sheet',
-    financialYear: params.financialYear,
-    asOfDate: params.toDate,
-    assets,
-    totalAssets: assets.reduce((sum, s) => sum + s.total, 0),
-    liabilitiesAndEquity,
-    totalLiabilitiesAndEquity: liabilitiesAndEquity.reduce((sum, s) => sum + s.total, 0),
-  };
+  function buildSection(
+    balances: AccountBalance[],
+    range: [number, number],
+    label: string,
+  ): ReportSection | null {
+    const lines = balances
+      .filter((a) => a.number >= range[0] && a.number <= range[1])
+      .map((a) => ({
+        account: a.number,
+        description: a.description,
+        balance: a.closingBalance,
+      }));
+
+    if (lines.length === 0) return null;
+
+    return {
+      label,
+      lines,
+      total: lines.reduce((sum, l) => sum + l.balance, 0),
+    };
+  }
+
+  async function getIncomeStatement(params: FinancialReportParams = {}): Promise<IncomeStatement> {
+    const balances = await computeBalances(params.financialYear, params.fromDate, params.toDate);
+
+    const sections: ReportSection[] = [];
+    for (const group of INCOME_STATEMENT_GROUPS) {
+      const section = buildSection(balances, group.range, group.label);
+      if (section) sections.push(section);
+    }
+
+    const netResult = sections.reduce((sum, s) => sum + s.total, 0);
+
+    return {
+      type: 'income-statement',
+      financialYear: params.financialYear,
+      period:
+        params.fromDate || params.toDate
+          ? { from: params.fromDate ?? '', to: params.toDate ?? '' }
+          : undefined,
+      sections,
+      netResult,
+    };
+  }
+
+  async function getBalanceSheet(params: FinancialReportParams = {}): Promise<BalanceSheet> {
+    const balances = await computeBalanceSheetBalances(params.financialYear, params.toDate);
+
+    const assets: ReportSection[] = [];
+    for (const group of BALANCE_SHEET_ASSET_GROUPS) {
+      const section = buildSection(balances, group.range, group.label);
+      if (section) assets.push(section);
+    }
+
+    const liabilitiesAndEquity: ReportSection[] = [];
+    for (const group of BALANCE_SHEET_LIABILITY_GROUPS) {
+      const section = buildSection(balances, group.range, group.label);
+      if (section) liabilitiesAndEquity.push(section);
+    }
+
+    return {
+      type: 'balance-sheet',
+      financialYear: params.financialYear,
+      asOfDate: params.toDate,
+      assets,
+      totalAssets: assets.reduce((sum, s) => sum + s.total, 0),
+      liabilitiesAndEquity,
+      totalLiabilitiesAndEquity: liabilitiesAndEquity.reduce((sum, s) => sum + s.total, 0),
+    };
+  }
+
+  return { getIncomeStatement, getBalanceSheet };
 }
+
+export const { getIncomeStatement, getBalanceSheet } =
+  createFinancialReportOperations(defaultFortnoxTransport);

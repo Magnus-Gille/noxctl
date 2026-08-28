@@ -1,13 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listOffers,
-  getOffer,
-  createOffer,
-  updateOffer,
-  createInvoiceFromOffer,
-  createOrderFromOffer,
-} from '../operations/offers.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { offerListColumns, offerDetailColumns, offerConfirmColumns } from '../views.js';
 import {
   confirmationResponse,
@@ -30,7 +23,18 @@ const OfferRowSchema = z.object({
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
 
-export function registerOfferTools(server: McpServer): void {
+export function registerOfferTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listOffers,
+    getOffer,
+    createOffer,
+    updateOffer,
+    createInvoiceFromOffer,
+    createOrderFromOffer,
+  } = operations;
   server.tool(
     'fortnox_list_offers',
     'Lista/filtrera offerter i Fortnox. Returnerar: DocumentNumber, CustomerName, OfferDate, ExpireDate, Total.',

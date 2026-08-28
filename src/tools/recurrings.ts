@@ -1,17 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  createInvoiceRequest,
-  createRecurring,
-  getInvoiceRequest,
-  getRecurring,
-  getRecurringDeviation,
-  listInvoiceRequests,
-  listRecurringDeviations,
-  listRecurrings,
-  patchRecurring,
-  replaceRecurring,
-} from '../operations/recurrings.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import {
   invoiceRequestDetailColumns,
   invoiceRequestListColumns,
@@ -49,7 +38,22 @@ function withMetadata(result: {
   };
 }
 
-export function registerRecurringTools(server: McpServer): void {
+export function registerRecurringTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    createInvoiceRequest,
+    createRecurring,
+    getInvoiceRequest,
+    getRecurring,
+    getRecurringDeviation,
+    listInvoiceRequests,
+    listRecurringDeviations,
+    listRecurrings,
+    patchRecurring,
+    replaceRecurring,
+  } = operations;
   server.tool(
     'fortnox_list_recurrings',
     'Lista återkommande faktureringar från Fortnox nya Recurring Billing API.',

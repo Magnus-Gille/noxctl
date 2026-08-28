@@ -1,10 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { getCompanyInfo } from '../operations/company.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { companyDetailColumns } from '../views.js';
 import { detailResponse } from '../tool-output.js';
 
-export function registerCompanyTools(server: McpServer): void {
+export function registerCompanyTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { getCompanyInfo } = operations;
   server.tool(
     'fortnox_company_info',
     'Hämta företagsinformation och inställningar från Fortnox',

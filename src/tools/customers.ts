@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listCustomers,
-  getCustomer,
-  createCustomer,
-  updateCustomer,
-} from '../operations/customers.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { customerListColumns, customerDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -18,7 +13,11 @@ const CustomerNumberSchema = z
   .string()
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/, 'Customer number must be alphanumeric');
 
-export function registerCustomerTools(server: McpServer): void {
+export function registerCustomerTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listCustomers, getCustomer, createCustomer, updateCustomer } = operations;
   server.tool(
     'fortnox_list_customers',
     'Lista/sök kunder i Fortnox. Returnerar: CustomerNumber, Name, OrganisationNumber, City, Email.',

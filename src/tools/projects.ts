@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { listProjects, getProject, createProject, updateProject } from '../operations/projects.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { projectListColumns, projectDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -9,7 +9,11 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-export function registerProjectTools(server: McpServer): void {
+export function registerProjectTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listProjects, getProject, createProject, updateProject } = operations;
   server.tool(
     'fortnox_list_projects',
     'Lista projekt i Fortnox. Returnerar: ProjectNumber, Description, Status, StartDate, EndDate.',

@@ -1,14 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listContracts,
-  getContract,
-  createContract,
-  updateContract,
-  finishContract,
-  createInvoiceFromContract,
-  increaseInvoiceCount,
-} from '../operations/contracts.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { contractListColumns, contractDetailColumns, invoiceDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -29,7 +21,19 @@ const invoiceRowSchema = z
   })
   .passthrough();
 
-export function registerContractTools(server: McpServer): void {
+export function registerContractTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const {
+    listContracts,
+    getContract,
+    createContract,
+    updateContract,
+    finishContract,
+    createInvoiceFromContract,
+    increaseInvoiceCount,
+  } = operations;
   server.tool(
     'fortnox_list_contracts',
     'Lista avtal (återkommande fakturering) i Fortnox. Returnerar: DocumentNumber, CustomerName, PeriodStart, PeriodEnd, InvoiceInterval, Continuous, Total.',

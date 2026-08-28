@@ -1,4 +1,4 @@
-import { fortnoxRequest, fortnoxRequestWithMetadata } from '../fortnox-client.js';
+import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 
 const RECURRINGS = '/api/recurring-billing/recurrings-v1';
 const INVOICE_REQUESTS = '/api/recurring-billing/recurrings-invoice-requests-v1';
@@ -42,116 +42,144 @@ function metadata(result: {
   return { recurring: result.data, etag: result.etag, lastModified: result.lastModified };
 }
 
-export async function listRecurrings(params: ListRecurringsParams = {}): Promise<Recurring[]> {
-  return fortnoxRequest<Recurring[]>(RECURRINGS, {
-    params: {
-      'customer-numbers': csv(params.customerNumbers),
-      statuses: csv(params.statuses),
-      'invoice-handlings': csv(params.invoiceHandlings),
-      'error-status': params.errorStatus,
-      offset: params.offset,
-      limit: params.limit,
-      sortby: params.sortBy,
-      order: params.order,
-    },
-  });
-}
-
-export async function getRecurring(recurringId: string): Promise<RecurringWithMetadata> {
-  return metadata(
-    await fortnoxRequestWithMetadata<Recurring>(
-      `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}`,
-    ),
-  );
-}
-
-export async function createRecurring(input: Recurring): Promise<RecurringWithMetadata> {
-  return metadata(
-    await fortnoxRequestWithMetadata<Recurring>(RECURRINGS, { method: 'POST', body: input }),
-  );
-}
-
-export async function replaceRecurring(
-  recurringId: string,
-  etag: string,
-  input: Recurring,
-  ifUnmodifiedSince?: string,
-): Promise<RecurringWithMetadata> {
-  return metadata(
-    await fortnoxRequestWithMetadata<Recurring>(
-      `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}`,
-      {
-        method: 'PUT',
-        body: input,
-        headers: { 'If-Match': etag, 'If-Unmodified-Since': ifUnmodifiedSince },
+export function createRecurringOperations(transport: FortnoxTransport) {
+  async function listRecurrings(params: ListRecurringsParams = {}): Promise<Recurring[]> {
+    return transport.request<Recurring[]>(RECURRINGS, {
+      params: {
+        'customer-numbers': csv(params.customerNumbers),
+        statuses: csv(params.statuses),
+        'invoice-handlings': csv(params.invoiceHandlings),
+        'error-status': params.errorStatus,
+        offset: params.offset,
+        limit: params.limit,
+        sortby: params.sortBy,
+        order: params.order,
       },
-    ),
-  );
-}
-
-export async function patchRecurring(
-  recurringId: string,
-  etag: string,
-  operations: Record<string, unknown>[],
-  ifUnmodifiedSince?: string,
-): Promise<RecurringWithMetadata> {
-  return metadata(
-    await fortnoxRequestWithMetadata<Recurring>(
-      `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}`,
-      {
-        method: 'PATCH',
-        body: operations,
-        headers: { 'If-Match': etag, 'If-Unmodified-Since': ifUnmodifiedSince },
-      },
-    ),
-  );
-}
-
-export async function listRecurringDeviations(recurringId: string): Promise<Recurring[]> {
-  return fortnoxRequest<Recurring[]>(
-    `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}/deviations`,
-  );
-}
-
-export async function getRecurringDeviation(
-  recurringId: string,
-  deviationId: string,
-): Promise<Recurring> {
-  return fortnoxRequest<Recurring>(
-    `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}/deviations/${uuidSegment('deviation ID', deviationId)}`,
-  );
-}
-
-export async function listInvoiceRequests(
-  recurringIds: string[],
-  statuses?: string[],
-): Promise<InvoiceRequest[]> {
-  return fortnoxRequest<InvoiceRequest[]>(INVOICE_REQUESTS, {
-    params: { 'recurring-ids': csv(recurringIds), status: csv(statuses) },
-  });
-}
-
-export async function getInvoiceRequest(invoiceRequestId: string): Promise<InvoiceRequest> {
-  return fortnoxRequest<InvoiceRequest>(
-    `${INVOICE_REQUESTS}/${uuidSegment('invoice request ID', invoiceRequestId)}`,
-  );
-}
-
-export async function createInvoiceRequest(
-  recurringIds: string[],
-  processingMode: 'SYNC' | 'ASYNC' = 'SYNC',
-): Promise<InvoiceRequest> {
-  if (recurringIds.length === 0) {
-    throw new Error('At least one recurring ID is required.');
+    });
   }
-  if (processingMode === 'SYNC' && recurringIds.length > 100) {
-    throw new Error(
-      'SYNC invoice requests support at most 100 recurring IDs. Use ASYNC for larger batches.',
+
+  async function getRecurring(recurringId: string): Promise<RecurringWithMetadata> {
+    return metadata(
+      await transport.requestWithMetadata<Recurring>(
+        `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}`,
+      ),
     );
   }
-  return fortnoxRequest<InvoiceRequest>(INVOICE_REQUESTS, {
-    method: 'POST',
-    params: { 'processing-mode': processingMode },
-    body: { recurring_ids: recurringIds },
-  });
+
+  async function createRecurring(input: Recurring): Promise<RecurringWithMetadata> {
+    return metadata(
+      await transport.requestWithMetadata<Recurring>(RECURRINGS, { method: 'POST', body: input }),
+    );
+  }
+
+  async function replaceRecurring(
+    recurringId: string,
+    etag: string,
+    input: Recurring,
+    ifUnmodifiedSince?: string,
+  ): Promise<RecurringWithMetadata> {
+    return metadata(
+      await transport.requestWithMetadata<Recurring>(
+        `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}`,
+        {
+          method: 'PUT',
+          body: input,
+          headers: { 'If-Match': etag, 'If-Unmodified-Since': ifUnmodifiedSince },
+        },
+      ),
+    );
+  }
+
+  async function patchRecurring(
+    recurringId: string,
+    etag: string,
+    operations: Record<string, unknown>[],
+    ifUnmodifiedSince?: string,
+  ): Promise<RecurringWithMetadata> {
+    return metadata(
+      await transport.requestWithMetadata<Recurring>(
+        `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}`,
+        {
+          method: 'PATCH',
+          body: operations,
+          headers: { 'If-Match': etag, 'If-Unmodified-Since': ifUnmodifiedSince },
+        },
+      ),
+    );
+  }
+
+  async function listRecurringDeviations(recurringId: string): Promise<Recurring[]> {
+    return transport.request<Recurring[]>(
+      `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}/deviations`,
+    );
+  }
+
+  async function getRecurringDeviation(
+    recurringId: string,
+    deviationId: string,
+  ): Promise<Recurring> {
+    return transport.request<Recurring>(
+      `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}/deviations/${uuidSegment('deviation ID', deviationId)}`,
+    );
+  }
+
+  async function listInvoiceRequests(
+    recurringIds: string[],
+    statuses?: string[],
+  ): Promise<InvoiceRequest[]> {
+    return transport.request<InvoiceRequest[]>(INVOICE_REQUESTS, {
+      params: { 'recurring-ids': csv(recurringIds), status: csv(statuses) },
+    });
+  }
+
+  async function getInvoiceRequest(invoiceRequestId: string): Promise<InvoiceRequest> {
+    return transport.request<InvoiceRequest>(
+      `${INVOICE_REQUESTS}/${uuidSegment('invoice request ID', invoiceRequestId)}`,
+    );
+  }
+
+  async function createInvoiceRequest(
+    recurringIds: string[],
+    processingMode: 'SYNC' | 'ASYNC' = 'SYNC',
+  ): Promise<InvoiceRequest> {
+    if (recurringIds.length === 0) {
+      throw new Error('At least one recurring ID is required.');
+    }
+    if (processingMode === 'SYNC' && recurringIds.length > 100) {
+      throw new Error(
+        'SYNC invoice requests support at most 100 recurring IDs. Use ASYNC for larger batches.',
+      );
+    }
+    return transport.request<InvoiceRequest>(INVOICE_REQUESTS, {
+      method: 'POST',
+      params: { 'processing-mode': processingMode },
+      body: { recurring_ids: recurringIds },
+    });
+  }
+
+  return {
+    listRecurrings,
+    getRecurring,
+    createRecurring,
+    replaceRecurring,
+    patchRecurring,
+    listRecurringDeviations,
+    getRecurringDeviation,
+    listInvoiceRequests,
+    getInvoiceRequest,
+    createInvoiceRequest,
+  };
 }
+
+export const {
+  listRecurrings,
+  getRecurring,
+  createRecurring,
+  replaceRecurring,
+  patchRecurring,
+  listRecurringDeviations,
+  getRecurringDeviation,
+  listInvoiceRequests,
+  getInvoiceRequest,
+  createInvoiceRequest,
+} = createRecurringOperations(defaultFortnoxTransport);

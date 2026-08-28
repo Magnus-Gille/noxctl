@@ -1,11 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listInvoicePayments,
-  getInvoicePayment,
-  createInvoicePayment,
-  deleteInvoicePayment,
-} from '../operations/invoice-payments.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { invoicePaymentListColumns, invoicePaymentDetailColumns } from '../views.js';
 import {
   confirmationResponse,
@@ -17,7 +12,12 @@ import {
 
 const PaymentNumberSchema = z.string().regex(/^\d+$/, 'Payment number must be numeric');
 
-export function registerInvoicePaymentTools(server: McpServer): void {
+export function registerInvoicePaymentTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listInvoicePayments, getInvoicePayment, createInvoicePayment, deleteInvoicePayment } =
+    operations;
   server.tool(
     'fortnox_list_invoice_payments',
     'Lista inbetalningar (kundfakturor) i Fortnox. Returnerar: Number, InvoiceNumber, PaymentDate, Amount.',

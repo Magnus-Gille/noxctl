@@ -1,10 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  listTaxReductions,
-  getTaxReduction,
-  createTaxReduction,
-} from '../operations/taxreductions.js';
+import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { taxReductionListColumns, taxReductionDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -13,7 +9,11 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-export function registerTaxReductionTools(server: McpServer): void {
+export function registerTaxReductionTools(
+  server: McpServer,
+  operations: FortnoxOperations = defaultFortnoxOperations,
+): void {
+  const { listTaxReductions, getTaxReduction, createTaxReduction } = operations;
   server.tool(
     'fortnox_list_taxreductions',
     'Lista skattereduktioner (ROT/RUT) i Fortnox. Returnerar: Id, CustomerName, TypeOfReduction, ReferenceNumber, AskedAmount, ApprovedAmount.',

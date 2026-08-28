@@ -1,11 +1,16 @@
 # Project Status
 
 **Last session:** 2026-08-28
-**Branch:** `main`
+**Branch:** `feat/122-embedded-api` (stacked on `feat/119-tenant-client` → `feat/120-client-bound-operations` → `feat/121-tenant-bound-mcp`)
 **Published:** `v0.7.4` on GitHub and `noxctl@0.7.4` on npm (both verified 2026-08-28)
 
 ## Completed This Session
 
+- Created hosted-product epic #118 and implementation tickets #119–#122 for the public reusable core; the private OAuth/session/token-vault/billing/operations host remains intentionally outside this repository.
+- Added isolated per-tenant Fortnox clients, transport-bound operation factories across all resource families, tenant-bound MCP server construction, and the supported `noxctl/embedded` package entry point while preserving local CLI/stdio behavior.
+- Added fail-closed embedded server construction, per-tenant rate-limit and diagnostic isolation tests, and non-retryable classification for invoice email/e-invoice delivery actions.
+- Added a real packed-package consumer gate covering runtime imports, TypeScript declarations, forbidden embedded exports, missing-transport rejection, and the packaged CLI help path. `npm run check:release` passes with 847 tests across 76 files and zero production vulnerabilities.
+- A fresh isolated Codex reviewer found the missing fail-closed embedded wrapper and invoice-delivery retry bug; both were fixed and regression-tested. Claude Code review was unavailable because its local CLI was not authenticated, so this review was independent-context but not cross-provider.
 - Refreshed the README opening for first-time visitors: trust model, badges and a GitHub-native callout, accurate value summary, global-install and `npx` quick starts, and navigation into the long-form reference.
 - Corrected stale pre-rename clone and private-security-advisory links, and added canonical repository/bugs/homepage plus discovery keywords to npm package metadata.
 - Verified GitHub Markdown rendering, local links/anchors, package metadata and dry-run contents, lint, TypeScript formatting, build, and all 833 tests across 73 files.
@@ -43,18 +48,19 @@ Found and fixed without being reported:
 
 ## In Progress
 
-No active release work. The GitHub front-page refresh and `noxctl@0.7.4` are live.
+The public hosted-core implementation and its review history are tracked in PR #123. GitHub is authoritative for its current merge state. This work does not include an npm release, deployment, or production-host publication.
 
 ## Blockers
 
-None.
+No public-core code blocker is known. The private hosted product still depends on answers from Fortnox about partner/App Market, OAuth, commercial, and data-processing requirements.
 
 ## Next Steps
 
-1. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
-2. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
-3. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
-4. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
+1. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
+2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
+3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
+4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
+5. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
 
 ## Notes
 
