@@ -1,7 +1,7 @@
 # Project Status
 
 **Last session:** 2026-08-28
-**Branch:** `docs/refresh-readme-front-page` (published as PR #112)
+**Branch:** `release/0.7.4` (local release preparation)
 **Published:** `v0.7.3` on GitHub and `noxctl@0.7.3` on npm (both verified 2026-08-27)
 
 ## Completed This Session
@@ -10,6 +10,7 @@
 - Corrected stale pre-rename clone and private-security-advisory links, and added canonical repository/bugs/homepage plus discovery keywords to npm package metadata.
 - Verified GitHub Markdown rendering, local links/anchors, package metadata and dry-run contents, lint, TypeScript formatting, build, and all 833 tests across 73 files.
 - Published PR #112 and updated the GitHub About description, npm homepage, and ten discovery topics. The refreshed public Open Graph metadata now uses the broader CLI/MCP positioning.
+- Codex review found and fixed two documentation issues before PR #112 merged as `6be163c60856da775b05470a0100b0af65adae8c`: an over-broad `npx` instruction and a brittle hard-coded test count.
 
 ## Previous Session (2026-08-27)
 
@@ -40,7 +41,7 @@ Found and fixed without being reported:
 
 ## In Progress
 
-PR #112 is open for the README/front-page refresh. The GitHub About metadata is live; merge only after required CI passes on the final PR head.
+The GitHub front-page refresh is live on `main`. Patch release 0.7.4 is being prepared so the new README and canonical package discovery metadata also reach npm; the local release gate passes with 833 tests and zero production vulnerabilities.
 
 ## Blockers
 
@@ -48,7 +49,7 @@ None.
 
 ## Next Steps
 
-1. Review and merge PR #112 after required CI passes; no automatic merge is configured.
+1. Open and merge the protected 0.7.4 release PR, then request exact-SHA confirmation before tagging and publishing to npm.
 2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
 3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
 4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
