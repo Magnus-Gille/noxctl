@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-08-28
+
+### Changed
+
+- Refreshed the repository front page for first-time visitors with a concise trust model, feature summary, quick start, status badges, and navigation into the full reference.
+- Added canonical npm repository, issue, homepage, and discovery metadata so package registries and tooling link back to the correct project surfaces.
+
+### Fixed
+
+- Corrected contributor clone instructions and the private security-advisory link that still used the repository's former `fortnox-mcp` name.
+
 ## [0.7.3] - 2026-08-27
 
 ### Fixed
@@ -214,6 +225,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.7.4]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.3...v0.7.4
+[0.7.3]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.6.1...v0.7.0

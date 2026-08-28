@@ -122,10 +122,11 @@ host rollout.
 
 1. Land everything on `main` and confirm CI is green.
 2. Promote `## [Unreleased]` to the new version in `CHANGELOG.md`.
-3. Bump the version in **three** places — they are separate literals and have
-   drifted before: `package.json`, `.version(...)` in `src/cli.ts`, and
-   `version:` in `src/index.ts` (the MCP server's `serverInfo`, which is what
-   connected clients see). `tests/cli.test.ts` asserts all three agree.
+3. Bump the version in **five files** — they are separate literals and have
+   drifted before: `package.json`, `package-lock.json`, `.version(...)` in
+   `src/cli.ts`, `version:` in `src/index.ts` (the MCP server's `serverInfo`),
+   and both version fields in `server.json`. `tests/cli.test.ts` asserts the
+   three code-facing versions agree; verify `server.json` separately.
 4. `npm run check:release` — lint, format, build, tests, production audit, and a
    package dry-run.
 5. Commit, open a PR, merge once CI passes.

@@ -99,7 +99,7 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
 program
   .name('noxctl')
   .description('CLI and MCP server for Fortnox accounting')
-  .version('0.7.3')
+  .version('0.7.4')
   .addOption(
     new Option('-o, --output <format>', 'Output format (default: table on TTY, json when piped)')
       .choices(['json', 'table'])
