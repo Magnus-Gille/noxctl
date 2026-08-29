@@ -31,10 +31,10 @@
     },
     {
       "id": "supplier-invoice-row",
-      "declaredPropertyCount": 4,
+      "declaredPropertyCount": 19,
       "specificationPropertyCount": 18,
-      "missingPropertyCount": 15,
-      "stateHash": "da75598bb1e7623170ae1b6ce0ff6096a55df3055d765ce8445a9c0d96f6283a"
+      "missingPropertyCount": 0,
+      "stateHash": "25c363c59fda47579aaf27c77e21c3af3fa7c239d23a2a0d01a18533c2e65d3f"
     },
     {
       "id": "voucher-row",
