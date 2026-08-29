@@ -201,7 +201,7 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
     throw err;
   }
 
-  setResolvedProfile(resolvedProfileInfo.name);
+  setResolvedProfile(resolvedProfileInfo.name, resolvedProfileInfo.source);
 
   // Banner ownership: MCP `serve` prints its own banner in bindStartupProfile
   // so host logs (Claude Desktop) always see it. Suppress here to avoid a
@@ -323,7 +323,7 @@ program
     'Also request the offer/order scopes — requires the Order licence on the Fortnox company',
   )
   .action(async (initOpts: { profile?: string; withSalary?: boolean; withOrders?: boolean }) => {
-    const { loadCredentials, runOAuthSetup, SCOPES, SALARY_SCOPE, ORDER_SCOPES } =
+    const { inspectCredentials, runOAuthSetup, SCOPES, SALARY_SCOPE, ORDER_SCOPES } =
       await import('./auth.js');
     const { validateProfileName } = await import('./profile-name.js');
 
@@ -349,12 +349,16 @@ program
     // (verification via getCompanyInfo, runOAuthSetup's internal saveCredentials
     // call chain) targets the profile being initialized — not a stale pointer.
     if (targetProfile.toLowerCase() !== resolvedProfileInfo.name.toLowerCase()) {
-      setResolvedProfile(targetProfile);
+      setResolvedProfile(targetProfile, 'flag');
       resolvedProfileInfo = { name: targetProfile, source: 'flag' };
     }
 
     // Step 1: Check if already configured
-    const existing = await loadCredentials(targetProfile);
+    const inspection = await inspectCredentials(targetProfile);
+    if (inspection.state === 'locked' || inspection.state === 'inaccessible') {
+      fail(inspection.detail);
+    }
+    const existing = inspection.credentials;
     if (existing) {
       console.log('Existing credentials found.');
 
@@ -709,9 +713,12 @@ profile
       process.exit(2);
     }
 
-    const { loadCredentials } = await import('./auth.js');
-    const creds = await loadCredentials(validated);
-    if (!creds) {
+    const { inspectCredentials } = await import('./auth.js');
+    const inspection = await inspectCredentials(validated);
+    if (inspection.state === 'locked' || inspection.state === 'inaccessible') {
+      fail(inspection.detail);
+    }
+    if (inspection.state === 'missing') {
       console.error(
         `No credentials found for profile "${validated}". Run \`noxctl init --profile ${validated}\` first.`,
       );
@@ -763,7 +770,7 @@ program
   .command('doctor')
   .description('Check setup: credentials, token, API connectivity, and scopes')
   .action(async () => {
-    const { loadCredentials } = await import('./auth.js');
+    const { inspectCredentials } = await import('./auth.js');
     let ok = true;
 
     function pass(label: string, detail?: string) {
@@ -802,6 +809,11 @@ program
         const state = kt.keychainLockState(activePath);
         if (state === 'locked') {
           fail('Dedicated keychain', 'locked — run `noxctl keychain unlock` (tap your YubiKey)');
+        } else if (state === 'missing') {
+          fail(
+            'Dedicated keychain',
+            `configured but inaccessible at ${activePath} — inspect it from an unsandboxed terminal`,
+          );
         } else {
           pass('Dedicated keychain', `active, ${state} (${activePath})`);
         }
@@ -845,23 +857,17 @@ program
       // best-effort diagnostic — don't block doctor on filesystem issues
     }
 
-    // 3. Credentials exist
-    let creds: Awaited<ReturnType<typeof loadCredentials>>;
-    try {
-      creds = await loadCredentials();
-    } catch (err) {
-      const { KeychainLockedError } = await import('./keychain-target.js');
-      if (err instanceof KeychainLockedError) {
-        fail('Credentials', err.message);
-        console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
-        return;
-      }
-      throw err;
+    // 3. Credential state
+    const inspection = await inspectCredentials();
+    if (inspection.state === 'locked' || inspection.state === 'inaccessible') {
+      fail('Credentials', `${inspection.state} — ${inspection.detail}`);
+      console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
+      return;
     }
-    if (!creds) {
+    if (inspection.state === 'missing') {
       fail(
         'Credentials',
-        `not found for profile "${resolvedProfileInfo.name}" — run \`noxctl init${
+        `missing — not found for profile "${resolvedProfileInfo.name}" — run \`noxctl init${
           resolvedProfileInfo.name === DEFAULT_PROFILE
             ? ''
             : ` --profile ${resolvedProfileInfo.name}`
@@ -870,6 +876,7 @@ program
       console.log(`\n${ok ? 'All checks passed.' : 'Some checks failed.'}`);
       return;
     }
+    const creds = inspection.credentials!;
     pass('Credentials', 'found');
     if (creds.company_name) {
       pass('Company (cached)', creds.company_name);
@@ -979,6 +986,16 @@ keychain
     console.log(
       `  Platform          ${process.platform}${onDarwin ? '' : ' (dedicated keychain is macOS-only)'}`,
     );
+
+    const { inspectCredentials } = await import('./auth.js');
+    const inspection = await inspectCredentials();
+    console.log(
+      `  Credential state  ${inspection.state} — profile "${inspection.profile}" (source: ${inspection.source})`,
+    );
+    if (inspection.state === 'locked' || inspection.state === 'inaccessible') {
+      console.log(`\n  ${inspection.detail}`);
+    }
+
     if (!onDarwin) return;
 
     const activePath = kt.activeKeychainPath();
@@ -1010,11 +1027,16 @@ keychain
   .action(async () => {
     requireDarwin();
     const kt = await import('./keychain-target.js');
-    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+    const activePath = kt.activeKeychainPath();
+    const kcPath = activePath ?? kt.dedicatedKeychainPath();
 
     const state = kt.keychainLockState(kcPath);
     if (state === 'missing') {
-      console.error('No dedicated keychain found. Run `noxctl keychain init` first.');
+      console.error(
+        activePath
+          ? `The configured keychain at ${kcPath} is inaccessible. Retry from an unsandboxed terminal; do not re-run noxctl keychain init.`
+          : 'No dedicated keychain found. Run `noxctl keychain init` first.',
+      );
       process.exit(1);
     }
     if (state === 'unlocked') {
@@ -1058,9 +1080,14 @@ keychain
   .action(async () => {
     requireDarwin();
     const kt = await import('./keychain-target.js');
-    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+    const activePath = kt.activeKeychainPath();
+    const kcPath = activePath ?? kt.dedicatedKeychainPath();
     if (kt.keychainLockState(kcPath) === 'missing') {
-      console.error('No dedicated keychain found.');
+      console.error(
+        activePath
+          ? `The configured keychain at ${kcPath} is inaccessible. Retry from an unsandboxed terminal.`
+          : 'No dedicated keychain found.',
+      );
       process.exit(1);
     }
     kt.lockKeychain(kcPath);

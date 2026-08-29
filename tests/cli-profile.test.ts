@@ -193,16 +193,67 @@ describe('profile list', () => {
 });
 
 describe('profile use', () => {
-  it('refuses to switch to a profile without credentials', () => {
+  it('refuses to switch when credentials are missing or the store is inaccessible', () => {
     const res = run(['profile', 'use', 'work']);
     expect(res.status).not.toBe(0);
-    expect(res.stderr).toContain('No credentials found for profile "work"');
+    const message = res.stderr.trim().startsWith('{')
+      ? (JSON.parse(res.stderr) as { error: { message: string } }).error.message
+      : res.stderr;
+    expect(message).toMatch(
+      /No credentials found for profile "work"|Credential state: inaccessible for profile "work"/,
+    );
   });
 
   it('rejects an invalid profile name', () => {
     const res = run(['profile', 'use', 'bad name!']);
     expect(res.status).not.toBe(0);
     expect(res.stderr.toLowerCase()).toContain('invalid profile name');
+  });
+});
+
+describe('credential recovery safety', () => {
+  async function registerProfile(name: string): Promise<void> {
+    await fs.mkdir(cfgDir, { recursive: true });
+    await fs.writeFile(
+      profilesIndexFile,
+      JSON.stringify({
+        schema_version: 1,
+        profiles: [{ name, created_at: '2026-01-01T00:00:00.000Z', schema_version: 2 }],
+      }),
+    );
+  }
+
+  it('init fails closed before setup when a registered profile lookup is inconclusive', async () => {
+    await registerProfile('work');
+
+    const res = run(['--output', 'table', '--profile', 'work', 'init']);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain('Credential state: inaccessible');
+    expect(res.stderr).toContain('profile "work" (source: flag)');
+    expect(res.stderr).toContain('unsandboxed terminal');
+    expect(res.stdout).not.toContain('Welcome to noxctl init');
+    expect(res.stdout).not.toContain('replace your current credentials');
+  });
+
+  it('doctor uses the same inaccessible vocabulary and reports profile source', async () => {
+    await registerProfile('work');
+
+    const res = run(['--output', 'table', '--profile', 'work', 'doctor']);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Profile — work (source: flag)');
+    expect(res.stdout).toContain('Credentials — inaccessible');
+    expect(res.stdout).toContain('unsandboxed terminal');
+    expect(res.stdout).not.toContain('noxctl init --profile work');
+  });
+
+  it('keychain status uses the same inaccessible vocabulary on every platform', async () => {
+    await registerProfile('work');
+
+    const res = run(['--output', 'table', '--profile', 'work', 'keychain', 'status']);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Credential state  inaccessible');
+    expect(res.stdout).toContain('profile "work" (source: flag)');
+    expect(res.stdout).toContain('unsandboxed terminal');
   });
 });
 

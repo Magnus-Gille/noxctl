@@ -20,6 +20,7 @@ vi.mock('node:fs', () => fsSync);
 
 import {
   KeychainLockedError,
+  KeychainAccessError,
   ChallengeResponseError,
   dedicatedKeychainPath,
   loginKeychainPath,
@@ -105,10 +106,17 @@ describe('activeKeychainPath precedence', () => {
     expect(isDedicatedModeActive()).toBe(false);
   });
 
-  it('returns the dedicated path on darwin only when both keychain and challenge files exist', () => {
+  it('returns the dedicated path on darwin when the challenge file marks it configured', () => {
     setPlatform('darwin');
     fsSync.default.existsSync.mockReturnValue(true);
     expect(activeKeychainPath()).toBe(dedicatedKeychainPath());
+  });
+
+  it('does not fall back when the configured keychain file is hidden by a sandbox', () => {
+    setPlatform('darwin');
+    fsSync.default.existsSync.mockImplementation((p: string) => p === challengeFilePath());
+    expect(activeKeychainPath()).toBe(dedicatedKeychainPath());
+    expect(isDedicatedModeActive()).toBe(true);
   });
 
   it('returns null on darwin when the challenge file is missing (half-created keychain)', () => {
@@ -272,6 +280,13 @@ describe('readDedicatedSecret', () => {
   it('returns null on exit 3 (item absent)', () => {
     childProcess.spawnSync.mockReturnValue({ status: 3, stdout: '' });
     expect(readDedicatedSecret('profile:default', '/tmp/k.keychain-db')).toBeNull();
+  });
+
+  it('throws KeychainAccessError when the configured keychain cannot be opened', () => {
+    childProcess.spawnSync.mockReturnValue({ status: 4, stdout: '', stderr: 'open failed' });
+    expect(() => readDedicatedSecret('profile:default', '/tmp/k.keychain-db')).toThrow(
+      KeychainAccessError,
+    );
   });
 
   it('passes account and keychain path as argv (not interpolated)', () => {

@@ -230,6 +230,31 @@ Non-default sessions print a `[profile: <name>]` stderr banner on startup and pr
 
 If the active pointer becomes unreadable or corrupt and no explicit `--profile` flag or `NOXCTL_PROFILE` is set, `noxctl serve` **refuses to start** rather than silently falling back to `default`. This prevents a corrupted pointer from routing production MCP sessions to the wrong tenant. The CLI's `doctor` and `profile use` commands are exempt — they can still run against a broken pointer so you can repair it.
 
+### Credential recovery from sandboxes and automation
+
+Credential diagnostics use the same four states in `doctor`, `keychain status`,
+and MCP status: `available`, `missing`, `locked`, and `inaccessible`. Only
+`missing` means no registered profile or credential was found. `inaccessible`
+means noxctl cannot safely determine whether credentials exist in the current
+execution context; it will not recommend or start OAuth replacement from that
+state.
+
+Use this recovery flow when a sandboxed agent and your terminal disagree:
+
+```bash
+# Run these in a normal, unsandboxed terminal.
+noxctl keychain status
+noxctl keychain unlock                    # only when the dedicated keychain is locked
+noxctl --profile <name> doctor
+noxctl --profile <name> company info
+```
+
+Do not re-run `noxctl init` while the state is `locked` or `inaccessible`.
+Resolve access first, then retry with an explicit profile. An MCP server is
+pinned to the profile selected when that process starts; changing the active
+pointer does not retarget it. Restart the MCP server after correcting profile
+selection or unlocking credentials.
+
 ## YubiKey-locked keychain (macOS)
 
 By default, credentials live in your macOS **login keychain**, which unlocks automatically when you log in. That's convenient, but it means an AI agent (or anything running as you) can read the tokens without a per-session gesture from you.
@@ -608,7 +633,12 @@ Once authorized, the tokens are stored in the OS keychain. No env vars are neede
 
 **"Not authenticated. Run `noxctl init`"**
 
-Credentials are missing or were not saved. Re-run the setup step. On macOS, check that Keychain Access is not blocking the `security` command. On Linux, ensure `secret-tool` is installed (`sudo apt install libsecret-tools`).
+This message is emitted only when the credential state is `missing`. Re-run the
+setup step. If the message instead says `locked` or `inaccessible`, do not
+replace the credentials: follow the
+[sandbox/automation recovery flow](#credential-recovery-from-sandboxes-and-automation).
+On Linux, an inaccessible store can also mean that `secret-tool` is unavailable
+(`sudo apt install libsecret-tools`).
 
 **403 Forbidden from Fortnox API**
 

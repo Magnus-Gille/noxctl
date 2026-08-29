@@ -1,10 +1,20 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { loadCredentialBlob, saveCredentialBlob, type LoadSource } from './credentials-store.js';
+import {
+  CredentialStoreAccessError,
+  loadCredentialBlob,
+  saveCredentialBlob,
+  type LoadSource,
+} from './credentials-store.js';
 import { KeychainLockedError } from './keychain-target.js';
 import { DEFAULT_PROFILE, validateProfileName } from './profile-name.js';
-import { migrateLegacyIfNeeded, readProfileIndex, upsertProfile } from './profiles.js';
+import {
+  migrateLegacyIfNeeded,
+  readProfileIndex,
+  upsertProfile,
+  type ProfileSource,
+} from './profiles.js';
 
 const FORTNOX_AUTH_URL = 'https://apps.fortnox.se/oauth-v1/auth';
 const FORTNOX_TOKEN_URL = 'https://apps.fortnox.se/oauth-v1/token';
@@ -103,6 +113,7 @@ export interface FortnoxAppConfig {
 // instance would share this state. Revisit if the MCP SDK grows request-local
 // context that handlers can read.
 let resolvedProfile: string = DEFAULT_PROFILE;
+let resolvedProfileSource: ProfileSource = 'default';
 
 // Token endpoints may rotate refresh tokens, so concurrent requests for the
 // same profile must share one refresh and one credential-store write. Profile
@@ -114,12 +125,17 @@ const tokenRefreshes = new Map<string, Promise<string>>();
 // saveCredentials to decide whether to dual-write during the 0.2.x window.
 let legacyObservedForDefault = false;
 
-export function setResolvedProfile(name: string): void {
+export function setResolvedProfile(name: string, source: ProfileSource = 'default'): void {
   resolvedProfile = validateProfileName(name);
+  resolvedProfileSource = source;
 }
 
 export function getResolvedProfile(): string {
   return resolvedProfile;
+}
+
+export function getResolvedProfileSource(): ProfileSource {
+  return resolvedProfileSource;
 }
 
 // Test-only: reset module-level observation state between cases.
@@ -129,6 +145,46 @@ export function __resetLegacyObservedForDefault(): void {
 
 function profileOrResolved(profile?: string): string {
   return profile ?? resolvedProfile;
+}
+
+function sourceForProfile(profile: string): ProfileSource | 'explicit' {
+  return profile.toLowerCase() === resolvedProfile.toLowerCase()
+    ? resolvedProfileSource
+    : 'explicit';
+}
+
+function credentialContext(profile: string): string {
+  return `profile "${profile}" (source: ${sourceForProfile(profile)})`;
+}
+
+function inaccessibleRecovery(profile: string): string {
+  return (
+    `Run \`noxctl keychain status\` and, if needed, \`noxctl keychain unlock\` in an ` +
+    `unsandboxed terminal, then retry with \`--profile ${profile}\`. An already-running MCP ` +
+    `server remains pinned to the profile selected at startup; changing the active profile ` +
+    `pointer will not retarget it, so restart that MCP process after correcting the profile.`
+  );
+}
+
+export type CredentialState = 'available' | 'missing' | 'locked' | 'inaccessible';
+
+export interface CredentialInspection {
+  state: CredentialState;
+  profile: string;
+  source: ProfileSource | 'explicit';
+  credentials: FortnoxCredentials | null;
+  detail: string;
+}
+
+export class CredentialAccessError extends Error {
+  constructor(
+    public readonly profile: string,
+    public readonly source: ProfileSource | 'explicit',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'CredentialAccessError';
+  }
 }
 
 function isDefaultProfile(name: string): boolean {
@@ -148,16 +204,31 @@ function legacySlotExists(source: LoadSource): boolean {
   );
 }
 
-export async function loadCredentials(profile?: string): Promise<FortnoxCredentials | null> {
+export async function inspectCredentials(profile?: string): Promise<CredentialInspection> {
   const target = profileOrResolved(profile);
+  const source = sourceForProfile(target);
   let result: { blob: string | null; source: LoadSource; legacyBlob: string | null };
   try {
     result = await loadCredentialBlob(target);
   } catch (err) {
-    // A locked dedicated keychain must surface, not look like "no credentials" —
-    // the caller tells the user to run `noxctl keychain unlock` (tap YubiKey).
-    if (err instanceof KeychainLockedError) throw err;
-    return null;
+    if (err instanceof KeychainLockedError) {
+      return {
+        state: 'locked',
+        profile: target,
+        source,
+        credentials: null,
+        detail: `Credential state: locked for ${credentialContext(target)} — ${err.message}`,
+      };
+    }
+    const reason =
+      err instanceof CredentialStoreAccessError || err instanceof Error ? err.message : String(err);
+    return {
+      state: 'inaccessible',
+      profile: target,
+      source,
+      credentials: null,
+      detail: `Credential state: inaccessible for ${credentialContext(target)} — ${reason}. ${inaccessibleRecovery(target)}`,
+    };
   }
 
   if (isDefaultProfile(target) && legacySlotExists(result.source)) {
@@ -166,15 +237,81 @@ export async function loadCredentials(profile?: string): Promise<FortnoxCredenti
     // the raw legacy blob — not result.blob, which may be the new slot if
     // pickHigher preferred it and would lose legacy-only metadata on drift.
     // A failure here must not break auth — Chunk D's `doctor` will surface it.
-    await migrateLegacyIfNeeded(result.legacyBlob);
+    try {
+      await migrateLegacyIfNeeded(result.legacyBlob);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return {
+        state: 'inaccessible',
+        profile: target,
+        source,
+        credentials: null,
+        detail: `Credential state: inaccessible for ${credentialContext(target)} — legacy profile metadata could not be inspected (${reason}). ${inaccessibleRecovery(target)}`,
+      };
+    }
   }
 
-  if (!result.blob) return null;
-  try {
-    return JSON.parse(result.blob) as FortnoxCredentials;
-  } catch {
-    return null;
+  if (!result.blob) {
+    let registered = false;
+    try {
+      const index = await readProfileIndex();
+      registered = index.profiles.some(
+        (entry) => entry.name.toLowerCase() === target.toLowerCase(),
+      );
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return {
+        state: 'inaccessible',
+        profile: target,
+        source,
+        credentials: null,
+        detail: `Credential state: inaccessible for ${credentialContext(target)} — the profile index could not be read (${reason}). ${inaccessibleRecovery(target)}`,
+      };
+    }
+    if (registered) {
+      return {
+        state: 'inaccessible',
+        profile: target,
+        source,
+        credentials: null,
+        detail: `Credential state: inaccessible for ${credentialContext(target)} — the registered profile exists, but credential lookup returned no item in this execution context. ${inaccessibleRecovery(target)}`,
+      };
+    }
+    return {
+      state: 'missing',
+      profile: target,
+      source,
+      credentials: null,
+      detail: `Credential state: missing for ${credentialContext(target)}. Run ${
+        isDefaultProfile(target) ? '`noxctl init`' : `\`noxctl init --profile ${target}\``
+      } to connect your Fortnox account.`,
+    };
   }
+  try {
+    return {
+      state: 'available',
+      profile: target,
+      source,
+      credentials: JSON.parse(result.blob) as FortnoxCredentials,
+      detail: `Credential state: available for ${credentialContext(target)}`,
+    };
+  } catch {
+    return {
+      state: 'inaccessible',
+      profile: target,
+      source,
+      credentials: null,
+      detail: `Credential state: inaccessible for ${credentialContext(target)} — the stored credential blob could not be parsed. ${inaccessibleRecovery(target)}`,
+    };
+  }
+}
+
+export async function loadCredentials(profile?: string): Promise<FortnoxCredentials | null> {
+  const inspected = await inspectCredentials(profile);
+  if (inspected.state === 'available') return inspected.credentials;
+  if (inspected.state === 'missing') return null;
+  if (inspected.state === 'locked') throw new KeychainLockedError(inspected.detail);
+  throw new CredentialAccessError(inspected.profile, inspected.source, inspected.detail);
 }
 
 export async function saveCredentials(creds: FortnoxCredentials, profile?: string): Promise<void> {
@@ -317,7 +454,7 @@ export async function getValidToken(profile?: string): Promise<string> {
       ? '`noxctl init`'
       : `\`noxctl init --profile ${target}\``;
     throw new Error(
-      `${profileTag(target)}Not authenticated. Run ${initCmd} to connect your Fortnox account.`,
+      `[profile: ${target}, source: ${sourceForProfile(target)}] Not authenticated. Run ${initCmd} to connect your Fortnox account.`,
     );
   }
 

@@ -11,7 +11,7 @@ import {
   validateProfileName,
 } from './profile-name.js';
 import { configDir } from './config-paths.js';
-import { activeKeychainPath, readDedicatedSecret } from './keychain-target.js';
+import { activeKeychainPath, KeychainAccessError, readDedicatedSecret } from './keychain-target.js';
 
 function legacyCredentialsFile(): string {
   return path.join(configDir(), 'credentials.json');
@@ -20,6 +20,40 @@ function legacyWindowsCredentialsFile(): string {
   return path.join(configDir(), 'credentials.dpapi');
 }
 const SERVICE_NAME = 'fortnox-mcp';
+
+export class CredentialStoreAccessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CredentialStoreAccessError';
+  }
+}
+
+function commandFailureDetail(err: unknown): string {
+  if (typeof err !== 'object' || err === null) return String(err);
+  const e = err as {
+    message?: string;
+    stderr?: Buffer | string;
+    code?: string;
+    status?: number;
+  };
+  const stderr = e.stderr?.toString().trim();
+  return stderr || e.message || e.code || `exit ${e.status ?? 'unknown'}`;
+}
+
+function isMissingSecretError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { message?: string; stderr?: Buffer | string; status?: number };
+  const detail = `${e.message ?? ''}\n${e.stderr?.toString() ?? ''}`;
+  return (
+    e.status === 44 || /not found|could not be found|no keychain item|no matching/i.test(detail)
+  );
+}
+
+function isEmptyExitOne(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const e = err as { stderr?: Buffer | string; status?: number };
+  return e.status === 1 && !(e.stderr?.toString().trim() ?? '');
+}
 
 function normalizeProfile(profile: string): { normalized: string; isDefault: boolean } {
   const validated = validateProfileName(profile).toLowerCase();
@@ -116,17 +150,29 @@ function loadMacSecret(account: string): string | null {
   // A locked keychain throws KeychainLockedError (propagated so the caller can
   // tell the user to run `noxctl keychain unlock`), not a silent null.
   const dedicated = activeKeychainPath();
-  if (dedicated) return readDedicatedSecret(account, dedicated);
+  if (dedicated) {
+    try {
+      return readDedicatedSecret(account, dedicated);
+    } catch (err) {
+      if (err instanceof KeychainAccessError) {
+        throw new CredentialStoreAccessError(err.message);
+      }
+      throw err;
+    }
+  }
 
   try {
     const raw = execFileSync(
       'security',
       ['find-generic-password', '-a', account, '-s', SERVICE_NAME, '-w'],
-      { encoding: 'utf-8' },
+      { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
     ).trim();
     return decodeHexIfNeeded(raw);
-  } catch {
-    return null;
+  } catch (err) {
+    if (isMissingSecretError(err)) return null;
+    throw new CredentialStoreAccessError(
+      `macOS Keychain could not be inspected (${commandFailureDetail(err)})`,
+    );
   }
 }
 
@@ -221,8 +267,14 @@ function loadLinuxSecret(account: string): string | null {
     return execFileSync('secret-tool', ['lookup', 'service', SERVICE_NAME, 'account', account], {
       encoding: 'utf-8',
     }).trim();
-  } catch {
-    return null;
+  } catch (err) {
+    // `secret-tool lookup` uses exit 1 with no stderr when no matching item
+    // exists. Transport/session failures include diagnostic stderr (and a
+    // missing binary reports ENOENT), so those remain inaccessible.
+    if (isMissingSecretError(err) || isEmptyExitOne(err)) return null;
+    throw new CredentialStoreAccessError(
+      `Linux Secret Service could not be inspected (${commandFailureDetail(err)})`,
+    );
   }
 }
 
@@ -235,6 +287,7 @@ function saveLinuxSecret(account: string, secret: string): void {
 }
 
 function loadWindowsSecret(file: string): string | null {
+  if (!fsSync.existsSync(file)) return null;
   try {
     return execFileSync(
       'powershell',
@@ -254,8 +307,10 @@ function loadWindowsSecret(file: string): string | null {
       ],
       { encoding: 'utf-8' },
     ).trim();
-  } catch {
-    return null;
+  } catch (err) {
+    throw new CredentialStoreAccessError(
+      `Windows DPAPI credential store could not be inspected (${commandFailureDetail(err)})`,
+    );
   }
 }
 

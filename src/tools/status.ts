@@ -28,14 +28,15 @@ export function registerStatusTools(server: McpServer): void {
       }
 
       // 2. Credentials
-      const { loadCredentials } = await import('../auth.js');
-      const creds = await loadCredentials();
-      if (!creds) {
-        fail('Credentials', 'not found — run `noxctl init` to set up');
+      const { inspectCredentials } = await import('../auth.js');
+      const inspection = await inspectCredentials();
+      if (inspection.state !== 'available') {
+        fail('Credentials', `${inspection.state} — ${inspection.detail}`);
         lines.push('');
         lines.push(ok ? 'All checks passed.' : 'Some checks failed.');
         return textResponse(lines.join('\n'));
       }
+      const creds = inspection.credentials!;
       pass('Credentials', 'found');
 
       // 3. Client ID
