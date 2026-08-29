@@ -44,7 +44,8 @@ If the scope changes, re-check the Fortnox terms and the privacy wording before 
 ## Release Checks
 
 - `npm run check:release` (lint, formatting, build, tests, production dependency audit, package manifest dry-run)
-- `npm audit` (record any dev-only findings separately; they are not shipped but still affect contributors/CI)
+- CI enforces `npm audit` across production and development dependencies; run it
+  locally as well and require zero known findings before release.
 - Review `git diff --stat origin/main..HEAD`
 - Sanity-read `README.md`, `PRIVACY.md`, and the tax tool descriptions
 

@@ -26,7 +26,7 @@ jobs:
       - run: npm run build
       - run: npm test
       - run: npm run format:check
-      - run: npm audit --omit=dev
+      - run: npm audit
       - run: npm pack --dry-run --ignore-scripts
 
   # Every bug in #95 was Windows-only (cmd.exe splitting the OAuth URL on `&`,
