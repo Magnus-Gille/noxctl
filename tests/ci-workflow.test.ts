@@ -8,7 +8,7 @@ const publishing = readFileSync(join(process.cwd(), 'PUBLISHING.md'), 'utf8');
 
 describe('CI workflow', () => {
   it('audits the complete installed dependency graph', () => {
-    expect(workflow).toContain('- run: npm audit\n');
+    expect(workflow).toMatch(/- run: npm audit\r?\n/);
     expect(workflow).not.toContain('npm audit --omit=dev');
     expect(contributing).toMatch(/complete installed\s+dependency graph/);
     expect(publishing).toContain(
