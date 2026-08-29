@@ -13,7 +13,7 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-const SupplierInvoiceRowSchema = z.object({
+const SupplierInvoiceRowSchema = z.strictObject({
   Account: z.number().describe('Kontonummer'),
   Debit: z.number().optional().describe('Debetbelopp'),
   Credit: z.number().optional().describe('Kreditbelopp'),

@@ -10,7 +10,7 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-const OrderRowSchema = z.object({
+const OrderRowSchema = z.strictObject({
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
   Description: z.string().describe('Beskrivning'),
   DeliveredQuantity: z.number().describe('Antal'),
@@ -106,7 +106,7 @@ export function registerOrderTools(
       CustomerNumber: z.string().optional().describe('Kundnummer'),
       OrderRows: z
         .array(
-          z.object({
+          z.strictObject({
             ArticleNumber: z.string().optional().describe('Artikelnummer'),
             Description: z.string().optional().describe('Beskrivning'),
             DeliveredQuantity: z.number().optional().describe('Antal'),

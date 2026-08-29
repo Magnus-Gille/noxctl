@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { setResolvedProfile } from './auth.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
@@ -32,6 +32,7 @@ import { registerSalaryTransactionTools } from './tools/salarytransactions.js';
 import { registerAttendanceTransactionTools } from './tools/attendancetransactions.js';
 import { registerAbsenceTransactionTools } from './tools/absencetransactions.js';
 import { registerScheduleTimeTools } from './tools/scheduletimes.js';
+import { createStrictMcpServer } from './strict-mcp-server.js';
 
 export interface CreateServerOptions {
   /** Host-authorized transport for exactly one tenant context. */
@@ -39,7 +40,7 @@ export interface CreateServerOptions {
 }
 
 export function createServer(options: CreateServerOptions = {}): McpServer {
-  const server = new McpServer({
+  const server = createStrictMcpServer({
     name: 'fortnox-mcp',
     version: '0.7.4',
   });
