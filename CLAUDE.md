@@ -28,9 +28,11 @@ noxctl invoices send 28 --yes        # skip prompt (non-interactive/scripting)
 noxctl invoices create --customer 25 --input data.json --dry-run
 ```
 
-## Backlog
+## Work tracking
 
-See `TODO.md` for the prioritized backlog and instructions for adding new resources.
+GitHub Issues are the canonical operational backlog. See `TODO.md` for the
+long-lived roadmap and instructions for adding new resources, and `STATUS.md`
+for the current execution handoff.
 
 ## Project structure
 
@@ -47,7 +49,7 @@ See `TODO.md` for the prioritized backlog and instructions for adding new resour
 
 ```bash
 npm run build       # TypeScript compile
-npm test            # Vitest (832 unit tests)
+npm test            # Vitest unit suite
 npm run test:live   # Live API tests (needs credentials)
 npm run lint        # ESLint
 npm run format      # Prettier

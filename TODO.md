@@ -1,20 +1,16 @@
 # TODO
 
-## Current State
-
-- Published to npm as `noxctl@0.6.0` (2026-07-21)
-- Invoice PDF export: `noxctl invoices pdf` / `fortnox_invoice_pdf`
-- Requires Node.js >=22.12.0; uses Commander 15
-- 27 operations modules: invoices, customers, suppliers, supplier invoices, articles, vouchers, accounts, financial reports, financial years/locked period, tax, company, invoice payments, supplier invoice payments, offers, orders, contracts, recurrings, projects, cost centers, tax reductions (ROT/RUT), price lists, analytics, employees, salary transactions, attendance transactions, absence transactions, schedule times
-- Full sales pipeline: offer → order → invoice → payment
-- Payroll (Lön): employees + salary/attendance/absence transactions + schedule times (opt-in `salary` scope via `init --with-salary`)
-- 832 unit tests across 73 files
+This file contains the long-lived roadmap and the recipe for adding Fortnox
+resources. [GitHub Issues](https://github.com/Magnus-Gille/noxctl/issues) are the
+canonical operational backlog; [STATUS.md](STATUS.md) contains the current
+execution handoff. Current release and capability information belongs in the
+package metadata, changelog, and README rather than as snapshots here.
 
 ## API Drift Detection
 
 Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and compares it against the committed **fingerprint** (`api-spec/openapi-fingerprint.json` — opaque hashes only; the full spec is not stored in the repo, per Fortnox Developer Agreement cl. 6.1/6.3). Opens a GitHub issue labeled `api-drift` when endpoints/schemas change. Run locally with `npm run check:api`. Can also be triggered manually from the Actions tab.
 
-## Backlog
+## Roadmap
 
 ### Tier 2 — Usability
 
