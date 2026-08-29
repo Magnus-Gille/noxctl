@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 const credentialStore = vi.hoisted(() => ({
   loadCredentialBlob: vi.fn(),
   saveCredentialBlob: vi.fn(),
+  CredentialStoreAccessError: class CredentialStoreAccessError extends Error {},
 }));
 
 const profilesModule = vi.hoisted(() => ({
@@ -18,6 +19,8 @@ import {
   browserOpenCommand,
   LEGACY_SCOPES,
   loadCredentials,
+  inspectCredentials,
+  CredentialAccessError,
   saveCredentials,
   exchangeCodeForTokens,
   refreshAccessToken,
@@ -31,6 +34,7 @@ import {
   SALARY_SCOPE,
   setResolvedProfile,
   getResolvedProfile,
+  getResolvedProfileSource,
   CREDENTIAL_SCHEMA_VERSION,
   __resetLegacyObservedForDefault,
   type FortnoxCredentials,
@@ -95,6 +99,16 @@ describe('auth', () => {
       );
       const creds = await loadCredentials();
       expect(creds).toEqual(mockCredentials);
+    });
+
+    it('throws when a registered profile cannot be read in the current execution context', async () => {
+      profilesModule.readProfileIndex.mockResolvedValueOnce({
+        schema_version: 1,
+        profiles: [{ name: 'work' }],
+      });
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+
+      await expect(loadCredentials('work')).rejects.toThrow(CredentialAccessError);
     });
 
     it('returns credentials with tenant_id when present', async () => {
@@ -222,8 +236,100 @@ describe('auth', () => {
     });
 
     it('setResolvedProfile updates the module state', () => {
-      setResolvedProfile('demo');
+      setResolvedProfile('demo', 'env');
       expect(getResolvedProfile()).toBe('demo');
+      expect(getResolvedProfileSource()).toBe('env');
+    });
+  });
+
+  describe('inspectCredentials', () => {
+    it('reports available when credentials parse successfully', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials)),
+      );
+
+      await expect(inspectCredentials('default')).resolves.toMatchObject({
+        state: 'available',
+        profile: 'default',
+        credentials: mockCredentials,
+      });
+    });
+
+    it('reports missing only when the profile is not registered', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+
+      await expect(inspectCredentials('fresh')).resolves.toMatchObject({
+        state: 'missing',
+        profile: 'fresh',
+        credentials: null,
+      });
+    });
+
+    it('reports inaccessible when a registered profile lookup returns no item', async () => {
+      profilesModule.readProfileIndex.mockResolvedValueOnce({
+        schema_version: 1,
+        profiles: [{ name: 'work' }],
+      });
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+
+      const result = await inspectCredentials('work');
+      expect(result).toMatchObject({ state: 'inaccessible', profile: 'work', credentials: null });
+      expect(result.detail).toContain('registered profile');
+      expect(result.detail).toContain('unsandboxed terminal');
+      expect(result.detail).toContain('already-running MCP server');
+    });
+
+    it('reports locked without recommending OAuth setup', async () => {
+      const { KeychainLockedError } = await import('../src/keychain-target.js');
+      credentialStore.loadCredentialBlob.mockRejectedValueOnce(new KeychainLockedError());
+
+      const result = await inspectCredentials('work');
+      expect(result.state).toBe('locked');
+      expect(result.detail).toContain('keychain unlock');
+      expect(result.detail).toContain('profile "work" (source: explicit)');
+      expect(result.detail).not.toContain('noxctl init');
+    });
+
+    it('reports inaccessible when the credential backend throws', async () => {
+      credentialStore.loadCredentialBlob.mockRejectedValueOnce(
+        new credentialStore.CredentialStoreAccessError('sandbox denied access'),
+      );
+
+      const result = await inspectCredentials('work');
+      expect(result.state).toBe('inaccessible');
+      expect(result.detail).toContain('sandbox denied access');
+      expect(result.detail).not.toContain('noxctl init');
+    });
+
+    it('reports inaccessible for a malformed credential blob', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult('{not-json'));
+
+      const result = await inspectCredentials('work');
+      expect(result.state).toBe('inaccessible');
+      expect(result.detail).toContain('could not be parsed');
+    });
+
+    it('reports legacy-index migration failures as inaccessible', async () => {
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(
+        blobResult(JSON.stringify(mockCredentials), 'legacy'),
+      );
+      profilesModule.migrateLegacyIfNeeded.mockRejectedValueOnce(new Error('index denied'));
+
+      const result = await inspectCredentials('default');
+      expect(result.state).toBe('inaccessible');
+      expect(result.detail).toContain('legacy profile metadata');
+      expect(result.detail).toContain('index denied');
+    });
+
+    it('includes the resolved profile source in access errors', async () => {
+      setResolvedProfile('work', 'pointer');
+      profilesModule.readProfileIndex.mockResolvedValueOnce({
+        schema_version: 1,
+        profiles: [{ name: 'work' }],
+      });
+      credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
+
+      await expect(loadCredentials()).rejects.toThrow(/profile "work" \(source: pointer\)/);
     });
   });
 
@@ -489,18 +595,18 @@ describe('auth', () => {
     it('tags the not-authenticated error with profile when non-default', async () => {
       credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
       await expect(getValidToken('staging')).rejects.toThrow(
-        /\[profile: staging\].*noxctl init --profile staging/,
+        /\[profile: staging, source: explicit\].*noxctl init --profile staging/,
       );
     });
 
-    it('omits the profile tag for the default profile', async () => {
+    it('names the default profile and its resolution source', async () => {
       credentialStore.loadCredentialBlob.mockResolvedValueOnce(blobResult(null));
       try {
         await getValidToken();
         expect.unreachable();
       } catch (err) {
         const message = (err as Error).message;
-        expect(message).not.toContain('[profile:');
+        expect(message).toContain('[profile: default, source: default]');
         expect(message).toContain('noxctl init');
       }
     });

@@ -30,6 +30,7 @@ import {
   loadCredentialBlob,
   saveCredentialBlob,
   deleteCredentialBlob,
+  CredentialStoreAccessError,
 } from '../src/credentials-store.js';
 import {
   validateProfileName,
@@ -216,6 +217,18 @@ describe('loadCredentialBlob (darwin)', () => {
 
     const result = await loadCredentialBlob('default');
     expect(result).toEqual({ blob: null, source: null, legacyBlob: null });
+  });
+
+  it('surfaces unexpected macOS keychain failures as inaccessible', async () => {
+    childProcess.execFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('sandbox denied access'), {
+        code: 'EPERM',
+        status: 1,
+        stderr: 'Operation not permitted',
+      });
+    });
+
+    await expect(loadCredentialBlob('demo')).rejects.toThrow(CredentialStoreAccessError);
   });
 
   it('returns legacy blob with source=legacy when only legacy keychain entry exists', async () => {
@@ -488,6 +501,26 @@ describe('Linux secret-tool backend', () => {
     setPlatform('linux');
   });
 
+  it('treats exit 1 without stderr as an absent secret', async () => {
+    childProcess.execFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('Command failed'), { status: 1, stderr: '' });
+    });
+
+    await expect(loadCredentialBlob('demo')).resolves.toEqual({
+      blob: null,
+      source: null,
+      legacyBlob: null,
+    });
+  });
+
+  it('surfaces a missing secret-tool binary as inaccessible', async () => {
+    childProcess.execFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('spawn secret-tool ENOENT'), { code: 'ENOENT' });
+    });
+
+    await expect(loadCredentialBlob('demo')).rejects.toThrow(CredentialStoreAccessError);
+  });
+
   it('uses account=profile:<name> for non-default profiles', async () => {
     childProcess.execFileSync.mockReturnValue('');
     await loadCredentialBlob('demo');
@@ -533,6 +566,26 @@ describe('Linux secret-tool backend', () => {
 describe('Windows DPAPI backend', () => {
   beforeEach(() => {
     setPlatform('win32');
+    fsSync.default.existsSync.mockReturnValue(true);
+  });
+
+  it('reports missing without invoking PowerShell when the DPAPI file is absent', async () => {
+    fsSync.default.existsSync.mockReturnValue(false);
+
+    await expect(loadCredentialBlob('demo')).resolves.toEqual({
+      blob: null,
+      source: null,
+      legacyBlob: null,
+    });
+    expect(childProcess.execFileSync).not.toHaveBeenCalled();
+  });
+
+  it('surfaces PowerShell failures for an existing DPAPI file as inaccessible', async () => {
+    childProcess.execFileSync.mockImplementation(() => {
+      throw Object.assign(new Error('ProtectedData failed'), { status: 1, stderr: 'denied' });
+    });
+
+    await expect(loadCredentialBlob('demo')).rejects.toThrow(CredentialStoreAccessError);
   });
 
   it('uses credentials.<name>.dpapi for non-default profiles', async () => {
@@ -660,6 +713,11 @@ describe('dedicated-keychain mode (darwin)', () => {
   it('throws KeychainLockedError when the dedicated keychain is locked', async () => {
     childProcess.spawnSync.mockReturnValue({ status: 2, stdout: '', stderr: '' });
     await expect(loadCredentialBlob('default')).rejects.toThrow(KeychainLockedError);
+  });
+
+  it('surfaces a configured but unreadable dedicated keychain as inaccessible', async () => {
+    childProcess.spawnSync.mockReturnValue({ status: 4, stdout: '', stderr: 'open failed' });
+    await expect(loadCredentialBlob('default')).rejects.toThrow(CredentialStoreAccessError);
   });
 
   it('save targets the dedicated keychain via Swift argv and kSecUseKeychain', async () => {

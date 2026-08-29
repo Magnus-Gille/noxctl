@@ -24,6 +24,18 @@ export class KeychainLockedError extends Error {
   }
 }
 
+// Thrown when the dedicated keychain is configured but cannot be inspected in
+// the current execution context (for example from a sandbox that cannot see
+// the user's keychain file). This is deliberately distinct from both a locked
+// keychain and an absent credential item: callers must fail closed rather than
+// recommend replacing credentials whose existence cannot be determined.
+export class KeychainAccessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'KeychainAccessError';
+  }
+}
+
 // Thrown when a challenge-response operation fails — most often a missed touch
 // (ykman reports "Failed to write to the YubiKey" when the tap window lapses).
 export class ChallengeResponseError extends Error {
@@ -91,7 +103,7 @@ let kcPath = CommandLine.arguments[2]
 
 var kc: SecKeychain?
 let openStatus = SecKeychainOpen(kcPath, &kc)
-if openStatus != errSecSuccess || kc == nil { exit(3) }
+if openStatus != errSecSuccess || kc == nil { exit(4) }
 
 SecKeychainSetUserInteractionAllowed(false)
 
@@ -110,15 +122,25 @@ if status == errSecSuccess, let data = item as? Data {
   exit(0)
 }
 if status == errSecInteractionNotAllowed || status == errSecAuthFailed { exit(2) }
-exit(3)
+if status == errSecItemNotFound { exit(3) }
+exit(4)
 `;
   const scriptPath = path.join(os.tmpdir(), `noxctl-kcread-${process.pid}.swift`);
   try {
     fsSync.writeFileSync(scriptPath, swiftScript, { mode: 0o600 });
     const result = spawnSync('swift', [scriptPath, account, keychainPath], { encoding: 'utf-8' });
+    if (result.error) {
+      throw new KeychainAccessError(
+        `Fortnox keychain at ${keychainPath} could not be inspected (${result.error.message})`,
+      );
+    }
     if (result.status === 0) return decodeBase64(result.stdout);
     if (result.status === 2) throw new KeychainLockedError();
-    return null;
+    if (result.status === 3) return null;
+    const detail = (result.stderr || '').trim() || `helper exit ${result.status ?? 'unknown'}`;
+    throw new KeychainAccessError(
+      `Fortnox keychain at ${keychainPath} could not be inspected (${detail})`,
+    );
   } finally {
     try {
       fsSync.unlinkSync(scriptPath);

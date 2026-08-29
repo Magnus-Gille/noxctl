@@ -1,10 +1,29 @@
 # Project Status
 
-**Last session:** 2026-08-28
-**Branch:** `feat/122-embedded-api` (stacked on `feat/119-tenant-client` → `feat/120-client-bound-operations` → `feat/121-tenant-bound-mcp`)
+**Last session:** 2026-08-29
+**Branch:** `fix/117-keychain-recovery`
 **Published:** `v0.7.4` on GitHub and `noxctl@0.7.4` on npm (both verified 2026-08-28)
 
 ## Completed This Session
+
+- Implemented #117's fail-closed credential recovery model. Auth, CLI doctor,
+  `keychain status`, profile selection, init, and MCP status now share the
+  explicit states `available`, `missing`, `locked`, and `inaccessible`.
+- A registered profile whose credential lookup returns no item is treated as
+  `inaccessible`, so sandbox/keychain ambiguity can no longer lead directly to
+  OAuth replacement. Recovery output identifies the effective profile and
+  source and explains that running MCP processes remain pinned to their startup
+  profile.
+- Hardened macOS dedicated-keychain inspection, Linux `secret-tool` exit-state
+  handling, and Windows DPAPI file/access detection without falling back to a
+  less protected credential store. Added the short sandbox/YubiKey recovery
+  flow to README.
+- Red/green coverage now exercises available, missing, locked, inaccessible,
+  malformed, registered-but-unreadable, Linux, Windows, macOS dedicated-keychain,
+  fail-closed init, doctor, keychain-status, and profile-source cases. Full
+  verification passes with 866 tests across 76 files, zero production
+  vulnerabilities, a passing packed embedded consumer, and a successful npm
+  package dry run.
 
 - Created hosted-product epic #118 and implementation tickets #119–#122 for the public reusable core; the private OAuth/session/token-vault/billing/operations host remains intentionally outside this repository.
 - Added isolated per-tenant Fortnox clients, transport-bound operation factories across all resource families, tenant-bound MCP server construction, and the supported `noxctl/embedded` package entry point while preserving local CLI/stdio behavior.
@@ -48,7 +67,8 @@ Found and fixed without being reported:
 
 ## In Progress
 
-The public hosted-core implementation and its review history are tracked in PR #123. GitHub is authoritative for its current merge state. This work does not include an npm release, deployment, or production-host publication.
+Issue #117 is implemented and verified locally on `fix/117-keychain-recovery`.
+It has not been pushed and no pull request or release has been created.
 
 ## Blockers
 
@@ -56,11 +76,12 @@ No public-core code blocker is known. The private hosted product still depends o
 
 ## Next Steps
 
-1. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
-2. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
-3. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
-4. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
-5. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
+1. Review and publish `fix/117-keychain-recovery` as a pull request; no release is bundled with this change.
+2. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
+3. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
+4. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
+5. Confirm against a live account whether Fortnox really overwrites voucher-row `Description` with the account's registered name. Adopted from @hedborg's report but **not independently verified** — verifying needs a real voucher mutation. The docs currently say "normally".
+6. `#13` (bank transactions) remains blocked upstream. Revisit only if the drift workflow reports a genuinely transactional bank path.
 
 ## Notes
 

@@ -20,6 +20,7 @@ vi.mock('node:fs', () => fsSync);
 
 import {
   KeychainLockedError,
+  KeychainAccessError,
   ChallengeResponseError,
   dedicatedKeychainPath,
   loginKeychainPath,
@@ -272,6 +273,13 @@ describe('readDedicatedSecret', () => {
   it('returns null on exit 3 (item absent)', () => {
     childProcess.spawnSync.mockReturnValue({ status: 3, stdout: '' });
     expect(readDedicatedSecret('profile:default', '/tmp/k.keychain-db')).toBeNull();
+  });
+
+  it('throws KeychainAccessError when the configured keychain cannot be opened', () => {
+    childProcess.spawnSync.mockReturnValue({ status: 4, stdout: '', stderr: 'open failed' });
+    expect(() => readDedicatedSecret('profile:default', '/tmp/k.keychain-db')).toThrow(
+      KeychainAccessError,
+    );
   });
 
   it('passes account and keychain path as argv (not interpolated)', () => {
