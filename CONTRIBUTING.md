@@ -14,6 +14,19 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
   tests, examples, or commits. Use synthetic placeholders (`Acme AB`, `556677-8899`, etc.).
 - Security issues: follow [SECURITY.md](SECURITY.md) — do not open a public issue.
 
+## Work tracking
+
+- [GitHub Issues](https://github.com/Magnus-Gille/noxctl/issues) are the canonical
+  operational backlog for non-trivial bugs, features, and follow-up work.
+- [TODO.md](TODO.md) is a long-lived roadmap and resource-implementation recipe.
+  It is not a live release, test-count, or execution-status dashboard.
+- [STATUS.md](STATUS.md) is the current execution handoff. It records branch,
+  verification, blockers, and the exact next step; it is not an issue tracker.
+
+If work discovered during a pull request is required for that pull request to
+be correct, secure, or green, fix and test it in the same pull request. Open a
+separate issue for independently useful or out-of-scope follow-up work.
+
 ## Dev setup
 
 Prerequisites: Node.js **22.22.1+** and (on Linux) `secret-tool` for the
@@ -44,7 +57,9 @@ npm run format:check  # Prettier (check only, what CI runs)
 npm run build         # tsc
 ```
 
-CI runs `build`, `test`, and `format:check` on Node 22 and 24 — all three must pass.
+CI runs lint, build, tests, formatting, a production dependency audit, and a
+package dry-run on Ubuntu with Node 22 and 24. A separate Windows Node 22 job
+runs the build and test suite. Every required job must pass.
 
 ## Project layout
 
@@ -105,6 +120,27 @@ Tests:
   to be covered.
 - Keep PR descriptions concrete: what changed, why, and anything a reviewer should
   double-check (new scope, new external call, privacy impact, etc.).
+
+### Authorized review-and-merge completion gate
+
+When the repository owner or a maintainer explicitly requests review and merge,
+that authorizes the workflow for the named pull request; it does not make PR
+creation the finish line. The task remains active until all of the following
+are true, or a concrete blocker is reported:
+
+1. Relevant focused and broad local checks pass.
+2. Every required CI job reaches a final successful state. Pending, flaky, or
+   cancelled checks are not green.
+3. Review findings are fixed and regression-tested, or explicitly declined with
+   evidence and rationale.
+4. The pull request is merged with the repository's established merge method.
+5. The merge commit is verified on the intended target branch.
+6. Issues linked for automatic closure are confirmed closed; issues deliberately
+   left open have a documented follow-up.
+
+Review-and-merge authorization does not imply branch deletion, a version bump,
+tagging, release creation, deployment, or package publication. Those remain
+separate, explicitly authorized workflows.
 
 ## API drift
 
