@@ -661,6 +661,8 @@ npm test             # run tests
 npm run test:watch   # watch mode
 npm run lint         # ESLint with typescript-eslint
 npm run format       # format
+npm run check:api    # refresh the git-ignored OpenAPI cache and detect API drift
+npm run audit:schemas # compare selected MCP write schemas with the local cache
 ```
 
 ## Architecture
