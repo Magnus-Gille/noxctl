@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "records": [
+    {
+      "id": "invoice-row",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 18,
+      "missingPropertyCount": 10,
+      "stateHash": "e04c83af8dda43e69d4aeec0c041b72ae2f782e7587b4f6dd83870acf22a6bab"
+    },
+    {
+      "id": "offer-row",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 19,
+      "missingPropertyCount": 12,
+      "stateHash": "60562fc9976fddccdbe0e99844a63ed092b77f225728aeed40350d61793bd7f9"
+    },
+    {
+      "id": "order-row",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 19,
+      "missingPropertyCount": 11,
+      "stateHash": "895148d406eb97c741d8a5b100df43cdd56c7302d81dc98a4a8574f7144c4c70"
+    },
+    {
+      "id": "supplier",
+      "declaredPropertyCount": 44,
+      "specificationPropertyCount": 41,
+      "missingPropertyCount": 0,
+      "stateHash": "22830034d8b00b23ddb2594bc76450751c81a3a16aaa50a7f44c20f82b62a545"
+    },
+    {
+      "id": "supplier-invoice-row",
+      "declaredPropertyCount": 4,
+      "specificationPropertyCount": 18,
+      "missingPropertyCount": 15,
+      "stateHash": "da75598bb1e7623170ae1b6ce0ff6096a55df3055d765ce8445a9c0d96f6283a"
+    },
+    {
+      "id": "voucher-row",
+      "declaredPropertyCount": 9,
+      "specificationPropertyCount": 9,
+      "missingPropertyCount": 0,
+      "stateHash": "d3d7fc08d35e0a5bdf4c2279bab5f5e2902cc070f2dff84e284e930e4a20d294"
+    }
+  ]
+}

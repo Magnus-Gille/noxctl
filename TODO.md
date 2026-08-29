@@ -10,6 +10,14 @@ package metadata, changelog, and README rather than as snapshots here.
 
 Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and compares it against the committed **fingerprint** (`api-spec/openapi-fingerprint.json` — opaque hashes only; the full spec is not stored in the repo, per Fortnox Developer Agreement cl. 6.1/6.3). Opens a GitHub issue labeled `api-drift` when endpoints/schemas change. Run locally with `npm run check:api`. Can also be triggered manually from the Actions tab.
 
+After fetching the local, git-ignored cache, run `npm run audit:schemas` to compare
+selected MCP write schemas with their OpenAPI payload components. Normal output and
+`api-spec/tool-schema-coverage.json` contain counts and opaque hashes only. Use
+`npm run audit:schemas -- --show-fields` for an explicit local diagnostic, and update
+the baseline with `npm run audit:schemas -- --update` only after reviewing an intended
+specification or tool-schema change. The coverage audit is deliberately local until
+its privacy boundary has been validated before CI integration.
+
 ## Roadmap
 
 ### Tier 2 — Usability
