@@ -57,9 +57,10 @@ npm run format:check  # Prettier (check only, what CI runs)
 npm run build         # tsc
 ```
 
-CI runs lint, build, tests, formatting, a production dependency audit, and a
-package dry-run on Ubuntu with Node 22 and 24. A separate Windows Node 22 job
-runs the build and test suite. Every required job must pass.
+CI runs lint, build, tests, formatting, an audit of the complete installed
+dependency graph, and a package dry-run on Ubuntu with Node 22 and 24. A
+separate Windows Node 22 job runs the build and test suite. Every required job
+must pass.
 
 ## Project layout
 
