@@ -28,7 +28,7 @@ noxctl invoices send 28 --yes        # skip prompt (non-interactive/scripting)
 noxctl invoices create --customer 25 --input data.json --dry-run
 ```
 
-## Backlog
+## Work tracking
 
 GitHub Issues are the canonical operational backlog. See `TODO.md` for the
 long-lived roadmap and instructions for adding new resources, and `STATUS.md`

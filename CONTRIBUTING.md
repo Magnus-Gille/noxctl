@@ -115,7 +115,8 @@ Tests:
 - Run `npm run format` and `npm run lint` before pushing. Husky runs Prettier on
   staged files automatically, but running the full check locally catches CI failures early.
 - Update `README.md` if you add, remove, or rename a public CLI/MCP command.
-- Update `TODO.md` when finishing a backlog item (strikethrough + ✅).
+- Update `TODO.md` when finishing a roadmap item (strikethrough + ✅) and link
+  the pull request to its GitHub issue for closure.
 - Include new/updated tests. CI is the bar; aim for the behaviour your PR changes
   to be covered.
 - Keep PR descriptions concrete: what changed, why, and anything a reviewer should
