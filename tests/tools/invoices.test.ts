@@ -213,6 +213,100 @@ describe('invoice tools', () => {
       expect(body.Invoice.InvoiceRows[0].VAT).toBe(25);
       expect(body.Invoice.InvoiceRows[0].Unit).toBe('tim');
     });
+
+    it('advertises and preserves complete invoice rows for create and update', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1004', CustomerNumber: '42' } });
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const createTool = tools.find((tool) => tool.name === 'fortnox_create_invoice');
+      const updateTool = tools.find((tool) => tool.name === 'fortnox_update_invoice');
+      type RowProperties = Record<string, { enum?: string[] }>;
+      type InvoiceToolInput = {
+        properties: { InvoiceRows: { items: { properties: RowProperties } } };
+      };
+      const createProperties = (createTool?.inputSchema as InvoiceToolInput).properties.InvoiceRows
+        .items.properties;
+      const updateProperties = (updateTool?.inputSchema as InvoiceToolInput).properties.InvoiceRows
+        .items.properties;
+
+      expect(Object.keys(createProperties)).toHaveLength(18);
+      expect(Object.keys(updateProperties)).toHaveLength(18);
+      expect(createProperties.DiscountType?.enum).toEqual(['AMOUNT', 'PERCENT']);
+      expect(createProperties.HouseWorkType?.enum).toHaveLength(24);
+      expect(createProperties.HouseWorkType?.enum).toContain('CONSTRUCTION');
+      expect(createProperties.HouseWorkType?.enum).toContain('ITSERVICES');
+      expect(createProperties.HouseWorkType?.enum).toContain('WASHINGANDCAREOFCLOTHING');
+
+      const row = {
+        AccountNumber: 3001,
+        ArticleNumber: 'CONSULTING',
+        Cost: null,
+        CostCenter: null,
+        DeliveredQuantity: '2.5',
+        Description: 'Teknisk rådgivning',
+        Discount: 10,
+        DiscountType: 'PERCENT',
+        HouseWork: true,
+        HouseWorkHoursToReport: null,
+        HouseWorkType: 'ITSERVICES',
+        Price: 1200,
+        Project: 'P1',
+        RowId: 7,
+        StockPointCode: 'STH',
+        Unit: 'tim',
+        VAT: 25,
+        VATCode: 'SE25',
+      };
+
+      const created = await client.callTool({
+        name: 'fortnox_create_invoice',
+        arguments: { CustomerNumber: '42', InvoiceRows: [row], confirm: true },
+      });
+      const updated = await client.callTool({
+        name: 'fortnox_update_invoice',
+        arguments: { documentNumber: '1004', InvoiceRows: [row], confirm: true },
+      });
+
+      expect(created.isError).not.toBe(true);
+      expect(updated.isError).not.toBe(true);
+      const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+      expect(JSON.parse(calls[0][1].body).Invoice.InvoiceRows[0]).toEqual(row);
+      expect(JSON.parse(calls[1][1].body).Invoice.InvoiceRows[0]).toEqual(row);
+    });
+
+    it.each([
+      ['an out-of-range account', { AccountNumber: 999 }],
+      ['an out-of-range cost', { Cost: 10_000_000_000 }],
+      ['an overlong description', { Description: 'x'.repeat(256) }],
+      ['an unknown discount type', { DiscountType: 'UNKNOWN' }],
+      ['too many house-work hours', { HouseWorkHoursToReport: 1000 }],
+      ['an unknown house-work type', { HouseWorkType: 'UNKNOWN' }],
+      ['a fractional row id', { RowId: 1.5 }],
+      ['an overlong unit', { Unit: 'x'.repeat(21) }],
+      ['a fractional VAT percentage', { VAT: 25.5 }],
+    ])('rejects %s before making an invoice request', async (_case, invalidFields) => {
+      mockFetch({ Invoice: {} });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_invoice',
+        arguments: {
+          CustomerNumber: '42',
+          InvoiceRows: [
+            {
+              Description: 'Test',
+              DeliveredQuantity: 1,
+              Price: 100,
+              ...invalidFields,
+            },
+          ],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
   });
 
   describe('fortnox_send_invoice', () => {

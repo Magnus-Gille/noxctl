@@ -3,10 +3,10 @@
   "records": [
     {
       "id": "invoice-row",
-      "declaredPropertyCount": 8,
+      "declaredPropertyCount": 18,
       "specificationPropertyCount": 18,
-      "missingPropertyCount": 10,
-      "stateHash": "e04c83af8dda43e69d4aeec0c041b72ae2f782e7587b4f6dd83870acf22a6bab"
+      "missingPropertyCount": 0,
+      "stateHash": "c88088ad9b7760e55821ad2ff4d22076a4efdc2e2a9a2419d7fe67bf62978a08"
     },
     {
       "id": "offer-row",
