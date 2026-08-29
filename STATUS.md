@@ -67,8 +67,8 @@ Found and fixed without being reported:
 
 ## In Progress
 
-Issue #117 is implemented and verified locally on `fix/117-keychain-recovery`.
-It has not been pushed and no pull request or release has been created.
+Issue #117 is implemented and verified on `fix/117-keychain-recovery` and is
+published for review in PR #124. No release has been created.
 
 ## Blockers
 
@@ -76,7 +76,7 @@ No public-core code blocker is known. The private hosted product still depends o
 
 ## Next Steps
 
-1. Review and publish `fix/117-keychain-recovery` as a pull request; no release is bundled with this change.
+1. Review and merge PR #124 after its required checks pass; no release is bundled with this change.
 2. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
 3. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
 4. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.
