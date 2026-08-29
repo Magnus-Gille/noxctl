@@ -19,6 +19,11 @@ describe('weekly API drift workflow', () => {
     expect(workflow).toContain("if: steps.diff.outputs.error != 'true'");
   });
 
+  it('treats every unexpected fetch exit as an error before the schema audit', () => {
+    expect(workflow).toContain('elif [ "$EXIT_CODE" -ne 0 ]; then');
+    expect(workflow).not.toContain('elif [ "$EXIT_CODE" -eq 2 ]; then');
+  });
+
   it('uses only the privacy-safe audit mode and never persists the fetched spec', () => {
     expect(workflow).toContain('npm run audit:schemas --silent');
     expect(workflow).not.toContain('audit:schemas -- --update');
@@ -35,7 +40,9 @@ describe('weekly API drift workflow', () => {
     expect(workflow).toContain("steps.schema_audit.outputs.error == 'true'");
     expect(workflow).toContain('MCP write schema drift');
     expect(workflow).toContain('MCP write schema audit failed');
-    expect(workflow).toContain('github.rest.issues.listForRepo');
+    expect(workflow).toContain('group: api-drift-check');
+    expect(workflow).toContain('cancel-in-progress: false');
+    expect(workflow).toContain('github.paginate(github.rest.issues.listForRepo');
     expect(workflow).toContain('github.rest.issues.createComment');
     expect(workflow).toContain('github.rest.issues.create({');
   });

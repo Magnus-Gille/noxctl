@@ -5,6 +5,10 @@ on:
     - cron: "0 8 * * 1" # Every Monday at 08:00 UTC
   workflow_dispatch: # Allow manual trigger
 
+concurrency:
+  group: api-drift-check
+  cancel-in-progress: false
+
 permissions:
   contents: write
   issues: write
@@ -35,10 +39,13 @@ jobs:
 
           if [ "$EXIT_CODE" -eq 1 ]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
-          elif [ "$EXIT_CODE" -eq 2 ]; then
+            echo "error=false" >> "$GITHUB_OUTPUT"
+          elif [ "$EXIT_CODE" -ne 0 ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "error=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "error=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check MCP write-schema coverage
@@ -132,14 +139,14 @@ jobs:
             // persistent HTTP 429). Rather than open a fresh issue each Monday,
             // append a comment to the existing open fetch-failure issue if one
             // exists, so the failure history lives in a single tracker.
-            const open = await github.rest.issues.listForRepo({
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'api-drift',
               per_page: 100,
             });
-            const existing = open.data.find(
+            const existing = open.find(
               (i) => !i.pull_request && /fetch failed|drift check|429/i.test(i.title),
             );
 
@@ -205,14 +212,14 @@ jobs:
               'The full Fortnox specification and raw property names are intentionally not included.',
             ].join('\n');
 
-            const open = await github.rest.issues.listForRepo({
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
               labels: 'api-drift',
               per_page: 100,
             });
-            const existing = open.data.find(
+            const existing = open.find(
               (issue) => !issue.pull_request && issue.title === title,
             );
 
