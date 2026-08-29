@@ -17,10 +17,10 @@
     },
     {
       "id": "order-row",
-      "declaredPropertyCount": 8,
+      "declaredPropertyCount": 19,
       "specificationPropertyCount": 19,
-      "missingPropertyCount": 11,
-      "stateHash": "895148d406eb97c741d8a5b100df43cdd56c7302d81dc98a4a8574f7144c4c70"
+      "missingPropertyCount": 0,
+      "stateHash": "9e47e77be6ba95abf03aa8b1b67ebfff4d661ab69471a05954fa034e9a8fed9c"
     },
     {
       "id": "supplier",
