@@ -21,7 +21,7 @@ import {
 // TransactionInformation simply vanished and the voucher booked without it
 // (#101). createVoucher() forwards rows verbatim, so this schema is the only
 // place fields were being lost.
-const VoucherRowSchema = z.object({
+const VoucherRowSchema = z.strictObject({
   Account: z.number().describe('Kontonummer'),
   Debit: z.number().optional().describe('Debetbelopp'),
   Credit: z.number().optional().describe('Kreditbelopp'),

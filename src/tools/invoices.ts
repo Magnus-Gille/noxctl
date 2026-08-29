@@ -20,7 +20,7 @@ import {
   requireConfirmation,
 } from '../tool-output.js';
 
-const InvoiceRowSchema = z.object({
+const InvoiceRowSchema = z.strictObject({
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
   Description: z.string().describe('Beskrivning'),
   DeliveredQuantity: z.number().describe('Antal'),
@@ -182,7 +182,7 @@ export function registerInvoiceTools(
       CustomerNumber: z.string().optional().describe('Kundnummer'),
       InvoiceRows: z
         .array(
-          z.object({
+          z.strictObject({
             ArticleNumber: z.string().optional().describe('Artikelnummer'),
             Description: z.string().optional().describe('Beskrivning'),
             DeliveredQuantity: z.number().optional().describe('Antal'),
