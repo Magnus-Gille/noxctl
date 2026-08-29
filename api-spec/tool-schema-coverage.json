@@ -10,10 +10,10 @@
     },
     {
       "id": "offer-row",
-      "declaredPropertyCount": 8,
+      "declaredPropertyCount": 20,
       "specificationPropertyCount": 19,
-      "missingPropertyCount": 12,
-      "stateHash": "60562fc9976fddccdbe0e99844a63ed092b77f225728aeed40350d61793bd7f9"
+      "missingPropertyCount": 0,
+      "stateHash": "ad10515787a657a7ca9f5bec5cd49d33e34e2861c5aa31da0925e05e86e54f96"
     },
     {
       "id": "order-row",

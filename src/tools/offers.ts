@@ -11,14 +11,53 @@ import {
 } from '../tool-output.js';
 
 const OfferRowSchema = z.strictObject({
+  AccountNumber: z.number().int().optional().describe('Kontonummer'),
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
-  Description: z.string().describe('Beskrivning'),
-  DeliveredQuantity: z.number().describe('Antal'),
+  ContributionPercent: z.string().optional().describe('Täckningsgrad i procent'),
+  ContributionValue: z.string().optional().describe('Täckningsbidrag'),
+  CostCenter: z.string().nullable().optional().describe('Kostnadsställe'),
+  Description: z.string().max(255).describe('Beskrivning (max 255 tecken)'),
+  DeliveredQuantity: z.number().describe('Antal (kompatibilitetsfält)'),
+  Discount: z.number().optional().describe('Rabattvärde'),
+  DiscountType: z.enum(['AMOUNT', 'PERCENT']).optional().describe('Rabatttyp'),
+  HouseWork: z.boolean().optional().describe('Markera raden som husarbete (ROT/RUT)'),
+  HouseWorkHoursToReport: z
+    .number()
+    .int()
+    .min(0)
+    .max(999)
+    .nullable()
+    .optional()
+    .describe('Timmar att rapportera för husarbete (0–999)'),
+  HouseWorkType: z
+    .enum([
+      'CONSTRUCTION',
+      'ELECTRICITY',
+      'GLASSMETALWORK',
+      'GROUNDDRAINAGEWORK',
+      'MASONRY',
+      'PAINTINGWALLPAPERING',
+      'HVAC',
+      'CLEANING',
+      'TEXTILECLOTHING',
+      'COOKING',
+      'SNOWPLOWING',
+      'GARDENING',
+      'BABYSITTING',
+      'OTHERCARE',
+      'TUTORING',
+      'OTHERCOSTS',
+    ])
+    .optional()
+    .describe('Typ av husarbete'),
   Price: z.number().describe('Pris per enhet (exkl. moms)'),
-  AccountNumber: z.number().optional().describe('Kontonummer (default: 3001)'),
-  VAT: z.number().optional().describe('Momssats i procent (default: 25)'),
-  Unit: z.string().optional().describe('Enhet (t.ex. "st", "tim")'),
-  Discount: z.number().optional().describe('Rabatt i procent'),
+  Project: z.string().optional().describe('Projektnummer'),
+  Quantity: z.string().optional().describe('Antal enligt Fortnox offertradskontrakt'),
+  RowId: z.number().int().optional().describe('Rad-id'),
+  Total: z.number().nullable().optional().describe('Radsumma'),
+  Unit: z.string().max(20).optional().describe('Enhet (max 20 tecken)'),
+  VAT: z.number().int().optional().describe('Momssats i procent (default: 25)'),
+  VATCode: z.string().optional().describe('Momskod'),
 });
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
@@ -115,18 +154,7 @@ export function registerOfferTools(
       documentNumber: DocumentNumberSchema.describe('Offertnummer att uppdatera'),
       CustomerNumber: z.string().optional().describe('Kundnummer'),
       OfferRows: z
-        .array(
-          z.strictObject({
-            ArticleNumber: z.string().optional().describe('Artikelnummer'),
-            Description: z.string().optional().describe('Beskrivning'),
-            DeliveredQuantity: z.number().optional().describe('Antal'),
-            Price: z.number().optional().describe('Pris per enhet (exkl. moms)'),
-            AccountNumber: z.number().optional().describe('Kontonummer'),
-            VAT: z.number().optional().describe('Momssats i procent'),
-            Unit: z.string().optional().describe('Enhet'),
-            Discount: z.number().optional().describe('Rabatt i procent'),
-          }),
-        )
+        .array(OfferRowSchema.partial())
         .optional()
         .describe('Offertrader (ersätter alla befintliga rader)'),
       ExpireDate: z.string().optional().describe('Utgångsdatum (YYYY-MM-DD)'),
