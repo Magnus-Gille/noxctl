@@ -110,6 +110,89 @@ describe('supplier invoice tools', () => {
       expect(body.SupplierInvoice.SupplierNumber).toBe('5');
     });
 
+    it('advertises and preserves the complete supplier invoice row payload', async () => {
+      mockFetch({
+        SupplierInvoice: { GivenNumber: 10, SupplierNumber: '5', Total: 1000 },
+      });
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const createTool = tools.find((tool) => tool.name === 'fortnox_create_supplier_invoice');
+      const input = createTool?.inputSchema as {
+        properties: {
+          SupplierInvoiceRows: {
+            items: { properties: Record<string, { enum?: string[] }> };
+          };
+        };
+      };
+      const rowProperties = input.properties.SupplierInvoiceRows.items.properties;
+
+      expect(Object.keys(rowProperties)).toHaveLength(19);
+      expect(rowProperties.Code?.enum).toHaveLength(14);
+      expect(rowProperties.Code?.enum).toContain('TOT');
+      expect(rowProperties.Code?.enum).toContain('ACC');
+
+      const row = {
+        Account: 5410,
+        AccountDescription: 'Förbrukningsinventarier',
+        ArticleNumber: 'LAPTOP',
+        Code: 'ACC',
+        CostCenter: null,
+        Credit: 0,
+        CreditCurrency: 0,
+        Debit: 1000,
+        DebitCurrency: 1000,
+        Description: 'Bakåtkompatibel beskrivning',
+        ItemDescription: 'Laptop',
+        Price: 1000,
+        Project: 'P1',
+        Quantity: 1,
+        StockLocationCode: 'STH',
+        StockPointCode: 'A1',
+        Total: null,
+        TransactionInformation: 'Laptopinköp',
+        Unit: 'st',
+      };
+
+      const result = await client.callTool({
+        name: 'fortnox_create_supplier_invoice',
+        arguments: {
+          SupplierNumber: '5',
+          SupplierInvoiceRows: [row],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).not.toBe(true);
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.SupplierInvoice.SupplierInvoiceRows[0]).toEqual(row);
+    });
+
+    it.each([
+      ['an unknown row code', { Account: 5410, Code: 'UNKNOWN' }],
+      ['an out-of-range account', { Account: 999 }],
+      ['a fractional quantity', { Account: 5410, Quantity: 1.5 }],
+      [
+        'overlong transaction information',
+        { Account: 5410, TransactionInformation: 'x'.repeat(101) },
+      ],
+    ])('rejects %s before making a Fortnox request', async (_case, row) => {
+      mockFetch({ SupplierInvoice: {} });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_supplier_invoice',
+        arguments: {
+          SupplierNumber: '5',
+          SupplierInvoiceRows: [row],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
     it('requires confirmation', async () => {
       mockFetch({ SupplierInvoice: {} });
       const { client } = await setupClientServer();

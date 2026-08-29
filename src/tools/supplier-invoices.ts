@@ -14,10 +14,50 @@ import {
 } from '../tool-output.js';
 
 const SupplierInvoiceRowSchema = z.strictObject({
-  Account: z.number().describe('Kontonummer'),
+  Account: z.number().int().min(1000).max(9999).describe('Kontonummer (1000–9999)'),
+  AccountDescription: z.string().optional().describe('Kontobeskrivning'),
+  ArticleNumber: z.string().optional().describe('Artikelnummer'),
+  Code: z
+    .enum([
+      'TOT',
+      'VAT',
+      'FRT',
+      'AFE',
+      'ROV',
+      'CND',
+      'CNC',
+      'PRD',
+      'PRC',
+      'SRD',
+      'SRC',
+      'PRE',
+      'GWB',
+      'ACC',
+    ])
+    .optional()
+    .describe('Radkod enligt Fortnox'),
+  CostCenter: z.string().nullable().optional().describe('Kostnadsställe'),
   Debit: z.number().optional().describe('Debetbelopp'),
+  DebitCurrency: z.number().optional().describe('Debetbelopp i fakturans valuta'),
   Credit: z.number().optional().describe('Kreditbelopp'),
-  Description: z.string().optional().describe('Beskrivning'),
+  CreditCurrency: z.number().optional().describe('Kreditbelopp i fakturans valuta'),
+  Description: z
+    .string()
+    .optional()
+    .describe('Äldre kompatibilitetsfält för beskrivning; använd ItemDescription'),
+  ItemDescription: z.string().optional().describe('Artikel- eller radbeskrivning'),
+  Price: z.number().optional().describe('Pris per enhet'),
+  Project: z.string().optional().describe('Projektnummer'),
+  Quantity: z.number().int().optional().describe('Antal'),
+  StockLocationCode: z.string().optional().describe('Lagerplatskod'),
+  StockPointCode: z.string().optional().describe('Lagerställekod'),
+  Total: z.number().nullable().optional().describe('Radens totalbelopp'),
+  TransactionInformation: z
+    .string()
+    .max(100)
+    .optional()
+    .describe('Transaktionsinformation (max 100 tecken)'),
+  Unit: z.string().optional().describe('Enhet'),
 });
 
 export function registerSupplierInvoiceTools(
@@ -94,7 +134,7 @@ export function registerSupplierInvoiceTools(
       SupplierInvoiceRows: z
         .array(SupplierInvoiceRowSchema)
         .optional()
-        .describe('Fakturarader med konto, debet och kredit'),
+        .describe('Fakturarader med kontering, belopp och valfri artikel-/lagerinformation'),
       confirm: z.boolean().optional().describe('Bekräfta att leverantörsfakturan ska skapas'),
       dryRun: z
         .boolean()
