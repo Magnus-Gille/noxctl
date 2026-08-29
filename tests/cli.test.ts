@@ -339,11 +339,8 @@ describe('CLI smoke tests', () => {
 });
 
 describe('version consistency', () => {
-  // Both entry points hardcode their version string, so each can silently drift
-  // from package.json across releases. Both have already done so: the CLI
-  // shipped 0.5.0 announcing 0.4.1, and the MCP server was still reporting
-  // 0.4.1 to clients after that was fixed. Cover both, not just the one that
-  // was noticed first.
+  // Both entry points share the generated runtime constant. Keep exercising the
+  // published behavior as well as the manifest-level version consistency check.
   const packageVersion = () =>
     (JSON.parse(readFileSync(path.resolve('package.json'), 'utf-8')) as { version: string })
       .version;

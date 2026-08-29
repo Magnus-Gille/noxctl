@@ -4,6 +4,7 @@ import { setResolvedProfile } from './auth.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
 import { readActivePointerOutcome, resolveProfile, type ResolvedProfile } from './profiles.js';
 import type { FortnoxTransport } from './fortnox-client.js';
+import { VERSION } from './version.js';
 import { createFortnoxOperations, defaultFortnoxOperations } from './operations/index.js';
 import { registerCustomerTools } from './tools/customers.js';
 import { registerInvoiceTools } from './tools/invoices.js';
@@ -42,7 +43,7 @@ export interface CreateServerOptions {
 export function createServer(options: CreateServerOptions = {}): McpServer {
   const server = createStrictMcpServer({
     name: 'fortnox-mcp',
-    version: '0.7.4',
+    version: VERSION,
   });
   const operations = options.transport
     ? createFortnoxOperations(options.transport)

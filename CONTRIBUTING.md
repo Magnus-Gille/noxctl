@@ -159,11 +159,11 @@ host rollout.
 
 1. Land everything on `main` and confirm CI is green.
 2. Promote `## [Unreleased]` to the new version in `CHANGELOG.md`.
-3. Bump the version in **five files** — they are separate literals and have
-   drifted before: `package.json`, `package-lock.json`, `.version(...)` in
-   `src/cli.ts`, `version:` in `src/index.ts` (the MCP server's `serverInfo`),
-   and both version fields in `server.json`. `tests/cli.test.ts` asserts the
-   three code-facing versions agree; verify `server.json` separately.
+3. Run `npm run version:set -- X.Y.Z`. It validates every version manifest first,
+   then synchronizes `package.json`, the two root package versions in
+   `package-lock.json`, both version fields in `server.json`, and the generated
+   runtime constant in `src/version.ts`. It does not commit, tag, publish, or use
+   the network. Run `npm run version:check` to verify the synchronized result.
 4. `npm run check:release` — lint, format, build, tests, production audit, and a
    package dry-run.
 5. Commit, open a PR, merge once CI passes.

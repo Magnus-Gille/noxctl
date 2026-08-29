@@ -1,8 +1,8 @@
 {
   "name": "noxctl",
-  "version": "0.7.4",
+  "version": "0.8.0",
   "mcpName": "io.github.magnus-gille/noxctl",
-  "description": "CLI and MCP server for Fortnox \u2014 invoices, bookkeeping, VAT, payroll, and automation",
+  "description": "CLI and MCP server for Fortnox — invoices, bookkeeping, VAT, payroll, and automation",
   "type": "module",
   "bin": {
     "noxctl": "dist/cli.js"
@@ -34,7 +34,9 @@
     "lint": "eslint src/ tests/",
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'",
-    "verify": "npm run lint && npm run format:check && npm run build && npm test",
+    "version:check": "node scripts/version.mjs check",
+    "version:set": "node scripts/version.mjs set",
+    "verify": "npm run version:check && npm run lint && npm run format:check && npm run build && npm test",
     "check:release": "npm run verify && npm audit --omit=dev && node scripts/check-embedded-consumer.mjs && npm pack --dry-run --ignore-scripts",
     "check:api": "bash scripts/check-api-changes.sh",
     "audit:schemas": "npm run build --silent && node scripts/audit-tool-schemas.mjs",

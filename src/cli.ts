@@ -24,6 +24,7 @@ import {
 import { setResolvedProfile } from './auth.js';
 import { applyPeriod } from './date-periods.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
+import { VERSION } from './version.js';
 import {
   invoiceListColumns,
   invoiceDetailColumns,
@@ -99,7 +100,7 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
 program
   .name('noxctl')
   .description('CLI and MCP server for Fortnox accounting')
-  .version('0.7.4')
+  .version(VERSION)
   .addOption(
     new Option('-o, --output <format>', 'Output format (default: table on TTY, json when piped)')
       .choices(['json', 'table'])

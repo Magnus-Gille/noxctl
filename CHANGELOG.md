@@ -6,6 +6,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-29
+
+### Added
+
+- **Supported embedded runtime API.** Hosts can import `noxctl/embedded`, inject a
+  tenant-authorized Fortnox transport, and create isolated clients, operations and
+  MCP servers without importing private `dist/` paths. Concurrent tenant tests cover
+  token, data, diagnostic and rate-limit isolation (#118–#122).
+- **Privacy-preserving MCP write-schema audit.** Six high-risk create/update schemas
+  are compared with the locally fetched Fortnox OpenAPI document while normal output
+  exposes only stable mapping IDs, counts and domain-separated hashes. The weekly API
+  drift workflow now runs the same audit and opens deduplicated issues without
+  publishing the full specification or raw property names (#129, #136).
+- **Deterministic version tooling.** `npm run version:set -- <semver>` synchronizes
+  package, lockfile, runtime and MCP registry metadata, while `npm run version:check`
+  fails CI and the release gate on drift. The setter has no Git, network, tagging or
+  publication side effects (#138).
+
+### Changed
+
+- MCP write schemas for supplier-invoice, invoice, offer and order rows now cover all
+  fields in the current Fortnox request components while preserving documented legacy
+  compatibility. All six audited first-wave mappings report zero missing fields
+  (#131).
+- MCP input objects reject unknown properties instead of silently stripping misspelled
+  or unsupported arguments before a Fortnox mutation (#127).
+
+### Fixed
+
+- Credential recovery now distinguishes available, missing, locked and inaccessible
+  keychain state and fails closed when a registered profile is hidden by a sandbox or
+  otherwise unreadable. Recovery diagnostics identify the effective profile and
+  credential source without replacing credentials automatically (#117).
+- Embedded construction fails closed without a host-authorized transport, and invoice
+  email/e-invoice delivery is classified as non-retryable so a timeout cannot cause a
+  duplicate send (#122).
+
 ## [0.7.4] - 2026-08-28
 
 ### Changed
@@ -225,6 +262,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.8.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.1...v0.7.2
