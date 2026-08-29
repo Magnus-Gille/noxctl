@@ -21,14 +21,61 @@ import {
 } from '../tool-output.js';
 
 const InvoiceRowSchema = z.strictObject({
+  AccountNumber: z.number().int().min(1000).max(9999).optional().describe('Kontonummer'),
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
-  Description: z.string().describe('Beskrivning'),
-  DeliveredQuantity: z.number().describe('Antal'),
+  Cost: z.number().min(-9_999_999_999).max(9_999_999_999).nullable().optional().describe('Kostnad'),
+  CostCenter: z.string().nullable().optional().describe('Kostnadsställe'),
+  DeliveredQuantity: z
+    .union([z.string(), z.number()])
+    .describe('Levererat antal (nummer eller decimalsträng)'),
+  Description: z.string().max(255).describe('Beskrivning (max 255 tecken)'),
+  Discount: z.number().optional().describe('Rabattvärde'),
+  DiscountType: z.enum(['AMOUNT', 'PERCENT']).optional().describe('Rabatttyp'),
+  HouseWork: z.boolean().optional().describe('Markera raden som husarbete (ROT/RUT)'),
+  HouseWorkHoursToReport: z
+    .number()
+    .int()
+    .min(0)
+    .max(999)
+    .nullable()
+    .optional()
+    .describe('Timmar att rapportera för husarbete (0–999)'),
+  HouseWorkType: z
+    .enum([
+      'CONSTRUCTION',
+      'ELECTRICITY',
+      'GLASSMETALWORK',
+      'GROUNDDRAINAGEWORK',
+      'MASONRY',
+      'PAINTINGWALLPAPERING',
+      'HVAC',
+      'MAJORAPPLIANCEREPAIR',
+      'MOVINGSERVICES',
+      'ITSERVICES',
+      'CLEANING',
+      'TEXTILECLOTHING',
+      'SNOWPLOWING',
+      'GARDENING',
+      'BABYSITTING',
+      'OTHERCARE',
+      'OTHERCOSTS',
+      'SOLARCELLS',
+      'STORAGESELFPRODUCEDELECTRICITY',
+      'CHARGINGSTATIONELECTRICVEHICLE',
+      'HOMEMAINTENANCE',
+      'FURNISHING',
+      'TRANSPORTATIONSERVICES',
+      'WASHINGANDCAREOFCLOTHING',
+    ])
+    .optional()
+    .describe('Typ av husarbete'),
   Price: z.number().describe('Pris per enhet (exkl. moms)'),
-  AccountNumber: z.number().optional().describe('Kontonummer (default: 3001)'),
-  VAT: z.number().optional().describe('Momssats i procent (default: 25)'),
-  Unit: z.string().optional().describe('Enhet (t.ex. "st", "tim")'),
-  Discount: z.number().optional().describe('Rabatt i procent'),
+  Project: z.string().optional().describe('Projektnummer'),
+  RowId: z.number().int().optional().describe('Rad-id'),
+  StockPointCode: z.string().optional().describe('Lagerställekod'),
+  Unit: z.string().max(20).optional().describe('Enhet (max 20 tecken)'),
+  VAT: z.number().int().optional().describe('Momssats i procent (default: 25)'),
+  VATCode: z.string().optional().describe('Momskod'),
 });
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
@@ -181,18 +228,7 @@ export function registerInvoiceTools(
       documentNumber: DocumentNumberSchema.describe('Fakturanummer att uppdatera'),
       CustomerNumber: z.string().optional().describe('Kundnummer'),
       InvoiceRows: z
-        .array(
-          z.strictObject({
-            ArticleNumber: z.string().optional().describe('Artikelnummer'),
-            Description: z.string().optional().describe('Beskrivning'),
-            DeliveredQuantity: z.number().optional().describe('Antal'),
-            Price: z.number().optional().describe('Pris per enhet (exkl. moms)'),
-            AccountNumber: z.number().optional().describe('Kontonummer'),
-            VAT: z.number().optional().describe('Momssats i procent'),
-            Unit: z.string().optional().describe('Enhet (t.ex. "st", "tim")'),
-            Discount: z.number().optional().describe('Rabatt i procent'),
-          }),
-        )
+        .array(InvoiceRowSchema.partial())
         .optional()
         .describe('Fakturarader (ersätter alla befintliga rader)'),
       DueDate: z.string().optional().describe('Förfallodatum (YYYY-MM-DD)'),
