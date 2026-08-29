@@ -106,10 +106,17 @@ describe('activeKeychainPath precedence', () => {
     expect(isDedicatedModeActive()).toBe(false);
   });
 
-  it('returns the dedicated path on darwin only when both keychain and challenge files exist', () => {
+  it('returns the dedicated path on darwin when the challenge file marks it configured', () => {
     setPlatform('darwin');
     fsSync.default.existsSync.mockReturnValue(true);
     expect(activeKeychainPath()).toBe(dedicatedKeychainPath());
+  });
+
+  it('does not fall back when the configured keychain file is hidden by a sandbox', () => {
+    setPlatform('darwin');
+    fsSync.default.existsSync.mockImplementation((p: string) => p === challengeFilePath());
+    expect(activeKeychainPath()).toBe(dedicatedKeychainPath());
+    expect(isDedicatedModeActive()).toBe(true);
   });
 
   it('returns null on darwin when the challenge file is missing (half-created keychain)', () => {

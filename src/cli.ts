@@ -986,6 +986,16 @@ keychain
     console.log(
       `  Platform          ${process.platform}${onDarwin ? '' : ' (dedicated keychain is macOS-only)'}`,
     );
+
+    const { inspectCredentials } = await import('./auth.js');
+    const inspection = await inspectCredentials();
+    console.log(
+      `  Credential state  ${inspection.state} — profile "${inspection.profile}" (source: ${inspection.source})`,
+    );
+    if (inspection.state === 'locked' || inspection.state === 'inaccessible') {
+      console.log(`\n  ${inspection.detail}`);
+    }
+
     if (!onDarwin) return;
 
     const activePath = kt.activeKeychainPath();
@@ -1006,15 +1016,6 @@ keychain
       if (mismatch) console.log(`\n  ${mismatch}`);
     }
 
-    const { inspectCredentials } = await import('./auth.js');
-    const inspection = await inspectCredentials();
-    console.log(
-      `  Credential state  ${inspection.state} — profile "${inspection.profile}" (source: ${inspection.source})`,
-    );
-    if (inspection.state === 'locked' || inspection.state === 'inaccessible') {
-      console.log(`\n  ${inspection.detail}`);
-    }
-
     if (activePath && lockState === 'locked') {
       console.log('\n  Locked — run `noxctl keychain unlock` (tap your YubiKey).');
     }
@@ -1026,11 +1027,16 @@ keychain
   .action(async () => {
     requireDarwin();
     const kt = await import('./keychain-target.js');
-    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+    const activePath = kt.activeKeychainPath();
+    const kcPath = activePath ?? kt.dedicatedKeychainPath();
 
     const state = kt.keychainLockState(kcPath);
     if (state === 'missing') {
-      console.error('No dedicated keychain found. Run `noxctl keychain init` first.');
+      console.error(
+        activePath
+          ? `The configured keychain at ${kcPath} is inaccessible. Retry from an unsandboxed terminal; do not re-run noxctl keychain init.`
+          : 'No dedicated keychain found. Run `noxctl keychain init` first.',
+      );
       process.exit(1);
     }
     if (state === 'unlocked') {
@@ -1074,9 +1080,14 @@ keychain
   .action(async () => {
     requireDarwin();
     const kt = await import('./keychain-target.js');
-    const kcPath = kt.activeKeychainPath() ?? kt.dedicatedKeychainPath();
+    const activePath = kt.activeKeychainPath();
+    const kcPath = activePath ?? kt.dedicatedKeychainPath();
     if (kt.keychainLockState(kcPath) === 'missing') {
-      console.error('No dedicated keychain found.');
+      console.error(
+        activePath
+          ? `The configured keychain at ${kcPath} is inaccessible. Retry from an unsandboxed terminal.`
+          : 'No dedicated keychain found.',
+      );
       process.exit(1);
     }
     kt.lockKeychain(kcPath);

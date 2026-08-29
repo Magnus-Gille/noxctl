@@ -20,8 +20,11 @@
   flow to README.
 - Red/green coverage now exercises available, missing, locked, inaccessible,
   malformed, registered-but-unreadable, Linux, Windows, macOS dedicated-keychain,
-  fail-closed init, doctor, keychain-status, and profile-source cases. Full
-  verification passes with 866 tests across 76 files, zero production
+  fail-closed init, doctor, keychain-status, and profile-source cases.
+- PR #124 review found and fixed two recovery gaps before merge: a sandbox-hidden
+  dedicated keychain could still fall back to the login keychain, and
+  `keychain status` omitted the shared credential state on non-macOS platforms.
+  The post-review gate passes with 867 tests across 76 files, zero production
   vulnerabilities, a passing packed embedded consumer, and a successful npm
   package dry run.
 
@@ -67,8 +70,8 @@ Found and fixed without being reported:
 
 ## In Progress
 
-Issue #117 is implemented and verified on `fix/117-keychain-recovery` and is
-published for review in PR #124. No release has been created.
+Issue #117 is implemented and verified on `fix/117-keychain-recovery` in PR
+#124. No release has been created.
 
 ## Blockers
 
@@ -76,7 +79,7 @@ No public-core code blocker is known. The private hosted product still depends o
 
 ## Next Steps
 
-1. Review and merge PR #124 after its required checks pass; no release is bundled with this change.
+1. Decide when to release the merged #117 fix; no release is bundled with PR #124.
 2. Start the private `noxctl-cloud` repository only after Fortnox has answered the partner/App Market, OAuth, commercial, and data-processing questions recorded in epic #118.
 3. **Close the schema-drift bug class.** #96 and #101 were the same defect: a hand-maintained Zod schema drifting from the Fortnox spec, with the MCP SDK silently discarding undeclared arguments. A test diffing each write tool's declared schema against the cached OpenAPI payload schema would catch the next one across all 27 resource modules.
 4. **Automate the version bump.** Five files carry the version (`package.json`, `package-lock.json`, `src/cli.ts`, `src/index.ts`, `server.json`); `server.json` had silently drifted three releases behind because nothing checks it.

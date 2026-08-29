@@ -193,10 +193,15 @@ describe('profile list', () => {
 });
 
 describe('profile use', () => {
-  it('refuses to switch to a profile without credentials', () => {
+  it('refuses to switch when credentials are missing or the store is inaccessible', () => {
     const res = run(['profile', 'use', 'work']);
     expect(res.status).not.toBe(0);
-    expect(res.stderr).toContain('No credentials found for profile "work"');
+    const message = res.stderr.trim().startsWith('{')
+      ? (JSON.parse(res.stderr) as { error: { message: string } }).error.message
+      : res.stderr;
+    expect(message).toMatch(
+      /No credentials found for profile "work"|Credential state: inaccessible for profile "work"/,
+    );
   });
 
   it('rejects an invalid profile name', () => {
@@ -241,18 +246,15 @@ describe('credential recovery safety', () => {
     expect(res.stdout).not.toContain('noxctl init --profile work');
   });
 
-  it.runIf(process.platform === 'darwin')(
-    'keychain status uses the same inaccessible vocabulary',
-    async () => {
-      await registerProfile('work');
+  it('keychain status uses the same inaccessible vocabulary on every platform', async () => {
+    await registerProfile('work');
 
-      const res = run(['--output', 'table', '--profile', 'work', 'keychain', 'status']);
-      expect(res.status).toBe(0);
-      expect(res.stdout).toContain('Credential state  inaccessible');
-      expect(res.stdout).toContain('profile "work" (source: flag)');
-      expect(res.stdout).toContain('unsandboxed terminal');
-    },
-  );
+    const res = run(['--output', 'table', '--profile', 'work', 'keychain', 'status']);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain('Credential state  inaccessible');
+    expect(res.stdout).toContain('profile "work" (source: flag)');
+    expect(res.stdout).toContain('unsandboxed terminal');
+  });
 });
 
 describe('stderr profile indicator', () => {

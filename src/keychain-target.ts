@@ -61,15 +61,18 @@ export function challengeFilePath(): string {
 
 // Resolve which keychain credential operations should target.
 //   1. NOXCTL_KEYCHAIN_PATH env override (used by tests and power users).
-//   2. darwin only: the dedicated keychain + its challenge file both exist.
+//   2. darwin only: the challenge file marks the dedicated keychain configured.
 //   3. otherwise null — caller falls back to the login keychain (legacy behavior).
-// The challenge file gates files-exist detection so a half-created keychain
-// (file present, never `init`-ed) doesn't silently divert reads.
+// The challenge file is the durable configuration marker. Once it exists we
+// must keep targeting the dedicated keychain even when the current execution
+// context cannot see the keychain file; falling back to the login keychain
+// would cross the configured protection boundary. A keychain file without a
+// challenge remains a half-created setup and does not divert reads.
 export function activeKeychainPath(): string | null {
   const override = process.env.NOXCTL_KEYCHAIN_PATH;
   if (override && override.trim()) return override;
   if (process.platform !== 'darwin') return null;
-  if (fsSync.existsSync(dedicatedKeychainPath()) && fsSync.existsSync(challengeFilePath())) {
+  if (fsSync.existsSync(challengeFilePath())) {
     return dedicatedKeychainPath();
   }
   return null;
