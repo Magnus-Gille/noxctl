@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SCOPES, SALARY_SCOPE, ORDER_SCOPES, LEGACY_SCOPES } from '../src/auth.js';
+import { SCOPES, SALARY_SCOPE, ORDER_SCOPES, LEGACY_SCOPES, ARCHIVE_SCOPE } from '../src/auth.js';
 import { scopeProbeEndpoints } from '../src/scope-probes.js';
 
 // `noxctl doctor` / `fortnox_status` probe one endpoint per granted scope and
@@ -11,6 +11,7 @@ describe('scope probe coverage', () => {
     ...SCOPES.split(' '),
     ...ORDER_SCOPES.split(' '),
     SALARY_SCOPE,
+    ARCHIVE_SCOPE,
     ...LEGACY_SCOPES.split(' '),
   ];
 

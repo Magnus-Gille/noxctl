@@ -11,13 +11,19 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
-import { invoiceListColumns, invoiceDetailColumns, invoiceConfirmColumns } from '../views.js';
+import {
+  invoiceListColumns,
+  invoiceDetailColumns,
+  invoiceConfirmColumns,
+  invoiceAttachmentListColumns,
+} from '../views.js';
 import {
   confirmationResponse,
   detailResponse,
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
 
 const InvoiceRowSchema = z.strictObject({
@@ -147,6 +153,8 @@ export function registerInvoiceTools(
     markInvoicePrinted,
     bookkeepInvoice,
     creditInvoice,
+    attachInvoiceFiles,
+    listInvoiceAttachments,
   } = operations;
   server.tool(
     'fortnox_list_invoices',
@@ -452,6 +460,66 @@ export function registerInvoiceTools(
         `Kreditfaktura skapad för faktura ${documentNumber}.`,
         invoice,
         invoiceConfirmColumns,
+        includeRaw,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_attach_invoice_files',
+    'Ladda upp kvitto/underlagsfiler och koppla dem till en kundfaktura i Fortnox. Kräver "archive"-behörigheten (noxctl init --with-archive).',
+    {
+      documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
+      files: z.array(z.string()).describe('Sökvägar till filer som ska laddas upp och kopplas'),
+      includeOnSend: z
+        .boolean()
+        .optional()
+        .describe('Bunta med filen när fakturan skickas (default: true)'),
+      confirm: z.boolean().optional().describe('Bekräfta att filerna ska kopplas'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle skickas utan att ladda upp filerna'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ documentNumber, files, includeOnSend, confirm, dryRun, includeRaw }) => {
+      if (dryRun) {
+        return dryRunResponse(`attach ${files.length} file(s) to invoice ${documentNumber}`, {
+          documentNumber,
+          files,
+          includeOnSend: includeOnSend ?? true,
+        });
+      }
+      if (!confirm) {
+        requireConfirmation(`attach ${files.length} file(s) to invoice ${documentNumber}`);
+      }
+      const results = await attachInvoiceFiles({
+        documentNumber,
+        filePaths: files,
+        includeOnSend,
+      });
+      const ids = results.map((r) => r.fileId).join(', ');
+      const summary = `Kopplade ${results.length} fil(er) till faktura ${documentNumber}. Fil-ID: ${ids}`;
+      return textResponse(
+        includeRaw ? `${summary}\n\n${JSON.stringify(results, null, 2)}` : summary,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_list_invoice_attachments',
+    'Lista filer som är kopplade till en kundfaktura i Fortnox.',
+    {
+      documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ documentNumber, includeRaw }) => {
+      const results = await listInvoiceAttachments(documentNumber);
+      return listResponse(
+        results as unknown as Record<string, unknown>[],
+        invoiceAttachmentListColumns,
+        results,
+        undefined,
         includeRaw,
       );
     },
