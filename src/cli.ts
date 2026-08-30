@@ -2248,6 +2248,77 @@ Examples:
     },
   );
 
+vouchers
+  .command('attachments <series> <voucherNumber>')
+  .description('List files (receipts/underlag) attached to a voucher')
+  .option(
+    '--year <number>',
+    'Financial year (recommended — voucher numbers reset between financial years)',
+    parseInt,
+  )
+  .action(async (series: string, voucherNumber: string, opts: { year?: number }) => {
+    const { listVoucherAttachments } = await import('./operations/vouchers.js');
+    const attachments = await listVoucherAttachments(series, voucherNumber, opts.year);
+    if (json()) {
+      console.log(JSON.stringify({ Attachments: attachments }, null, 2));
+    } else {
+      outputList(
+        attachments as unknown as Record<string, unknown>[],
+        voucherAttachmentColumns,
+        false,
+        attachments,
+      );
+    }
+  });
+
+vouchers
+  .command('file <fileId>')
+  .description('Download a file attached to a voucher (get the fileId from "vouchers attachments")')
+  .option(
+    '-f, --file <path>',
+    'Write the file here (- for stdout; default: voucher-file-<fileId><ext>)',
+  )
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl vouchers attachments A 60 --year 4
+  noxctl vouchers file c7e578d8-59a7-4e00-b29b-b99e4d9ede63
+  noxctl vouchers file c7e578d8-59a7-4e00-b29b-b99e4d9ede63 --file receipt.pdf`,
+  )
+  .action(async (fileId: string, opts: { file?: string }) => {
+    const { getVoucherFile, extensionForMime } = await import('./operations/vouchers.js');
+    const toStdout = opts.file === '-';
+
+    if (toStdout && program.opts().output === 'json') {
+      throw new Error(
+        '--file - writes raw file bytes to stdout and cannot be combined with --output json.',
+      );
+    }
+
+    const file = await getVoucherFile(fileId);
+
+    if (toStdout) {
+      await new Promise<void>((resolve, reject) => {
+        process.stdout.write(file.buffer, (err) => (err ? reject(err) : resolve()));
+      });
+      return;
+    }
+
+    const path = opts.file ?? `voucher-file-${fileId}${extensionForMime(file.contentType)}`;
+    writeFileSync(path, file.buffer);
+    outputConfirmation(
+      `File saved to ${path} (${file.contentType}, ${file.buffer.length} bytes).`,
+      json(),
+      {
+        FileId: fileId,
+        Path: path,
+        ContentType: file.contentType,
+        Bytes: file.buffer.length,
+      },
+    );
+  });
+
 // --- invoice-payments ---
 const invoicePayments = program
   .command('invoice-payments')

@@ -143,6 +143,8 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('list');
     expect(output).toContain('create');
     expect(output).toContain('attach');
+    expect(output).toContain('attachments');
+    expect(output).toContain('file');
   });
 
   it('noxctl vouchers attach --help shows file and year options', () => {
@@ -153,6 +155,24 @@ describe('CLI smoke tests', () => {
     ) as string;
     expect(output).toContain('--year');
     expect(output).toContain('--dry-run');
+  });
+
+  it('noxctl vouchers attachments --help shows the year option', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'vouchers', 'attachments', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('--year');
+  });
+
+  it('noxctl vouchers file --help shows the file option', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'vouchers', 'file', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('--file');
   });
 
   it('noxctl reports --help shows report subcommands', () => {

@@ -11,6 +11,7 @@ function stubTransport(companyName: string): FortnoxTransport {
     requestWithMetadata: vi.fn(),
     requestPdf: vi.fn(),
     requestPdfFromMutation: vi.fn(),
+    requestFile: vi.fn(),
     fetchAllPages: vi.fn(),
   } as FortnoxTransport;
 }
