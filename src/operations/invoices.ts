@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { basename, extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
@@ -44,6 +46,27 @@ export interface MarkInvoicePrintedResult {
    * otherwise leave the saved file a version behind the one marked as sent.
    */
   pdf?: Buffer;
+}
+
+export interface InvoiceAttachment {
+  id: string;
+  entityId: number;
+  entityType: 'F';
+  fileId: string;
+  includeOnSend: boolean;
+}
+
+export interface AttachInvoiceFilesParams {
+  documentNumber: string;
+  filePaths: string[];
+  includeOnSend?: boolean;
+}
+
+export interface AttachInvoiceFileResult {
+  fileName: string;
+  fileId: string;
+  attachmentId: string;
+  includeOnSend: boolean;
 }
 
 export function createInvoiceOperations(transport: FortnoxTransport) {
@@ -210,6 +233,125 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     return data?.Invoice || {};
   }
 
+  const MIME_BY_EXT: Record<string, string> = {
+    '.pdf': 'application/pdf',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.heic': 'image/heic',
+    '.tif': 'image/tiff',
+    '.tiff': 'image/tiff',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
+    '.xml': 'application/xml',
+  };
+
+  function mimeForFile(filePath: string): string {
+    return MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  }
+
+  interface ArchiveFileRow {
+    Id: string;
+    ArchiveFileId: string;
+    Name: string;
+    Size: number;
+    Path: string;
+  }
+  interface ArchiveFileResponse {
+    File: ArchiveFileRow;
+  }
+
+  /**
+   * Upload a file for later attachment to a customer invoice.
+   *
+   * Two details here are not in Fortnox's published OpenAPI spec and were only
+   * found by inspecting the Fortnox web app's own network traffic:
+   *   1. The upload must go to `/3/archive?folderid=inbox_kf` — not `/3/inbox`
+   *      (file_not_found on attach) and not a default-folder `/3/archive`
+   *      (wrong_file_location on attach).
+   *   2. The attach call (createInvoiceAttachment below) needs this response's
+   *      `ArchiveFileId` field, not `Id` — the latter also produces
+   *      wrong_file_location.
+   * Customer invoices have no `invoicefileconnections` — the per-entity
+   * connection pattern used by vouchers/supplier invoices/articles/assets never
+   * covered Faktura — so this goes through the archive plus the separate,
+   * mostly undocumented `/api/fileattachments/attachments-v1` product API
+   * instead.
+   */
+  async function uploadForInvoiceAttachment(filePath: string): Promise<ArchiveFileRow> {
+    const buf = readFileSync(filePath);
+    const form = new FormData();
+    form.append('file', new Blob([buf], { type: mimeForFile(filePath) }), basename(filePath));
+    const data = await transport.request<ArchiveFileResponse>('/3/archive', {
+      method: 'POST',
+      params: { folderid: 'inbox_kf' },
+      rawBody: form,
+    });
+    return data.File;
+  }
+
+  async function listInvoiceAttachments(documentNumber: string): Promise<InvoiceAttachment[]> {
+    return transport.request<InvoiceAttachment[]>('/api/fileattachments/attachments-v1', {
+      params: { entityid: documentNumber, entitytype: 'F' },
+    });
+  }
+
+  async function createInvoiceAttachment(
+    documentNumber: string,
+    fileId: string,
+    includeOnSend: boolean,
+  ): Promise<InvoiceAttachment> {
+    const data = await transport.request<InvoiceAttachment[]>(
+      '/api/fileattachments/attachments-v1',
+      {
+        method: 'POST',
+        body: [{ entityId: Number(documentNumber), entityType: 'F', fileId, includeOnSend }],
+      },
+    );
+    const attachment = data[0];
+    if (!attachment) {
+      throw new Error(`Fortnox did not return an attachment record for invoice ${documentNumber}.`);
+    }
+    return attachment;
+  }
+
+  // Orchestrate: upload each file to the archive, then attach it in order.
+  async function attachInvoiceFiles(
+    params: AttachInvoiceFilesParams,
+  ): Promise<AttachInvoiceFileResult[]> {
+    for (const filePath of params.filePaths) {
+      if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
+      if (!statSync(filePath).isFile()) throw new Error(`Not a file: ${filePath}`);
+    }
+    const includeOnSend = params.includeOnSend ?? true;
+    const results: AttachInvoiceFileResult[] = [];
+    for (const filePath of params.filePaths) {
+      try {
+        const file = await uploadForInvoiceAttachment(filePath);
+        const attachment = await createInvoiceAttachment(
+          params.documentNumber,
+          file.ArchiveFileId,
+          includeOnSend,
+        );
+        results.push({
+          fileName: file.Name,
+          fileId: attachment.fileId,
+          attachmentId: attachment.id,
+          includeOnSend: attachment.includeOnSend,
+        });
+      } catch (err) {
+        const done = results.map((r) => r.fileName).join(', ') || 'none';
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(
+          `Failed attaching "${basename(filePath)}" to invoice ${params.documentNumber}: ${detail}. Files already attached this run: ${done}.`,
+        );
+      }
+    }
+    return results;
+  }
+
   return {
     listInvoices,
     getInvoice,
@@ -220,6 +362,8 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     markInvoicePrinted,
     bookkeepInvoice,
     creditInvoice,
+    attachInvoiceFiles,
+    listInvoiceAttachments,
   };
 }
 
@@ -233,4 +377,6 @@ export const {
   markInvoicePrinted,
   bookkeepInvoice,
   creditInvoice,
+  attachInvoiceFiles,
+  listInvoiceAttachments,
 } = createInvoiceOperations(defaultFortnoxTransport);

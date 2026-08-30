@@ -96,6 +96,24 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('pdf');
     expect(output).toContain('bookkeep');
     expect(output).toContain('credit');
+    expect(output).toContain('attach');
+    expect(output).toContain('attachments');
+  });
+
+  it('noxctl invoices attach --help documents the archive scope requirement', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'invoices', 'attach', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('--no-include-on-send');
+    expect(output).toContain('--dry-run');
+    expect(output).toContain('archive');
+  });
+
+  it('noxctl init --help shows the --with-archive flag', () => {
+    const output = execFileSync('node', [CLI_PATH, 'init', '--help'], execOpts) as string;
+    expect(output).toContain('--with-archive');
   });
 
   it('noxctl invoices pdf --help documents the destination and --mark-sent options', () => {

@@ -1,9 +1,26 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
   // Needed by FortnoxApiError, which prefixes messages with the active profile.
   getResolvedProfile: vi.fn().mockReturnValue('default'),
+}));
+
+const fsMock = vi.hoisted(() => {
+  const readFileSync = vi.fn(() => Buffer.from('fake-file-content'));
+  const existsSync = vi.fn(() => true);
+  const statSync = vi.fn(() => ({ isFile: () => true }));
+  return { readFileSync, existsSync, statSync };
+});
+vi.mock('node:fs', () => ({
+  default: {
+    readFileSync: fsMock.readFileSync,
+    existsSync: fsMock.existsSync,
+    statSync: fsMock.statSync,
+  },
+  readFileSync: fsMock.readFileSync,
+  existsSync: fsMock.existsSync,
+  statSync: fsMock.statSync,
 }));
 
 function mockFetch(response: unknown) {
@@ -48,6 +65,13 @@ function mockPdfThenInvoice(invoice: Record<string, unknown>) {
 }
 
 describe('invoice operations', () => {
+  beforeEach(() => {
+    // Re-establish fs defaults each test (restoreAllMocks below clears them).
+    fsMock.readFileSync.mockReturnValue(Buffer.from('fake-file-content'));
+    fsMock.existsSync.mockReturnValue(true);
+    fsMock.statSync.mockReturnValue({ isFile: () => true });
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -357,6 +381,251 @@ describe('invoice operations', () => {
       expect(fetchCall[0]).toContain('invoices/1001/credit');
       expect(fetchCall[1].method).toBe('PUT');
       expect(result.CreditInvoiceReference).toBe('1001');
+    });
+  });
+
+  describe('attachInvoiceFiles', () => {
+    it('uploads to /3/archive?folderid=inbox_kf and attaches with ArchiveFileId (not Id)', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+
+      const mockFn = vi
+        .fn()
+        // upload: POST /3/archive?folderid=inbox_kf
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                File: { Id: 'wrong-id', ArchiveFileId: 'arch-1', Name: 'underlag.pdf' },
+              }),
+            ),
+          json: () =>
+            Promise.resolve({
+              File: { Id: 'wrong-id', ArchiveFileId: 'arch-1', Name: 'underlag.pdf' },
+            }),
+        })
+        // attach: POST /api/fileattachments/attachments-v1
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify([
+                {
+                  id: 'attach-1',
+                  entityId: 91110646,
+                  entityType: 'F',
+                  fileId: 'arch-1',
+                  includeOnSend: true,
+                },
+              ]),
+            ),
+          json: () =>
+            Promise.resolve([
+              {
+                id: 'attach-1',
+                entityId: 91110646,
+                entityType: 'F',
+                fileId: 'arch-1',
+                includeOnSend: true,
+              },
+            ]),
+        });
+      global.fetch = mockFn;
+
+      const results = await attachInvoiceFiles({
+        documentNumber: '91110646',
+        filePaths: ['/tmp/underlag.pdf'],
+      });
+
+      const [uploadUrl, uploadInit] = mockFn.mock.calls[0] as [string, RequestInit];
+      expect(uploadUrl).toContain('/3/archive');
+      expect(uploadUrl).toContain('folderid=inbox_kf');
+      expect(uploadInit.method).toBe('POST');
+      expect(uploadInit.body).toBeInstanceOf(FormData);
+
+      const [attachUrl, attachInit] = mockFn.mock.calls[1] as [string, RequestInit];
+      expect(attachUrl).toContain('/api/fileattachments/attachments-v1');
+      const attachBody = JSON.parse(attachInit.body as string);
+      // The critical, easy-to-regress detail: the ARCHIVE upload's `Id` must
+      // never be used — only `ArchiveFileId`. Using `Id` here fails on the
+      // real API with wrong_file_location.
+      expect(attachBody[0].fileId).toBe('arch-1');
+      expect(attachBody[0].fileId).not.toBe('wrong-id');
+      expect(attachBody[0].entityType).toBe('F');
+      expect(attachBody[0].entityId).toBe(91110646);
+
+      expect(results).toEqual([
+        {
+          fileName: 'underlag.pdf',
+          fileId: 'arch-1',
+          attachmentId: 'attach-1',
+          includeOnSend: true,
+        },
+      ]);
+    });
+
+    it('defaults includeOnSend to true when not specified', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+      const mockFn = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () =>
+            Promise.resolve(JSON.stringify({ File: { ArchiveFileId: 'a1', Name: 'x.pdf' } })),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify([
+                { id: 'att1', entityId: 1, entityType: 'F', fileId: 'a1', includeOnSend: true },
+              ]),
+            ),
+        });
+      global.fetch = mockFn;
+
+      await attachInvoiceFiles({ documentNumber: '1', filePaths: ['/tmp/x.pdf'] });
+
+      const [, attachInit] = mockFn.mock.calls[1] as [string, RequestInit];
+      const body = JSON.parse(attachInit.body as string);
+      expect(body[0].includeOnSend).toBe(true);
+    });
+
+    it('honors an explicit includeOnSend: false', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+      const mockFn = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () =>
+            Promise.resolve(JSON.stringify({ File: { ArchiveFileId: 'a2', Name: 'y.pdf' } })),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify([
+                { id: 'att2', entityId: 1, entityType: 'F', fileId: 'a2', includeOnSend: false },
+              ]),
+            ),
+        });
+      global.fetch = mockFn;
+
+      await attachInvoiceFiles({
+        documentNumber: '1',
+        filePaths: ['/tmp/y.pdf'],
+        includeOnSend: false,
+      });
+
+      const [, attachInit] = mockFn.mock.calls[1] as [string, RequestInit];
+      const body = JSON.parse(attachInit.body as string);
+      expect(body[0].includeOnSend).toBe(false);
+    });
+
+    it('fails fast (before any upload) when a file path does not exist', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+      fsMock.existsSync.mockReturnValue(false);
+      mockFetch({});
+
+      await expect(
+        attachInvoiceFiles({ documentNumber: '1', filePaths: ['/tmp/missing.pdf'] }),
+      ).rejects.toThrow(/File not found: \/tmp\/missing\.pdf/);
+
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('rejects a directory path before uploading', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+      fsMock.statSync.mockReturnValue({ isFile: () => false });
+      mockFetch({});
+
+      await expect(
+        attachInvoiceFiles({ documentNumber: '1', filePaths: ['/tmp/adir'] }),
+      ).rejects.toThrow(/Not a file: \/tmp\/adir/);
+
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('surfaces already-attached files when a later file fails mid-batch', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+      const mockFn = vi
+        .fn()
+        // file 1 upload OK
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () =>
+            Promise.resolve(JSON.stringify({ File: { ArchiveFileId: 'a1', Name: 'a.pdf' } })),
+        })
+        // file 1 attach OK
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify([
+                { id: 'att1', entityId: 1, entityType: 'F', fileId: 'a1', includeOnSend: true },
+              ]),
+            ),
+        })
+        // file 2 upload FAILS
+        .mockResolvedValueOnce({
+          ok: false,
+          status: 500,
+          text: () => Promise.resolve(JSON.stringify({ ErrorInformation: { message: 'boom' } })),
+        });
+      global.fetch = mockFn;
+
+      await expect(
+        attachInvoiceFiles({ documentNumber: '1', filePaths: ['/tmp/a.pdf', '/tmp/b.pdf'] }),
+      ).rejects.toThrow(/already attached this run: a\.pdf/);
+    });
+
+    it('throws when Fortnox returns no attachment record for the invoice', async () => {
+      const { attachInvoiceFiles } = await import('../../src/operations/invoices.js');
+      const mockFn = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () =>
+            Promise.resolve(JSON.stringify({ File: { ArchiveFileId: 'a1', Name: 'a.pdf' } })),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(JSON.stringify([])),
+        });
+      global.fetch = mockFn;
+
+      await expect(
+        attachInvoiceFiles({ documentNumber: '1', filePaths: ['/tmp/a.pdf'] }),
+      ).rejects.toThrow(/did not return an attachment record/);
+    });
+  });
+
+  describe('listInvoiceAttachments', () => {
+    it('GETs the fileattachments product API filtered by entity id/type', async () => {
+      const { listInvoiceAttachments } = await import('../../src/operations/invoices.js');
+      mockFetch([
+        { id: 'att1', entityId: 91110646, entityType: 'F', fileId: 'a1', includeOnSend: true },
+      ]);
+
+      const result = await listInvoiceAttachments('91110646');
+
+      const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).toContain('/api/fileattachments/attachments-v1');
+      expect(url).toContain('entityid=91110646');
+      expect(url).toContain('entitytype=F');
+      expect(result).toEqual([
+        { id: 'att1', entityId: 91110646, entityType: 'F', fileId: 'a1', includeOnSend: true },
+      ]);
     });
   });
 });

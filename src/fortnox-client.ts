@@ -96,7 +96,12 @@ function getErrorHint(statusCode: number, message: string, endpoint?: string): s
 }
 
 function endpointToScope(endpoint: string): string | undefined {
-  const path = endpoint.split('?')[0]!.toLowerCase();
+  // Endpoints that select the API root directly (a leading "/3/..." or
+  // "/api/...", used by newer product APIs alongside the classic relative
+  // "vouchers"-style paths) carry that prefix into the 403 hint lookup below,
+  // so strip it before matching against the bare resource-name mapping.
+  let path = endpoint.split('?')[0]!.toLowerCase();
+  if (path.startsWith('/3/')) path = path.slice(3);
   const mapping: Record<string, string> = {
     articles: 'article',
     customers: 'customer',

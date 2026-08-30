@@ -26,4 +26,5 @@ export const scopeProbeEndpoints: Record<string, string> = {
   inbox: 'inbox',
   connectfile: 'voucherfileconnections?limit=1',
   salary: 'employees?limit=1',
+  archive: 'archive',
 };

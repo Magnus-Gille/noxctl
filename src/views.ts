@@ -506,6 +506,20 @@ export const voucherAttachmentColumns: Column[] = [
   { key: 'voucherYear', header: 'Year', width: 5, align: 'right' },
 ];
 
+// --- Invoice file attachment views ---
+
+export const invoiceAttachmentColumns: Column[] = [
+  { key: 'fileName', header: 'File', width: 40 },
+  { key: 'fileId', header: 'File ID', width: 36 },
+  { key: 'includeOnSend', header: 'On send', width: 8 },
+];
+
+export const invoiceAttachmentListColumns: Column[] = [
+  { key: 'fileId', header: 'File ID', width: 36 },
+  { key: 'includeOnSend', header: 'On send', width: 8 },
+  { key: 'id', header: 'Attachment ID', width: 36 },
+];
+
 // --- Payroll / Lön views (target ≤80 cols) ---
 
 const redactPayrollValue = (): string => '[redacted — use JSON/includeRaw for explicit access]';
