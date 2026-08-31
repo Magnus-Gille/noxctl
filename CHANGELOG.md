@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-31
+
+### Added
+
+- **Voucher attachments can now be listed and downloaded.**
+  `noxctl vouchers attachments <series> <number> [--year]` and
+  `fortnox_list_voucher_attachments` list existing receipt/underlag connections;
+  `noxctl vouchers file <fileId>` and `fortnox_get_voucher_file` download the
+  original PDF, image or other file. Thanks to @hedborg for the implementation
+  and byte-for-byte verification against live Fortnox data (#144).
+- **Customer-invoice attachments can now be uploaded and listed.**
+  `noxctl invoices attach <docNumber> <file...>` and
+  `fortnox_attach_invoice_files` upload files through the Fortnox archive and
+  attach them to a customer invoice; matching CLI and MCP list operations expose
+  current attachments. Uploading requires the opt-in `archive` scope, so existing
+  users who need this feature must reauthorize with
+  `noxctl init --with-archive`. Thanks to @hedborg for tracing the required
+  `inbox_kf` / `ArchiveFileId` flow and covering it with live verification and
+  regression tests (#145).
+
+### Internal
+
+- Remediated development-dependency audit findings and strengthened CI so both
+  production and development dependency audits must pass (#141).
+
 ## [0.8.0] - 2026-08-29
 
 ### Added
@@ -262,6 +287,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.9.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.3...v0.7.4
 [0.7.3]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.2...v0.7.3
