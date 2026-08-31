@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { createServer } from '../../src/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
@@ -13,6 +15,16 @@ function mockFetch(response: unknown, ok = true, status = 200) {
     status,
     text: () => Promise.resolve(JSON.stringify(response)),
     json: () => Promise.resolve(response),
+  });
+}
+
+function mockBinaryFetch(bytes: Buffer, contentType: string) {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': contentType }),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
   });
 }
 
@@ -240,6 +252,105 @@ describe('bookkeeping tools', () => {
       const text = (result.content as { type: string; text: string }[])[0].text;
       expect(text).toContain('Dry run');
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+  });
+
+  describe('fortnox_list_voucher_attachments', () => {
+    it('lists attached files for a voucher', async () => {
+      mockFetch({
+        VoucherFileConnections: [
+          {
+            FileId: 'f1',
+            Name: 'receipt.pdf',
+            VoucherSeries: 'A',
+            VoucherNumber: '60',
+            VoucherYear: 4,
+          },
+        ],
+      });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_list_voucher_attachments',
+        arguments: { series: 'A', voucherNumber: '60', financialYear: 4 },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('receipt.pdf');
+      expect(text).toContain('f1');
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('voucherseries=A');
+      expect(calledUrl).toContain('vouchernumber=60');
+      expect(calledUrl).toContain('voucheryear=4');
+    });
+
+    it('is read-only — no confirmation required', async () => {
+      mockFetch({ VoucherFileConnections: [] });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_list_voucher_attachments',
+        arguments: { series: 'A', voucherNumber: '60' },
+      });
+
+      expect(result.isError).toBeFalsy();
+    });
+  });
+
+  describe('fortnox_get_voucher_file', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('downloads the file and saves it to a temp path, returning that path', async () => {
+      const bytes = Buffer.from('%PDF-1.4 fake receipt bytes');
+      mockBinaryFetch(bytes, 'application/pdf');
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_get_voucher_file',
+        arguments: { fileId: 'f1' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      const match = text.match(/till (.+voucher-file-f1\.pdf)/);
+      expect(match).not.toBeNull();
+      const savedPath = match![1]!;
+      expect(readFileSync(savedPath).equals(bytes)).toBe(true);
+      rmSync(savedPath, { force: true });
+    });
+
+    it('writes to an explicit outputPath when given', async () => {
+      const bytes = Buffer.from('image-bytes');
+      mockBinaryFetch(bytes, 'image/jpeg');
+      const target = `${tmpdir()}/noxctl-test-voucher-file.jpg`;
+      rmSync(target, { force: true });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_get_voucher_file',
+        arguments: { fileId: 'f2', outputPath: target },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(readFileSync(target).equals(bytes)).toBe(true);
+      rmSync(target, { force: true });
+    });
+
+    it('refuses to overwrite an existing file without overwrite: true', async () => {
+      const target = `${tmpdir()}/noxctl-test-voucher-file-exists.pdf`;
+      writeFileSync(target, 'already here');
+      mockBinaryFetch(Buffer.from('new-bytes'), 'application/pdf');
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_get_voucher_file',
+        arguments: { fileId: 'f3', outputPath: target },
+      });
+
+      expect(result.isError).toBe(true);
+      rmSync(target, { force: true });
     });
   });
 

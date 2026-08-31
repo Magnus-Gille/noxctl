@@ -37,6 +37,20 @@ export interface VoucherFileAttachment {
   connection: Record<string, unknown>;
 }
 
+export interface VoucherAttachment {
+  fileName: string;
+  fileId: string;
+  voucherSeries: string;
+  voucherNumber: string;
+  voucherYear?: number;
+}
+
+export interface VoucherFileContent {
+  fileId: string;
+  contentType: string;
+  buffer: Buffer;
+}
+
 export function createVoucherOperations(transport: FortnoxTransport) {
   const { listFinancialYears } = createFinancialYearOperations(transport);
 
@@ -99,6 +113,9 @@ export function createVoucherOperations(transport: FortnoxTransport) {
   interface VoucherFileConnectionResponse {
     VoucherFileConnection: Record<string, unknown>;
   }
+  interface VoucherFileConnectionListResponse {
+    VoucherFileConnections: Record<string, unknown>[];
+  }
 
   const MIME_BY_EXT: Record<string, string> = {
     '.pdf': 'application/pdf',
@@ -117,6 +134,16 @@ export function createVoucherOperations(transport: FortnoxTransport) {
 
   function mimeForFile(filePath: string): string {
     return MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  }
+
+  // Best-effort reverse of MIME_BY_EXT, for naming a downloaded file when the
+  // caller doesn't specify an output path.
+  const EXT_BY_MIME: Record<string, string> = Object.fromEntries(
+    Object.entries(MIME_BY_EXT).map(([ext, mime]) => [mime, ext]),
+  );
+
+  function extensionForMime(contentType: string): string {
+    return EXT_BY_MIME[contentType] ?? '';
   }
 
   // Upload a single file to the Fortnox inbox; returns the archived File object (has .Id).
@@ -224,6 +251,45 @@ export function createVoucherOperations(transport: FortnoxTransport) {
     return results;
   }
 
+  // List the files already attached to a voucher — the read counterpart to
+  // attachVoucherFiles. `financialYear` is optional (Fortnox will match across
+  // years without it) but recommended: voucher numbers reset every financial
+  // year, so series+number alone can be ambiguous.
+  async function listVoucherAttachments(
+    series: string,
+    voucherNumber: string,
+    financialYear?: number,
+  ): Promise<VoucherAttachment[]> {
+    const data = await transport.request<VoucherFileConnectionListResponse>(
+      'voucherfileconnections',
+      {
+        params: {
+          voucherseries: series,
+          vouchernumber: voucherNumber,
+          voucheryear: financialYear,
+        },
+      },
+    );
+    return (data.VoucherFileConnections ?? []).map((c) => ({
+      fileName: String(c.Name ?? ''),
+      fileId: String(c.FileId),
+      voucherSeries: String(c.VoucherSeries ?? series),
+      voucherNumber: String(c.VoucherNumber ?? voucherNumber),
+      voucherYear: c.VoucherYear !== undefined ? Number(c.VoucherYear) : undefined,
+    }));
+  }
+
+  // Download the actual bytes of a file attached to a voucher (or sitting in
+  // the inbox generally) — the read counterpart to uploadInboxFile. fileId
+  // comes from listVoucherAttachments (its `fileId`) or from a prior
+  // uploadInboxFile/attachVoucherFiles call.
+  async function getVoucherFile(fileId: string): Promise<VoucherFileContent> {
+    const { buffer, contentType } = await transport.requestFile(
+      `inbox/${encodeURIComponent(fileId)}`,
+    );
+    return { fileId, contentType, buffer };
+  }
+
   return {
     listVouchers,
     getVoucher,
@@ -231,6 +297,9 @@ export function createVoucherOperations(transport: FortnoxTransport) {
     uploadInboxFile,
     createVoucherFileConnection,
     attachVoucherFiles,
+    listVoucherAttachments,
+    getVoucherFile,
+    extensionForMime,
   };
 }
 
@@ -241,4 +310,7 @@ export const {
   uploadInboxFile,
   createVoucherFileConnection,
   attachVoucherFiles,
+  listVoucherAttachments,
+  getVoucherFile,
+  extensionForMime,
 } = createVoucherOperations(defaultFortnoxTransport);

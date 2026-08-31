@@ -30,6 +30,20 @@ function mockFetch(response: unknown) {
   });
 }
 
+function binaryResponse(bytes: Buffer, contentType: string) {
+  return {
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': contentType }),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+  };
+}
+
+function mockBinary(bytes: Buffer, contentType: string) {
+  global.fetch = vi.fn().mockResolvedValue(binaryResponse(bytes, contentType));
+}
+
 describe('voucher operations', () => {
   beforeEach(() => {
     // Re-establish fs defaults each test (restoreAllMocks below clears them).
@@ -436,6 +450,107 @@ describe('voucher operations', () => {
           financialYear: 4,
         }),
       ).rejects.toThrow(/already attached this run: a\.pdf/);
+    });
+  });
+
+  describe('listVoucherAttachments', () => {
+    it('GETs voucherfileconnections filtered by series/number/year and maps the response', async () => {
+      const { listVoucherAttachments } = await import('../../src/operations/vouchers.js');
+      mockFetch({
+        VoucherFileConnections: [
+          {
+            FileId: 'f1',
+            Name: 'receipt.pdf',
+            VoucherSeries: 'A',
+            VoucherNumber: '60',
+            VoucherYear: 4,
+          },
+        ],
+      });
+
+      const result = await listVoucherAttachments('A', '60', 4);
+
+      const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).toContain('voucherfileconnections');
+      expect(url).toContain('voucherseries=A');
+      expect(url).toContain('vouchernumber=60');
+      expect(url).toContain('voucheryear=4');
+      expect(result).toEqual([
+        {
+          fileName: 'receipt.pdf',
+          fileId: 'f1',
+          voucherSeries: 'A',
+          voucherNumber: '60',
+          voucherYear: 4,
+        },
+      ]);
+    });
+
+    it('omits the voucheryear param when no financial year is given', async () => {
+      const { listVoucherAttachments } = await import('../../src/operations/vouchers.js');
+      mockFetch({ VoucherFileConnections: [] });
+
+      await listVoucherAttachments('A', '60');
+
+      const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).not.toContain('voucheryear');
+    });
+
+    it('returns an empty array when the voucher has no attachments', async () => {
+      const { listVoucherAttachments } = await import('../../src/operations/vouchers.js');
+      mockFetch({ VoucherFileConnections: [] });
+
+      const result = await listVoucherAttachments('A', '61', 4);
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getVoucherFile', () => {
+    it('GETs inbox/{fileId} and returns the raw bytes with content-type', async () => {
+      const { getVoucherFile } = await import('../../src/operations/vouchers.js');
+      const bytes = Buffer.from('fake-pdf-bytes');
+      mockBinary(bytes, 'application/pdf');
+
+      const result = await getVoucherFile('f1');
+
+      const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).toContain('inbox/f1');
+      expect(result.fileId).toBe('f1');
+      expect(result.contentType).toBe('application/pdf');
+      expect(result.buffer.equals(bytes)).toBe(true);
+    });
+
+    it('strips parameters off the content-type header (e.g. charset)', async () => {
+      const { getVoucherFile } = await import('../../src/operations/vouchers.js');
+      mockBinary(Buffer.from('hello'), 'text/plain; charset=utf-8');
+
+      const result = await getVoucherFile('f2');
+
+      expect(result.contentType).toBe('text/plain');
+    });
+
+    it('throws when Fortnox answers 2xx with a JSON error envelope instead of file bytes', async () => {
+      const { getVoucherFile } = await import('../../src/operations/vouchers.js');
+      const bytes = Buffer.from(
+        JSON.stringify({ ErrorInformation: { message: 'not found', code: 123 } }),
+      );
+      mockBinary(bytes, 'application/json');
+
+      await expect(getVoucherFile('missing')).rejects.toThrow(/not found/);
+    });
+  });
+
+  describe('extensionForMime', () => {
+    it('maps known content-types back to a file extension', async () => {
+      const { extensionForMime } = await import('../../src/operations/vouchers.js');
+      expect(extensionForMime('application/pdf')).toBe('.pdf');
+      expect(extensionForMime('image/jpeg')).toBe('.jpeg');
+    });
+
+    it('returns an empty string for an unknown content-type', async () => {
+      const { extensionForMime } = await import('../../src/operations/vouchers.js');
+      expect(extensionForMime('application/x-mystery')).toBe('');
     });
   });
 });

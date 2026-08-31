@@ -420,6 +420,8 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl vouchers get <series> <number>` | `fortnox_get_voucher` | Get a single voucher with rows |
 | `noxctl vouchers create --input <file>` | `fortnox_create_voucher` | Create a voucher with debit/credit rows (mutation) |
 | `noxctl vouchers attach <series> <number> <file...> [--year]` | `fortnox_attach_voucher_files` | Upload receipt/underlag files and link them to a voucher (mutation; needs the Fortnox archive scope) |
+| `noxctl vouchers attachments <series> <number> [--year]` | `fortnox_list_voucher_attachments` | List files (receipts/underlag) already attached to a voucher — read-only, default scopes only |
+| `noxctl vouchers file <fileId> [-f <path>]` | `fortnox_get_voucher_file` | Download a file attached to a voucher (get `fileId` from `vouchers attachments`) — read-only, default scopes only |
 | `noxctl accounts list [--search <term>]` | `fortnox_list_accounts` | View chart of accounts, search by name or number |
 
 ### Financial reports

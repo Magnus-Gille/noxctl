@@ -245,6 +245,7 @@ export interface FortnoxTransport {
   requestWithMetadata<T>(endpoint: string, options?: RequestOptions): Promise<FortnoxResponse<T>>;
   requestPdf(endpoint: string, options?: RequestOptions): Promise<Buffer>;
   requestPdfFromMutation(endpoint: string, options?: RequestOptions): Promise<Buffer | undefined>;
+  requestFile(endpoint: string, options?: RequestOptions): Promise<FortnoxFile>;
   fetchAllPages<T extends Record<string, unknown>>(
     endpoint: string,
     dataKey: string,
@@ -543,6 +544,47 @@ async function requestPdfFromMutation(
   );
 }
 
+export interface FortnoxFile {
+  buffer: Buffer;
+  contentType: string;
+}
+
+/**
+ * Fetch an arbitrary binary file from one of Fortnox's file endpoints (inbox,
+ * archive) — the read counterpart to the raw-body uploads elsewhere in this
+ * file. Unlike requestPdf this makes no assumption about the file type:
+ * voucher/invoice attachments can be PDF, JPEG, PNG, etc., so the caller's
+ * Content-Type is trusted rather than checked against a magic number. Still
+ * guards against a 2xx response that is actually a JSON error envelope, which
+ * would otherwise be saved to disk and look like a valid file.
+ */
+async function requestFile(
+  runtime: ClientRuntime,
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<FortnoxFile> {
+  return request<FortnoxFile>(runtime, endpoint, options, async (response) => {
+    const buffer = Buffer.from(await response.arrayBuffer());
+
+    const error = fortnoxErrorInBody(buffer);
+    if (error) {
+      throw new FortnoxApiError(
+        response.status,
+        error.message,
+        error.code !== undefined ? `Error code: ${error.code}` : undefined,
+        endpoint,
+        undefined,
+        runtime.getDiagnosticContext(),
+      );
+    }
+
+    const contentType = (response.headers?.get?.('content-type') || 'application/octet-stream')
+      .split(';')[0]!
+      .trim();
+    return { buffer, contentType };
+  });
+}
+
 /**
  * Fetch all pages of a paginated Fortnox list endpoint.
  * `dataKey` is the envelope key (e.g. "Invoices", "Customers").
@@ -661,6 +703,9 @@ function createFortnoxClientInternal(
     ): Promise<Buffer | undefined> {
       return requestPdfFromMutation(runtime, endpoint, requestOptions);
     },
+    requestFile(endpoint: string, requestOptions: RequestOptions = {}): Promise<FortnoxFile> {
+      return requestFile(runtime, endpoint, requestOptions);
+    },
     fetchAllPages<T extends Record<string, unknown>>(
       endpoint: string,
       dataKey: string,
@@ -710,6 +755,13 @@ export async function fortnoxRequestPdfFromMutation(
   options: RequestOptions = {},
 ): Promise<Buffer | undefined> {
   return defaultFortnoxTransport.requestPdfFromMutation(endpoint, options);
+}
+
+export async function fortnoxRequestFile(
+  endpoint: string,
+  options: RequestOptions = {},
+): Promise<FortnoxFile> {
+  return defaultFortnoxTransport.requestFile(endpoint, options);
 }
 
 export async function fetchAllPages<T extends Record<string, unknown>>(
