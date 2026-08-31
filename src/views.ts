@@ -52,9 +52,12 @@ export const customerListColumns: Column[] = [
 export const customerDetailColumns: Column[] = [
   { key: 'CustomerNumber', header: 'Customer #', width: 20 },
   { key: 'Name', header: 'Name', width: 40 },
+  { key: 'Type', header: 'Type', width: 8 },
   { key: 'OrganisationNumber', header: 'Org Nr', width: 20 },
   { key: 'Email', header: 'Email', width: 40 },
-  { key: 'Phone', header: 'Phone', width: 20 },
+  // The real Fortnox field is Phone1 (there is no bare "Phone") — see the write
+  // schema fix in tools/customers.ts for the same mismatch on the write side.
+  { key: 'Phone1', header: 'Phone', width: 20 },
   { key: 'Address1', header: 'Address', width: 40 },
   { key: 'ZipCode', header: 'Zip Code', width: 10 },
   { key: 'City', header: 'City', width: 20 },

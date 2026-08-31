@@ -1885,7 +1885,7 @@ customers
     'after',
     `
 Examples:
-  echo '{"Email":"new@acme.se","Phone":"08-123456"}' | noxctl customers update 25 --input - --yes`,
+  echo '{"Email":"new@acme.se","Phone1":"08-123456"}' | noxctl customers update 25 --input - --yes`,
   )
   .action(
     async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
