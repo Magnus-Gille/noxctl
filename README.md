@@ -104,6 +104,7 @@ So you control the credentials, the scopes, and which company is connected end t
    | `offer`              | Offert               | Offer               | **Order**                   | Offers — **opt-in**, see below                 |
    | `order`              | Order                | Order               | **Order**                   | Orders — **opt-in**, see below                 |
    | `salary`             | Lön                  | Salary              | **Lön**                     | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
+   | `archive`            | Arkivplats           | File Archive        | **Arkivplats**              | Attaching files to customer invoices — **opt-in**, see below |
 
    Enable every non-opt-in scope. noxctl requests that exact set at authorize time, and
    Fortnox rejects the whole authorization if the app has not been granted a scope that
@@ -122,9 +123,13 @@ So you control the credentials, the scopes, and which company is connected end t
      then authorize with `noxctl init --with-orders` (or `FORTNOX_WITH_ORDERS=1`).
    - **Payroll (Lön licence).** Enable **Lön** on the app, then authorize with
      `noxctl init --with-salary` (or `FORTNOX_WITH_SALARY=1`).
+   - **File archive (Arkivplats licence).** Enable **Arkivplats** on the app, then
+     authorize with `noxctl init --with-archive` (or `FORTNOX_WITH_ARCHIVE=1`). Only
+     needed for `noxctl invoices attach` — voucher and supplier-invoice attachments
+     use the `inbox`/`connectfile` scopes instead and don't need it.
 
-   Both can be combined. The granted scope set is remembered per profile, so token
-   refreshes keep working.
+   All three can be combined. The granted scope set is remembered per profile, so
+   token refreshes keep working.
 
 5. Save the integration
 
@@ -351,6 +356,8 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]` | `fortnox_invoice_pdf` | Download the invoice PDF (via `/preview`, no side effect). `--mark-sent` also flags it as sent afterwards (mutation) |
 | `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Bookkeep an invoice (mutation) |
 | `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
+| `noxctl invoices attach <docNumber> <file...> [--no-include-on-send]` | `fortnox_attach_invoice_files` | Upload receipt/underlag files and attach them to a customer invoice (mutation; needs the Fortnox **archive** scope — `noxctl init --with-archive`) |
+| `noxctl invoices attachments <docNumber>` | `fortnox_list_invoice_attachments` | List files currently attached to a customer invoice |
 
 ### Invoice payments (inbetalningar)
 

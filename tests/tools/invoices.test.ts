@@ -570,4 +570,118 @@ describe('invoice tools', () => {
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
+
+  describe('fortnox_attach_invoice_files', () => {
+    it('returns isError when confirm is missing', async () => {
+      mockFetch({});
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_attach_invoice_files',
+        arguments: { documentNumber: '91110646', files: ['/tmp/underlag.pdf'] },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('returns dryRun preview without uploading', async () => {
+      mockFetch({});
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_attach_invoice_files',
+        arguments: { documentNumber: '91110646', files: ['/tmp/underlag.pdf'], dryRun: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Dry run');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('uploads to /3/archive?folderid=inbox_kf and attaches with ArchiveFileId', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'noxctl-attach-test-'));
+      const filePath = join(dir, 'underlag.pdf');
+      writeFileSync(filePath, 'fake receipt bytes');
+
+      const mockFn = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 201,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify({
+                File: { Id: 'wrong-id', ArchiveFileId: 'arch-1', Name: 'underlag.pdf' },
+              }),
+            ),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () =>
+            Promise.resolve(
+              JSON.stringify([
+                {
+                  id: 'attach-1',
+                  entityId: 91110646,
+                  entityType: 'F',
+                  fileId: 'arch-1',
+                  includeOnSend: true,
+                },
+              ]),
+            ),
+        });
+      global.fetch = mockFn;
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_attach_invoice_files',
+        arguments: { documentNumber: '91110646', files: [filePath], confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const [uploadUrl] = mockFn.mock.calls[0] as [string];
+      expect(uploadUrl).toContain('/3/archive');
+      expect(uploadUrl).toContain('folderid=inbox_kf');
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('arch-1');
+
+      rmSync(dir, { recursive: true, force: true });
+    });
+  });
+
+  describe('fortnox_list_invoice_attachments', () => {
+    it('lists attachments via the fileattachments product API', async () => {
+      mockFetch([
+        { id: 'att1', entityId: 91110646, entityType: 'F', fileId: 'a1', includeOnSend: true },
+      ]);
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_list_invoice_attachments',
+        arguments: { documentNumber: '91110646' },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('a1');
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/api/fileattachments/attachments-v1');
+      expect(calledUrl).toContain('entityid=91110646');
+      expect(calledUrl).toContain('entitytype=F');
+    });
+
+    it('is read-only — no confirmation required', async () => {
+      mockFetch([]);
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_list_invoice_attachments',
+        arguments: { documentNumber: '91110646' },
+      });
+
+      expect(result.isError).toBeFalsy();
+    });
+  });
 });

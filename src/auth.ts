@@ -70,6 +70,14 @@ export const LEGACY_SCOPES =
 // client-credentials refresh re-requests the same set.
 export const SALARY_SCOPE = 'salary';
 
+// The file archive (Arkivplats) scope. Opt-in for the same reason as salary:
+// requesting it at authorize time fails for apps without the Arkivplats
+// permission enabled. Needed for `noxctl invoices attach` — customer invoices
+// have no `invoicefileconnections` (the pattern vouchers/supplier invoices use),
+// so attaching a file to one goes through the archive instead. `noxctl init
+// --with-archive` (or FORTNOX_WITH_ARCHIVE=1) appends it.
+export const ARCHIVE_SCOPE = 'archive';
+
 /**
  * Effective scope string for a profile: the granted set if recorded, else the
  * frozen LEGACY_SCOPES — what a credential predating the `scopes` field was
