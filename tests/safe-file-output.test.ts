@@ -8,7 +8,9 @@ describe('safe binary file output', () => {
     const path = privateOutputPath('noxctl-test-', 'file.bin');
     expect(writeBinaryFile(path, Buffer.from([0, 1, 2]))).toBe(path);
     expect(readFileSync(path)).toEqual(Buffer.from([0, 1, 2]));
-    expect(lstatSync(path).mode & 0o777).toBe(0o600);
+    // POSIX mode bits are not meaningful on Windows; the user's temporary
+    // directory ACL is the relevant boundary there.
+    if (process.platform !== 'win32') expect(lstatSync(path).mode & 0o777).toBe(0o600);
   });
 
   it('keeps untrusted default file names inside the private temporary directory', () => {
