@@ -111,4 +111,20 @@ describe('accrual tools', () => {
     expect(result.isError).toBe(true);
     expect(global.fetch).not.toHaveBeenCalled();
   });
+
+  it('accepts the extended native period values for invoice accrual families', async () => {
+    global.fetch = vi.fn();
+    const { client } = await setup();
+    for (const [name, payload] of [
+      ['fortnox_create_invoice_accrual', payloads.invoice_accrual],
+      ['fortnox_create_supplier_invoice_accrual', payloads.supplier_invoice_accrual],
+    ] as const) {
+      const result = await client.callTool({
+        name,
+        arguments: { ...payload, Period: '12_MONTHS', dryRun: true },
+      });
+      expect(result.isError, name).toBeFalsy();
+    }
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });

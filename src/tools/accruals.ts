@@ -11,7 +11,15 @@ import {
 import { referenceDataColumns } from '../views.js';
 
 const Account = z.number().int().min(1000).max(9999);
-const Period = z.enum(['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'SEMIANNUALLY', 'ANNUALLY']);
+const ContractPeriod = z.enum(['MONTHLY', 'BIMONTHLY', 'QUARTERLY', 'SEMIANNUALLY', 'ANNUALLY']);
+const InvoicePeriod = z.enum([
+  ...ContractPeriod.options,
+  '1_MONTHS',
+  '2_MONTHS',
+  '3_MONTHS',
+  '6_MONTHS',
+  '12_MONTHS',
+]);
 const AccrualRow = z.strictObject({
   Account,
   CostCenter: z.string().optional(),
@@ -55,7 +63,7 @@ export const ACCRUAL_TOOL_DEFINITIONS: readonly AccrualToolDefinition[] = [
       ...commonScheduleFields,
       Description: z.string(),
       InvoiceNumber: z.number().int(),
-      Period: Period.optional(),
+      Period: InvoicePeriod.optional(),
       RevenueAccount: Account,
       Times: z.number().int().optional(),
       InvoiceAccrualRows: z.array(AccrualRow).min(2),
@@ -75,7 +83,7 @@ export const ACCRUAL_TOOL_DEFINITIONS: readonly AccrualToolDefinition[] = [
       Description: z.string().optional(),
       SupplierInvoiceNumber: z.number().int(),
       CostAccount: Account,
-      Period,
+      Period: InvoicePeriod,
       Times: z.number().int(),
       SupplierInvoiceAccrualRows: z.array(AccrualRow).min(2),
     },
@@ -95,7 +103,7 @@ export const ACCRUAL_TOOL_DEFINITIONS: readonly AccrualToolDefinition[] = [
       CostAccount: Account,
       Description: z.string(),
       DocumentNumber: z.number().int(),
-      Period: Period.optional(),
+      Period: ContractPeriod.optional(),
       Times: z.number().int().optional(),
       Total: z.number(),
       VATIncluded: z.boolean().optional(),
