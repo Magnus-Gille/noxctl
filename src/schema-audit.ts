@@ -18,6 +18,31 @@ export interface SchemaAuditMapping {
   /** Component name under components.schemas in the local OpenAPI cache. */
   specSchemaName: string;
   ignoredProperties?: readonly string[];
+  /** Opaque, reviewed exceptions for compatibility differences that are intentional. */
+  compatibilityExceptions?: readonly SchemaAuditCompatibilityException[];
+}
+
+export type SchemaAuditDimension =
+  | 'field'
+  | 'nesting'
+  | 'requiredness'
+  | 'type'
+  | 'enum'
+  | 'nullability'
+  | 'constraint'
+  | 'strictness';
+
+export interface SchemaAuditCompatibilityException {
+  issueHash: string;
+  rationale: string;
+}
+
+export interface MutationAuditException {
+  id: string;
+  toolName: string;
+  kind: 'no-structured-body' | 'binary-or-local-file' | 'passthrough';
+  rationale: string;
+  preservationTest?: string;
 }
 
 export interface SchemaAuditResult {
@@ -26,6 +51,10 @@ export interface SchemaAuditResult {
   specificationPropertyCount: number;
   ignoredProperties: string[];
   missingProperties: string[];
+  checkedNodeCount: number;
+  compatibilityIssueCount: number;
+  resultClass: 'compatible' | 'tracked-gap';
+  issuesByDimension: Record<SchemaAuditDimension, string[]>;
   stateHash: string;
 }
 
@@ -34,12 +63,23 @@ export interface SchemaAuditBaselineRecord {
   declaredPropertyCount: number;
   specificationPropertyCount: number;
   missingPropertyCount: number;
+  checkedNodeCount: number;
+  issuesByDimension: Record<SchemaAuditDimension, number>;
+  resultClass: 'compatible' | 'tracked-gap';
   stateHash: string;
 }
 
 export interface SchemaAuditBaseline {
-  formatVersion: 1;
+  formatVersion: 2;
   records: SchemaAuditBaselineRecord[];
+}
+
+export interface MutationInventoryResult {
+  discoveredMutationCount: number;
+  mappedMutationCount: number;
+  exceptedMutationCount: number;
+  unmappedToolNames: string[];
+  staleExceptionIds: string[];
 }
 
 export interface SchemaAuditComparison {
@@ -82,18 +122,283 @@ function resolvePointer(root: unknown, pointer: string, description: string): un
 
 function sortedPropertyNames(schema: unknown, description: string): string[] {
   const object = asObject(schema, description);
+  if (object['properties'] === undefined) return [];
   const properties = asObject(object['properties'], `${description} properties`);
   return Object.keys(properties).sort(compareText);
 }
 
-function stateHash(mappingId: string, ignored: string[], missing: string[]): string {
+const DIMENSIONS: readonly SchemaAuditDimension[] = [
+  'field',
+  'nesting',
+  'requiredness',
+  'type',
+  'enum',
+  'nullability',
+  'constraint',
+  'strictness',
+];
+
+function issueHash(dimension: SchemaAuditDimension, detail: string): string {
+  return createHash('sha256')
+    .update(`${HASH_DOMAIN}/issue\0${dimension}\0${detail}`, 'utf8')
+    .digest('hex');
+}
+
+function stateHash(
+  mappingId: string,
+  ignored: string[],
+  issuesByDimension: Record<SchemaAuditDimension, string[]>,
+): string {
   const canonical = JSON.stringify({
     domain: HASH_DOMAIN,
     mappingId,
     ignored,
-    missing,
+    issues: Object.fromEntries(
+      DIMENSIONS.map((dimension) => [
+        dimension,
+        issuesByDimension[dimension]
+          .map((detail) => issueHash(dimension, detail))
+          .sort(compareText),
+      ]),
+    ),
   });
   return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+function emptyIssues(): Record<SchemaAuditDimension, string[]> {
+  return Object.fromEntries(DIMENSIONS.map((dimension) => [dimension, []])) as unknown as Record<
+    SchemaAuditDimension,
+    string[]
+  >;
+}
+
+function schemaTypes(schema: JsonObject): Set<string> {
+  const result = new Set<string>();
+  const type = schema['type'];
+  if (typeof type === 'string') result.add(type);
+  else if (Array.isArray(type)) {
+    for (const value of type) if (typeof value === 'string') result.add(value);
+  }
+  if (schema['nullable'] === true || (schema['enum'] as unknown[] | undefined)?.includes(null)) {
+    result.add('null');
+  }
+  for (const keyword of ['anyOf', 'oneOf'] as const) {
+    const alternatives = schema[keyword];
+    if (Array.isArray(alternatives)) {
+      for (const alternative of alternatives) {
+        if (alternative && typeof alternative === 'object' && !Array.isArray(alternative)) {
+          for (const value of schemaTypes(alternative as JsonObject)) result.add(value);
+        }
+      }
+    }
+  }
+  if (result.size === 0) {
+    if (schema['properties']) result.add('object');
+    else if (schema['items']) result.add('array');
+  }
+  return result;
+}
+
+function normalizedPrimitiveTypes(schema: JsonObject): string[] {
+  return [...schemaTypes(schema)]
+    .filter((value) => !['null', 'object', 'array'].includes(value))
+    .map((value) => (value === 'integer' ? 'number' : value))
+    .sort(compareText);
+}
+
+function nesting(schema: JsonObject): 'object' | 'array' | 'scalar' {
+  const types = schemaTypes(schema);
+  if (types.has('object')) return 'object';
+  if (types.has('array')) return 'array';
+  return 'scalar';
+}
+
+function dereferenceSchema(
+  schema: unknown,
+  schemas: JsonObject,
+  seen = new Set<string>(),
+): JsonObject {
+  const object = asObject(schema, 'Schema node');
+  const reference = object['$ref'];
+  if (typeof reference === 'string') {
+    const prefix = '#/components/schemas/';
+    if (!reference.startsWith(prefix))
+      throw new Error('External schema references are unsupported');
+    const name = decodeURIComponent(reference.slice(prefix.length));
+    if (seen.has(name)) return object;
+    if (!Object.hasOwn(schemas, name)) throw new Error('Referenced OpenAPI schema not found');
+    return dereferenceSchema(schemas[name], schemas, new Set([...seen, name]));
+  }
+  const allOf = object['allOf'];
+  if (!Array.isArray(allOf)) return object;
+  const merged: JsonObject = { ...object };
+  delete merged['allOf'];
+  const properties: JsonObject = { ...(object['properties'] as JsonObject | undefined) };
+  const required = new Set(Array.isArray(object['required']) ? object['required'] : []);
+  for (const member of allOf) {
+    const expanded = dereferenceSchema(member, schemas, seen);
+    Object.assign(properties, expanded['properties'] as JsonObject | undefined);
+    for (const value of Array.isArray(expanded['required']) ? expanded['required'] : []) {
+      if (typeof value === 'string') required.add(value);
+    }
+    for (const [key, value] of Object.entries(expanded)) {
+      if (!['properties', 'required'].includes(key) && merged[key] === undefined)
+        merged[key] = value;
+    }
+  }
+  if (Object.keys(properties).length) merged['properties'] = properties;
+  if (required.size) merged['required'] = [...required];
+  return merged;
+}
+
+const CONSTRAINT_KEYS = [
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'format',
+  'minItems',
+  'maxItems',
+  'uniqueItems',
+] as const;
+
+function canonicalValue(value: unknown): string {
+  return JSON.stringify(value, (_key, nested) =>
+    nested && typeof nested === 'object' && !Array.isArray(nested)
+      ? Object.fromEntries(
+          Object.entries(nested).sort(([left], [right]) => compareText(left, right)),
+        )
+      : nested,
+  );
+}
+
+function compareSchemaNodes(
+  toolSchema: unknown,
+  specificationSchema: unknown,
+  schemas: JsonObject,
+  ignored: Set<string>,
+  exceptionHashes: Set<string>,
+): {
+  checkedNodeCount: number;
+  issues: Record<SchemaAuditDimension, string[]>;
+} {
+  const issues = emptyIssues();
+  let checkedNodeCount = 0;
+  const addIssue = (dimension: SchemaAuditDimension, detail: string) => {
+    if (!exceptionHashes.has(issueHash(dimension, detail))) issues[dimension].push(detail);
+  };
+
+  const visit = (
+    toolValue: unknown,
+    specValue: unknown,
+    path: string,
+    requiredBySpec: boolean,
+    requiredByTool: boolean,
+  ) => {
+    const tool = asObject(toolValue, `Tool schema at ${path || '<root>'}`);
+    const specification = dereferenceSchema(specValue, schemas);
+    checkedNodeCount += 1;
+
+    const specNesting = nesting(specification);
+    const toolNesting = nesting(tool);
+    if (specNesting !== toolNesting) {
+      addIssue('nesting', `${path || '<root>'}:${specNesting}:${toolNesting}`);
+      return;
+    }
+    if (requiredBySpec !== requiredByTool) {
+      addIssue('requiredness', `${path || '<root>'}:${requiredBySpec}:${requiredByTool}`);
+    }
+    const specNullable = schemaTypes(specification).has('null');
+    const toolNullable = schemaTypes(tool).has('null');
+    if (specNullable !== toolNullable) {
+      addIssue('nullability', `${path || '<root>'}:${specNullable}:${toolNullable}`);
+    }
+    if (specNesting === 'scalar') {
+      const expectedTypes = normalizedPrimitiveTypes(specification);
+      const actualTypes = normalizedPrimitiveTypes(tool);
+      if (canonicalValue(expectedTypes) !== canonicalValue(actualTypes)) {
+        addIssue(
+          'type',
+          `${path || '<root>'}:${canonicalValue(expectedTypes)}:${canonicalValue(actualTypes)}`,
+        );
+      }
+      const expectedEnum = Array.isArray(specification['enum']) ? specification['enum'] : undefined;
+      const actualEnum = Array.isArray(tool['enum']) ? tool['enum'] : undefined;
+      if (expectedEnum || actualEnum) {
+        const expected = [...(expectedEnum ?? [])].sort();
+        const actual = [...(actualEnum ?? [])].sort();
+        if (canonicalValue(expected) !== canonicalValue(actual)) {
+          addIssue(
+            'enum',
+            `${path || '<root>'}:${canonicalValue(expected)}:${canonicalValue(actual)}`,
+          );
+        }
+      }
+    }
+    for (const key of CONSTRAINT_KEYS) {
+      if (specification[key] !== undefined || tool[key] !== undefined) {
+        if (canonicalValue(specification[key]) !== canonicalValue(tool[key])) {
+          addIssue(
+            'constraint',
+            `${path || '<root>'}:${key}:${canonicalValue(specification[key])}:${canonicalValue(tool[key])}`,
+          );
+        }
+      }
+    }
+
+    if (specNesting === 'array') {
+      if (specification['items'] && tool['items']) {
+        visit(tool['items'], specification['items'], `${path}[]`, false, false);
+      }
+      return;
+    }
+    if (specNesting !== 'object') return;
+    if (tool['additionalProperties'] !== false) {
+      addIssue('strictness', `${path || '<root>'}:additionalProperties`);
+    }
+    const specificationProperties = asObject(
+      specification['properties'] ?? {},
+      `OpenAPI schema properties at ${path || '<root>'}`,
+    );
+    const toolProperties = asObject(
+      tool['properties'] ?? {},
+      `Tool schema properties at ${path || '<root>'}`,
+    );
+    const requiredSpec = new Set(
+      (Array.isArray(specification['required']) ? specification['required'] : []).filter(
+        (value): value is string => typeof value === 'string',
+      ),
+    );
+    const requiredTool = new Set(
+      (Array.isArray(tool['required']) ? tool['required'] : []).filter(
+        (value): value is string => typeof value === 'string',
+      ),
+    );
+    for (const [property, childSpec] of Object.entries(specificationProperties).sort(
+      ([left], [right]) => compareText(left, right),
+    )) {
+      const childPath = path ? `${path}.${property}` : property;
+      if (ignored.has(property) || ignored.has(childPath)) continue;
+      if (!Object.hasOwn(toolProperties, property)) {
+        addIssue('field', childPath);
+        continue;
+      }
+      visit(
+        toolProperties[property],
+        childSpec,
+        childPath,
+        requiredSpec.has(property),
+        requiredTool.has(property),
+      );
+    }
+  };
+  visit(toolSchema, specificationSchema, '', false, false);
+  for (const dimension of DIMENSIONS) issues[dimension].sort(compareText);
+  return { checkedNodeCount, issues };
 }
 
 export function auditSchemaCoverage(
@@ -126,15 +431,31 @@ export function auditSchemaCoverage(
       `Tool schema for ${mapping.id}`,
     );
     const declared = sortedPropertyNames(toolSchema, `Tool schema for ${mapping.id}`);
+    const specificationSchema = schemas[mapping.specSchemaName];
     const specification = sortedPropertyNames(
-      schemas[mapping.specSchemaName],
+      dereferenceSchema(specificationSchema, schemas),
       `OpenAPI schema for ${mapping.id}`,
     );
     const ignored = [...new Set(mapping.ignoredProperties ?? [])].sort(compareText);
-    const declaredSet = new Set(declared);
-    const ignoredSet = new Set(ignored);
-    const missing = specification.filter(
-      (property) => !declaredSet.has(property) && !ignoredSet.has(property),
+    const exceptionHashes = new Set(
+      (mapping.compatibilityExceptions ?? []).map(({ issueHash: identity, rationale }) => {
+        if (!identity || !rationale.trim()) {
+          throw new Error(`Invalid compatibility exception for mapping ${mapping.id}`);
+        }
+        return identity;
+      }),
+    );
+    const comparison = compareSchemaNodes(
+      toolSchema,
+      specificationSchema,
+      schemas,
+      new Set(ignored),
+      exceptionHashes,
+    );
+    const missing = comparison.issues.field;
+    const compatibilityIssueCount = DIMENSIONS.reduce(
+      (count, dimension) => count + comparison.issues[dimension].length,
+      0,
     );
 
     return {
@@ -143,7 +464,12 @@ export function auditSchemaCoverage(
       specificationPropertyCount: specification.length,
       ignoredProperties: ignored,
       missingProperties: missing,
-      stateHash: stateHash(mapping.id, ignored, missing),
+      checkedNodeCount: comparison.checkedNodeCount,
+      compatibilityIssueCount,
+      resultClass: (compatibilityIssueCount === 0 ? 'compatible' : 'tracked-gap') as
+        'compatible' | 'tracked-gap',
+      issuesByDimension: comparison.issues,
+      stateHash: stateHash(mapping.id, ignored, comparison.issues),
     };
   });
 
@@ -152,7 +478,7 @@ export function auditSchemaCoverage(
 
 export function toAuditBaseline(results: readonly SchemaAuditResult[]): SchemaAuditBaseline {
   return {
-    formatVersion: 1,
+    formatVersion: 2,
     records: [...results]
       .sort((a, b) => compareText(a.id, b.id))
       .map((result) => ({
@@ -160,6 +486,11 @@ export function toAuditBaseline(results: readonly SchemaAuditResult[]): SchemaAu
         declaredPropertyCount: result.declaredPropertyCount,
         specificationPropertyCount: result.specificationPropertyCount,
         missingPropertyCount: result.missingProperties.length,
+        checkedNodeCount: result.checkedNodeCount,
+        issuesByDimension: Object.fromEntries(
+          DIMENSIONS.map((dimension) => [dimension, result.issuesByDimension[dimension].length]),
+        ) as Record<SchemaAuditDimension, number>,
+        resultClass: result.compatibilityIssueCount === 0 ? 'compatible' : 'tracked-gap',
         stateHash: result.stateHash,
       })),
   };
@@ -194,11 +525,17 @@ export function formatAuditSummary(
   comparison?: SchemaAuditComparison,
 ): string {
   const status = comparison ? (comparison.matches ? 'ok' : 'drift') : 'generated';
-  const lines = [`Schema audit: ${status}`];
-  for (const result of [...results].sort((a, b) => compareText(a.id, b.id))) {
-    lines.push(
-      `${result.id}: declared=${result.declaredPropertyCount} spec=${result.specificationPropertyCount} missing=${result.missingProperties.length} state=${result.stateHash}`,
-    );
+  const totals = {
+    compatible: results.filter(({ resultClass }) => resultClass === 'compatible').length,
+    trackedGap: results.filter(({ resultClass }) => resultClass === 'tracked-gap').length,
+    nodes: results.reduce((count, result) => count + result.checkedNodeCount, 0),
+    issues: results.reduce((count, result) => count + result.compatibilityIssueCount, 0),
+  };
+  const lines = [
+    `Schema audit: ${status} mappings=${results.length} compatible=${totals.compatible} tracked-gap=${totals.trackedGap} nodes=${totals.nodes} issues=${totals.issues} ${DIMENSIONS.map((dimension) => `${dimension}=${results.reduce((count, result) => count + result.issuesByDimension[dimension].length, 0)}`).join(' ')}`,
+  ];
+  if (comparison && !comparison.matches) {
+    lines.push(`Changed mappings: ${comparison.changedMappingIds.join(', ')}`);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -209,8 +546,61 @@ export function formatAuditFields(results: readonly SchemaAuditResult[]): string
     lines.push(`${result.id}:`);
     // Property names originate in a fetched document. JSON quoting preserves
     // their exact value while preventing terminal control-sequence injection.
-    lines.push(...result.missingProperties.map((property) => `  - ${JSON.stringify(property)}`));
-    if (result.missingProperties.length === 0) lines.push('  (none)');
+    for (const dimension of DIMENSIONS) {
+      lines.push(`  ${dimension}:`);
+      const issues = result.issuesByDimension[dimension];
+      lines.push(...issues.map((issue) => `    - ${JSON.stringify(issue)}`));
+      if (issues.length === 0) lines.push('    (none)');
+    }
   }
   return `${lines.join('\n')}\n`;
+}
+
+export function auditMutationInventory(
+  tools: readonly DiscoveredToolSchema[],
+  mappings: readonly SchemaAuditMapping[],
+  exceptions: readonly MutationAuditException[],
+): MutationInventoryResult {
+  const mutationTools = tools.filter(({ inputSchema }) => {
+    const properties = inputSchema['properties'];
+    return (
+      properties !== null &&
+      typeof properties === 'object' &&
+      !Array.isArray(properties) &&
+      (Object.hasOwn(properties, 'confirm') || Object.hasOwn(properties, 'dryRun'))
+    );
+  });
+  const discoveredNames = new Set(mutationTools.map(({ name }) => name));
+  const mappedNames = new Set(mappings.map(({ toolName }) => toolName));
+  const exceptionIds = new Set<string>();
+  const exceptionNames = new Set<string>();
+  for (const exception of exceptions) {
+    if (
+      !exception.id ||
+      exceptionIds.has(exception.id) ||
+      exceptionNames.has(exception.toolName) ||
+      !exception.rationale.trim()
+    ) {
+      throw new Error('Invalid or duplicate mutation-audit exception');
+    }
+    if (exception.kind === 'passthrough' && !exception.preservationTest?.trim()) {
+      throw new Error(`Passthrough exception ${exception.id} requires a preservation test`);
+    }
+    exceptionIds.add(exception.id);
+    exceptionNames.add(exception.toolName);
+  }
+  const unmappedToolNames = [...discoveredNames]
+    .filter((name) => !mappedNames.has(name) && !exceptionNames.has(name))
+    .sort(compareText);
+  const staleExceptionIds = exceptions
+    .filter(({ toolName }) => !discoveredNames.has(toolName))
+    .map(({ id }) => id)
+    .sort(compareText);
+  return {
+    discoveredMutationCount: mutationTools.length,
+    mappedMutationCount: [...discoveredNames].filter((name) => mappedNames.has(name)).length,
+    exceptedMutationCount: [...discoveredNames].filter((name) => exceptionNames.has(name)).length,
+    unmappedToolNames,
+    staleExceptionIds,
+  };
 }

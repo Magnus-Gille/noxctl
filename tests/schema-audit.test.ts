@@ -4,13 +4,14 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/index.js';
 import {
   auditSchemaCoverage,
+  auditMutationInventory,
   compareAuditBaselines,
   formatAuditFields,
   formatAuditSummary,
   toAuditBaseline,
   type SchemaAuditMapping,
 } from '../src/schema-audit.js';
-import { SCHEMA_AUDIT_MAPPINGS } from '../src/schema-audit-mappings.js';
+import { SCHEMA_AUDIT_EXCEPTIONS, SCHEMA_AUDIT_MAPPINGS } from '../src/schema-audit-mappings.js';
 
 const mapping: SchemaAuditMapping = {
   id: 'example-row',
@@ -27,6 +28,7 @@ function syntheticInputs() {
         name: 'fortnox_create_example',
         inputSchema: {
           type: 'object',
+          additionalProperties: false,
           properties: {
             Rows: {
               type: 'array',
@@ -146,7 +148,7 @@ describe('OpenAPI tool-schema audit', () => {
     const other = { ...mapping, id: 'aaa-example-row' };
     const baseline = toAuditBaseline(auditSchemaCoverage(spec, tools, [mapping, other]));
 
-    expect(baseline.formatVersion).toBe(1);
+    expect(baseline.formatVersion).toBe(2);
     expect(baseline.records.map((record) => record.id)).toEqual(['aaa-example-row', 'example-row']);
     expect(`${JSON.stringify(baseline, null, 2)}\n`).toBe(
       `${JSON.stringify(toAuditBaseline(auditSchemaCoverage(spec, tools, [other, mapping])), null, 2)}\n`,
@@ -178,10 +180,105 @@ describe('OpenAPI tool-schema audit', () => {
         SCHEMA_AUDIT_MAPPINGS,
       );
 
-      expect(results).toHaveLength(6);
-      expect(results.every((result) => result.declaredPropertyCount > 0)).toBe(true);
+      expect(results).toHaveLength(SCHEMA_AUDIT_MAPPINGS.length);
+      expect(results.every((result) => result.checkedNodeCount > 0)).toBe(true);
+      expect(
+        auditMutationInventory(tools, SCHEMA_AUDIT_MAPPINGS, SCHEMA_AUDIT_EXCEPTIONS),
+      ).toMatchObject({ unmappedToolNames: [], staleExceptionIds: [] });
     } finally {
       await Promise.allSettled([client.close(), server.close()]);
     }
+  });
+
+  it('reports every compatibility dimension independently', () => {
+    const tool = {
+      name: 'fortnox_create_example',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          Kind: { type: 'string', enum: ['wrong'], maxLength: 9 },
+          Nested: { type: 'string' },
+          Maybe: { type: 'string' },
+          Open: { type: 'object', properties: { Value: { type: 'string' } } },
+        },
+        required: ['Maybe'],
+      },
+    };
+    const spec = {
+      components: {
+        schemas: {
+          Example: {
+            type: 'object',
+            properties: {
+              Missing: { type: 'string' },
+              Kind: { type: 'number', enum: [1, 2], maxLength: 8 },
+              Nested: { type: 'array', items: { type: 'string' } },
+              Maybe: { type: ['string', 'null'] },
+              Open: {
+                type: 'object',
+                properties: { Value: { type: 'string' } },
+                additionalProperties: false,
+              },
+            },
+            required: ['Kind'],
+          },
+        },
+      },
+    };
+    const [result] = auditSchemaCoverage(
+      spec,
+      [tool],
+      [{ ...mapping, toolSchemaPointer: '', specSchemaName: 'Example', ignoredProperties: [] }],
+    );
+
+    expect(result.issuesByDimension.field).toHaveLength(1);
+    expect(result.issuesByDimension.nesting).toHaveLength(1);
+    expect(result.issuesByDimension.requiredness).toHaveLength(2);
+    expect(result.issuesByDimension.type).toHaveLength(1);
+    expect(result.issuesByDimension.enum).toHaveLength(1);
+    expect(result.issuesByDimension.nullability).toHaveLength(1);
+    expect(result.issuesByDimension.constraint).toHaveLength(1);
+    expect(result.issuesByDimension.strictness).toHaveLength(2);
+  });
+
+  it('inventories discovered mutations and requires tested passthrough exceptions', () => {
+    const tools = [
+      { name: 'fortnox_create_example', inputSchema: { properties: { confirm: {} } } },
+      { name: 'fortnox_delete_example', inputSchema: { properties: { dryRun: {} } } },
+      { name: 'fortnox_list_examples', inputSchema: { properties: {} } },
+    ];
+    expect(
+      auditMutationInventory(
+        tools,
+        [mapping],
+        [
+          {
+            id: 'delete-example',
+            toolName: 'fortnox_delete_example',
+            kind: 'no-structured-body',
+            rationale: 'Identifier-only delete.',
+          },
+        ],
+      ),
+    ).toMatchObject({
+      discoveredMutationCount: 2,
+      mappedMutationCount: 1,
+      exceptedMutationCount: 1,
+      unmappedToolNames: [],
+    });
+    expect(() =>
+      auditMutationInventory(
+        tools,
+        [],
+        [
+          {
+            id: 'open',
+            toolName: 'fortnox_create_example',
+            kind: 'passthrough',
+            rationale: 'Provider payload.',
+          },
+        ],
+      ),
+    ).toThrow(/preservation test/i);
   });
 });

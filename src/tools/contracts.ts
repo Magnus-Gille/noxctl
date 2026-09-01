@@ -19,7 +19,7 @@ const invoiceRowSchema = z
     VAT: z.number().optional().describe('Momssats (%)'),
     Discount: z.number().optional().describe('Rabatt'),
   })
-  .passthrough();
+  .strict();
 
 export function registerContractTools(
   server: McpServer,

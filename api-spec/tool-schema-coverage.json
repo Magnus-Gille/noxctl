@@ -1,47 +1,1164 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "records": [
+    {
+      "id": "absence-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 8,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 9,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "1e118d92fd0627cb2f2a2779932ebc6479d5d8bd43659759ce1a9d5aaae4174e"
+    },
+    {
+      "id": "absence-update",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 8,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 9,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "625226bb21b50e539adc249717b8456f6850e903dc40c36ea46cfb552895e7f8"
+    },
+    {
+      "id": "account-create",
+      "declaredPropertyCount": 16,
+      "specificationPropertyCount": 13,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 17,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 10,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "b387e7cb15ad167e83cc72c4cdcbf3e058f668d95deacb02d77e0ec1d2188189"
+    },
+    {
+      "id": "account-update",
+      "declaredPropertyCount": 16,
+      "specificationPropertyCount": 13,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 16,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 9,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "8424b0af4187ba849a60d9371cb23eb71cbb8d8d3231d0db472742fd21bd3d1b"
+    },
+    {
+      "id": "article-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 44,
+      "missingPropertyCount": 36,
+      "checkedNodeCount": 9,
+      "issuesByDimension": {
+        "field": 36,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 9,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "80ed0f9830f005ab17dc278c60940be0fa56f3f4b4f0d4b287817b5a65d861ac"
+    },
+    {
+      "id": "article-update",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 44,
+      "missingPropertyCount": 37,
+      "checkedNodeCount": 8,
+      "issuesByDimension": {
+        "field": 37,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 8,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "ab4218827c08648d3819a4bea0796c8b2121d070f40ecfb4053b330be4ab07e5"
+    },
+    {
+      "id": "attendance-create",
+      "declaredPropertyCount": 9,
+      "specificationPropertyCount": 6,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 7,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 5,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "107b7cc096c91ec3fab24c1d9015fc08b663f5ab4c944774f30d9b36ef741182"
+    },
+    {
+      "id": "attendance-update",
+      "declaredPropertyCount": 10,
+      "specificationPropertyCount": 6,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 7,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 5,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "c4a92cf998bf965be9d059da730218ee20e92b32f14d37ebbcb97860db91f6f1"
+    },
+    {
+      "id": "contract-accrual-create",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 9,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 17,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 17,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "7ba264823d4ad33f8dc01e943f19deeaa42206b354086474e4f80e6903287084"
+    },
+    {
+      "id": "contract-accrual-update",
+      "declaredPropertyCount": 13,
+      "specificationPropertyCount": 9,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 17,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 17,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "8cff587090432f84ef613ca565296e78dcdb79d7cada3d092f3fe647c70650d6"
+    },
+    {
+      "id": "contract-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 34,
+      "missingPropertyCount": 40,
+      "checkedNodeCount": 17,
+      "issuesByDimension": {
+        "field": 40,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 12,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "b2ade189f80417e04121c7f098965ae2b758fe86cb9b828379085ddc98196ea6"
+    },
+    {
+      "id": "contract-update",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 49,
+      "missingPropertyCount": 56,
+      "checkedNodeCount": 16,
+      "issuesByDimension": {
+        "field": 56,
+        "nesting": 0,
+        "requiredness": 4,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 12,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "7f6c80e1afa2a7f1c585b823511d499c1488ee43b63a01010531d0df8ed85a3c"
+    },
+    {
+      "id": "cost-center-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 4,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 4,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "58b7ea5d2e021679eb7522fed9b8b017409a3ab5bf7700a41a9d5abdf9d19d33"
+    },
+    {
+      "id": "cost-center-update",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 4,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 4,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "0201c656857ba51dc24a1cb7c8f2b0f175cd9064e3ac41a90da27ff6982bcf69"
+    },
+    {
+      "id": "customer",
+      "declaredPropertyCount": 60,
+      "specificationPropertyCount": 63,
+      "missingPropertyCount": 6,
+      "checkedNodeCount": 58,
+      "issuesByDimension": {
+        "field": 6,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 52,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "4129eb4086e36fef65d42af2c4d90c775bd80c0b075b4f934fd9115a8140f544"
+    },
+    {
+      "id": "customer-update",
+      "declaredPropertyCount": 61,
+      "specificationPropertyCount": 63,
+      "missingPropertyCount": 6,
+      "checkedNodeCount": 58,
+      "issuesByDimension": {
+        "field": 6,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 52,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "0f29f53c8198e03fe7c8dfc3978e7d93d418e10a5a602827c0faab788a0ef661"
+    },
+    {
+      "id": "document-attachment-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 5,
+      "missingPropertyCount": 2,
+      "checkedNodeCount": 4,
+      "issuesByDimension": {
+        "field": 2,
+        "nesting": 0,
+        "requiredness": 2,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 1,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "420131936a39b38dc7f56dbcfd13c58521910cd7656342fb29862d56314fce89"
+    },
+    {
+      "id": "document-attachment-update",
+      "declaredPropertyCount": 9,
+      "specificationPropertyCount": 5,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 6,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 4,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "14dfdbf31381d90d04f38ae7cf047d552db3c063ce67b184e6f6df04169d7703"
+    },
+    {
+      "id": "document-attachment-validate-item",
+      "declaredPropertyCount": 5,
+      "specificationPropertyCount": 5,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 6,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 4,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "0b9854b31053672b04d8ffd6e50204cb4efd313d1194a87e0af0cc67957f8c49"
+    },
+    {
+      "id": "employee-create",
+      "declaredPropertyCount": 35,
+      "specificationPropertyCount": 109,
+      "missingPropertyCount": 77,
+      "checkedNodeCount": 33,
+      "issuesByDimension": {
+        "field": 77,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 5,
+        "nullability": 0,
+        "constraint": 8,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "0e33dd9a5230bdb76e15adcb829ab7aa518a197fa926f6a17a434fd284a47430"
+    },
+    {
+      "id": "employee-update",
+      "declaredPropertyCount": 35,
+      "specificationPropertyCount": 109,
+      "missingPropertyCount": 78,
+      "checkedNodeCount": 32,
+      "issuesByDimension": {
+        "field": 78,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 0,
+        "enum": 5,
+        "nullability": 0,
+        "constraint": 6,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "d6cbc35a669005f4d66c2f0be7c0634ea447872455231bb9ab860880df602509"
+    },
+    {
+      "id": "financial-year-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 5,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "ac907bc4dfcbb1d8f5219d29f5058154cc76a867f993399c900e821346a6c136"
+    },
+    {
+      "id": "invoice-accrual-create",
+      "declaredPropertyCount": 14,
+      "specificationPropertyCount": 11,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 19,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 19,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "04e9e0a1fd75f9dc0266243db225c4941564da46704049296bc0f5bc54823d81"
+    },
+    {
+      "id": "invoice-accrual-update",
+      "declaredPropertyCount": 15,
+      "specificationPropertyCount": 11,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 19,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 19,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "a1109cc32febde78edb86e0159c46f6d0eb3363fa327f3dbbded404df760c008"
+    },
+    {
+      "id": "invoice-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 52,
+      "missingPropertyCount": 44,
+      "checkedNodeCount": 28,
+      "issuesByDimension": {
+        "field": 44,
+        "nesting": 0,
+        "requiredness": 4,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 20,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "ccdc9a82f75494750ac0d2b70496a35a935badf8e65bd5d9659870974eeaae7c"
+    },
+    {
+      "id": "invoice-payment-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 23,
+      "missingPropertyCount": 19,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 19,
+        "nesting": 0,
+        "requiredness": 2,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "30f88eb32c5d8c384607d6b6acc0a7f1acc188098fa54124bb1768734a244997"
+    },
+    {
+      "id": "invoice-payment-update",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 23,
+      "missingPropertyCount": 19,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 19,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "42e4ef86d3198fc2c367fa0a756ef0a838159afcfb756a7959022af2c207bc39"
+    },
     {
       "id": "invoice-row",
       "declaredPropertyCount": 18,
       "specificationPropertyCount": 18,
       "missingPropertyCount": 0,
-      "stateHash": "c88088ad9b7760e55821ad2ff4d22076a4efdc2e2a9a2419d7fe67bf62978a08"
+      "checkedNodeCount": 19,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 15,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "7effac25c5c7c1d4f08052a39b5c865d8419d08a2ccac6377e17ab2b5df0dfb3"
+    },
+    {
+      "id": "invoice-update",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 52,
+      "missingPropertyCount": 44,
+      "checkedNodeCount": 28,
+      "issuesByDimension": {
+        "field": 44,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 20,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "96648e54f2cdfc3f1c88247cc747de15cee8c2520f821844dfb3d8b24c1b739d"
+    },
+    {
+      "id": "offer-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 45,
+      "missingPropertyCount": 37,
+      "checkedNodeCount": 29,
+      "issuesByDimension": {
+        "field": 37,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 17,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "84cbfdad8ed8c862f84320b800147e8302a6f36aa373edf072536ec484dda0b2"
     },
     {
       "id": "offer-row",
       "declaredPropertyCount": 20,
       "specificationPropertyCount": 19,
       "missingPropertyCount": 0,
-      "stateHash": "ad10515787a657a7ca9f5bec5cd49d33e34e2861c5aa31da0925e05e86e54f96"
+      "checkedNodeCount": 20,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 2,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 15,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "2ba9c3a594429bae66928ecc16e125ee898d30d34632edf6b60f127bc046e48f"
+    },
+    {
+      "id": "offer-update",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 45,
+      "missingPropertyCount": 37,
+      "checkedNodeCount": 29,
+      "issuesByDimension": {
+        "field": 37,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 17,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "eb9d6c348a4d0577a4db7876f9a3fa9c23c5511e17208909c85dcfd035721266"
+    },
+    {
+      "id": "order-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 50,
+      "missingPropertyCount": 42,
+      "checkedNodeCount": 29,
+      "issuesByDimension": {
+        "field": 42,
+        "nesting": 0,
+        "requiredness": 4,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 18,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "390f2803c511d97beb99572dddadb9218946e0849a7fa73b7b47447d4ce529cf"
     },
     {
       "id": "order-row",
       "declaredPropertyCount": 19,
       "specificationPropertyCount": 19,
       "missingPropertyCount": 0,
-      "stateHash": "9e47e77be6ba95abf03aa8b1b67ebfff4d661ab69471a05954fa034e9a8fed9c"
+      "checkedNodeCount": 20,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 12,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "7f6fc87656c93631d90cba7383ce38ccf42386742a1068711f87c0d211acae56"
+    },
+    {
+      "id": "order-update",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 50,
+      "missingPropertyCount": 42,
+      "checkedNodeCount": 29,
+      "issuesByDimension": {
+        "field": 42,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 18,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "3b046c26717c58100bb1c83ef87a7fd61b11b6d13d86000af907ef192fa394f3"
+    },
+    {
+      "id": "price-create",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 6,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 6,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "5170522c298392f9c0ddaf29c12e5b26c8465e794cd8e5626f1fba872d5fdf98"
+    },
+    {
+      "id": "price-list-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 4,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 4,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "021ab0c1bcc4988951978f39d5027e932edc4e24bd06b4668b13ccf0316bc886"
+    },
+    {
+      "id": "price-list-update",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 4,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 4,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "d3cf7ec52466b29f0c461e75dcbd91c97ffddafc4372fb9c84b8f89a2015f1d3"
+    },
+    {
+      "id": "price-update",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 6,
+      "missingPropertyCount": 4,
+      "checkedNodeCount": 3,
+      "issuesByDimension": {
+        "field": 4,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "de52153322ee84ef53f5780dd21aa695f7de5d0d5965eaba8a1254e0bcf9bcde"
+    },
+    {
+      "id": "project-create",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 8,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 9,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 8,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "89f3ef3c2a06f95fb35f27b7b3a883a9b4dedf9f0097a51371ea5cc220823c53"
+    },
+    {
+      "id": "project-update",
+      "declaredPropertyCount": 11,
+      "specificationPropertyCount": 8,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 8,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 7,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "1c8222a3db8fc591e90ace497a42fdef91f9b97a0aa6e38c1a83d91ca5ce41b8"
+    },
+    {
+      "id": "recurring-invoice-request-create",
+      "declaredPropertyCount": 5,
+      "specificationPropertyCount": 1,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 1,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 0,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "e393e8c8aef96201423aa5ba5d51a39543f0960aa6b1e66f844c438114f96fe7"
+    },
+    {
+      "id": "recurring-patch-document",
+      "declaredPropertyCount": 0,
+      "specificationPropertyCount": 0,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "521f69c18c8427b133ac8da6ca1f1d3d6c421b72f381624c0a76e9ca0ff8919a"
+    },
+    {
+      "id": "salary-transaction-create",
+      "declaredPropertyCount": 14,
+      "specificationPropertyCount": 12,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 12,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "2105527548ea14b21069ed36ddd92831cc3439a536bab210d1b0db51f97896e3"
+    },
+    {
+      "id": "salary-transaction-update",
+      "declaredPropertyCount": 15,
+      "specificationPropertyCount": 12,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 12,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 3,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 3,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "e81713348966298d6862011f84a1338cd4da7fcd7508150dd9c8214042b20ca2"
+    },
+    {
+      "id": "schedule-time-reset",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 9,
+      "missingPropertyCount": 2,
+      "checkedNodeCount": 8,
+      "issuesByDimension": {
+        "field": 2,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 0,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "3a45fce918b4cf97880e2d5a65d9e1dd0c84e6950d861df9bc35fe86a48ad668"
+    },
+    {
+      "id": "schedule-time-update",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 9,
+      "missingPropertyCount": 2,
+      "checkedNodeCount": 8,
+      "issuesByDimension": {
+        "field": 2,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 0,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "31cd3d579a364a4e18f2450e006710e26d258fd0cc6cb67b60fce2aa8d39291c"
     },
     {
       "id": "supplier",
       "declaredPropertyCount": 44,
       "specificationPropertyCount": 41,
       "missingPropertyCount": 0,
-      "stateHash": "22830034d8b00b23ddb2594bc76450751c81a3a16aaa50a7f44c20f82b62a545"
+      "checkedNodeCount": 42,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 10,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "b659c1b3f3031abcd7b922b793b894921f6562055300a1d7dab8a151a65555cc"
+    },
+    {
+      "id": "supplier-invoice-accrual-create",
+      "declaredPropertyCount": 14,
+      "specificationPropertyCount": 11,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 19,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 19,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "cadaa26ddb8b51e160488339e49ad77cb0a41cd5ea164b46e1e2cc7b292dcf12"
+    },
+    {
+      "id": "supplier-invoice-accrual-update",
+      "declaredPropertyCount": 15,
+      "specificationPropertyCount": 11,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 19,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 19,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "fd3f44626e4fa59ea6a97b6389eabed5b54b1900885b422913d9e40a3ac87caa"
+    },
+    {
+      "id": "supplier-invoice-create",
+      "declaredPropertyCount": 12,
+      "specificationPropertyCount": 26,
+      "missingPropertyCount": 17,
+      "checkedNodeCount": 29,
+      "issuesByDimension": {
+        "field": 17,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 14,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "5d90f65b5f9e1164687bb25b00d6137fac67dffa08c264559c94dd2bcc94779a"
+    },
+    {
+      "id": "supplier-invoice-file-connection-create",
+      "declaredPropertyCount": 5,
+      "specificationPropertyCount": 4,
+      "missingPropertyCount": 4,
+      "checkedNodeCount": 1,
+      "issuesByDimension": {
+        "field": 4,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 0,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "2551299e2d5cc959af553bc3d5cf0e5db6774a26964947f5367835180a16c904"
+    },
+    {
+      "id": "supplier-invoice-payment-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 21,
+      "missingPropertyCount": 17,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 17,
+        "nesting": 0,
+        "requiredness": 2,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "2b6ae2075a92a2d1adced606de8da0f9adda660d922bdf9622b8135da32d8b8d"
+    },
+    {
+      "id": "supplier-invoice-payment-update",
+      "declaredPropertyCount": 8,
+      "specificationPropertyCount": 21,
+      "missingPropertyCount": 17,
+      "checkedNodeCount": 5,
+      "issuesByDimension": {
+        "field": 17,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 1,
+        "nullability": 0,
+        "constraint": 2,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "b4d4e2a2ee38294d264a5b65d7ae1437541ca0f3651d775e8ebe818640da0e2a"
     },
     {
       "id": "supplier-invoice-row",
       "declaredPropertyCount": 19,
       "specificationPropertyCount": 18,
       "missingPropertyCount": 0,
-      "stateHash": "25c363c59fda47579aaf27c77e21c3af3fa7c239d23a2a0d01a18533c2e65d3f"
+      "checkedNodeCount": 19,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 10,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "fd478dca3f5c6f25609908341dd3c8ff5d4b9cc9b27f08d4a39cefc1e3769b72"
+    },
+    {
+      "id": "supplier-invoice-update",
+      "declaredPropertyCount": 13,
+      "specificationPropertyCount": 26,
+      "missingPropertyCount": 17,
+      "checkedNodeCount": 29,
+      "issuesByDimension": {
+        "field": 17,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 1,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 14,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "cc9b9e3e2072eb588a70a9ad55257c152ddc55bf1bbd22d17c689a78b94f625c"
+    },
+    {
+      "id": "supplier-update",
+      "declaredPropertyCount": 44,
+      "specificationPropertyCount": 41,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 41,
+      "issuesByDimension": {
+        "field": 1,
+        "nesting": 0,
+        "requiredness": 1,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 10,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "45e39d06dfb39a10c16adc3738e98f76b2053b6416ecfb62ae7e83c8f660e1c3"
+    },
+    {
+      "id": "tax-reduction-create",
+      "declaredPropertyCount": 9,
+      "specificationPropertyCount": 15,
+      "missingPropertyCount": 10,
+      "checkedNodeCount": 6,
+      "issuesByDimension": {
+        "field": 10,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 4,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "25a29353c6d697c15b337e36e9d6e20724dce52107128569c18eefc766c08a8a"
+    },
+    {
+      "id": "tax-reduction-update",
+      "declaredPropertyCount": 10,
+      "specificationPropertyCount": 15,
+      "missingPropertyCount": 10,
+      "checkedNodeCount": 6,
+      "issuesByDimension": {
+        "field": 10,
+        "nesting": 0,
+        "requiredness": 4,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 4,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "341338fbd3f94f01a675538b6d0da1d059dd6f47fc999b630779ecd8707131af"
+    },
+    {
+      "id": "voucher-create",
+      "declaredPropertyCount": 7,
+      "specificationPropertyCount": 12,
+      "missingPropertyCount": 8,
+      "checkedNodeCount": 15,
+      "issuesByDimension": {
+        "field": 8,
+        "nesting": 0,
+        "requiredness": 2,
+        "type": 0,
+        "enum": 0,
+        "nullability": 1,
+        "constraint": 13,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "840f5efaf12f5f34b9b33aff7dde18831d186fc084a4e4662c8b9d92898f28c9"
     },
     {
       "id": "voucher-row",
       "declaredPropertyCount": 9,
       "specificationPropertyCount": 9,
       "missingPropertyCount": 0,
-      "stateHash": "d3d7fc08d35e0a5bdf4c2279bab5f5e2902cc070f2dff84e284e930e4a20d294"
+      "checkedNodeCount": 10,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 1,
+        "constraint": 7,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "0af843ab16ea80e0247b3f4ebbee4c3ac37dfb84103a02c76154d450cf0925b4"
     }
   ]
 }
