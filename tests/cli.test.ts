@@ -271,6 +271,16 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('bookkeep');
   });
 
+  it('noxctl supplier-invoices file --help requires explicit overwrite opt-in', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'supplier-invoices', 'file', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('--file');
+    expect(output).toContain('--overwrite');
+  });
+
   it('noxctl articles --help shows subcommands', () => {
     const output = execFileSync('node', [CLI_PATH, 'articles', '--help'], execOpts) as string;
     expect(output).toContain('list');

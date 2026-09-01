@@ -269,41 +269,41 @@
     },
     {
       "id": "customer",
-      "declaredPropertyCount": 60,
+      "declaredPropertyCount": 63,
       "specificationPropertyCount": 63,
-      "missingPropertyCount": 6,
-      "checkedNodeCount": 58,
+      "missingPropertyCount": 3,
+      "checkedNodeCount": 68,
       "issuesByDimension": {
-        "field": 6,
+        "field": 3,
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
         "enum": 0,
         "nullability": 0,
-        "constraint": 52,
+        "constraint": 54,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "4129eb4086e36fef65d42af2c4d90c775bd80c0b075b4f934fd9115a8140f544"
+      "stateHash": "caee6e1297ba1645bb8d885e10de6a3ece638473da476bfa9a31ee6916ca4cac"
     },
     {
       "id": "customer-update",
-      "declaredPropertyCount": 61,
+      "declaredPropertyCount": 64,
       "specificationPropertyCount": 63,
-      "missingPropertyCount": 6,
-      "checkedNodeCount": 58,
+      "missingPropertyCount": 3,
+      "checkedNodeCount": 68,
       "issuesByDimension": {
-        "field": 6,
+        "field": 3,
         "nesting": 0,
         "requiredness": 1,
         "type": 0,
         "enum": 0,
         "nullability": 0,
-        "constraint": 52,
+        "constraint": 54,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "0f29f53c8198e03fe7c8dfc3978e7d93d418e10a5a602827c0faab788a0ef661"
+      "stateHash": "9e749b9f1d8e5f9565615319b1f94f8b875308ba1017835878ecd4e246f3bcab"
     },
     {
       "id": "document-attachment-create",

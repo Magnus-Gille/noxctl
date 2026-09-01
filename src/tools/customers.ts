@@ -14,6 +14,8 @@ const CustomerNumberSchema = z
   .string()
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,49}$/, 'Customer number must be alphanumeric');
 
+const CustomerDeliveryTypeSchema = z.enum(['PRINT', 'EMAIL', 'PRINTSERVICE']);
+
 // The full writable Customer field set (Fortnox `CustomerSinglePayloadItem`).
 // The MCP SDK silently strips any argument the schema does not declare, so a
 // field missing here never reaches Fortnox and never raises an error — it just
@@ -28,8 +30,26 @@ const CustomerNumberSchema = z
 // into create/update still works, but the tool schema should not offer a
 // field that would then be silently dropped a second time.
 const customerWritableFields = {
+  CustomerNumber: CustomerNumberSchema.optional().describe('Kundnummer'),
   Name: z.string().optional().describe('Kundnamn'),
   Type: z.enum(['PRIVATE', 'COMPANY']).optional().describe('Kundtyp: privatperson eller företag'),
+  DefaultDeliveryTypes: z
+    .strictObject({
+      Invoice: CustomerDeliveryTypeSchema.optional().describe('Leveranssätt för fakturor'),
+      Offer: CustomerDeliveryTypeSchema.optional().describe('Leveranssätt för offerter'),
+      Order: CustomerDeliveryTypeSchema.optional().describe('Leveranssätt för ordrar'),
+    })
+    .optional()
+    .describe('Förvalda leveranssätt för fakturor, offerter och ordrar'),
+  DefaultTemplates: z
+    .strictObject({
+      CashInvoice: z.string().optional().describe('Mall för kontantfakturor'),
+      Invoice: z.string().optional().describe('Mall för fakturor'),
+      Offer: z.string().optional().describe('Mall för offerter'),
+      Order: z.string().optional().describe('Mall för ordrar'),
+    })
+    .optional()
+    .describe('Förvalda dokumentmallar'),
   OrganisationNumber: z.string().optional().describe('Organisations- eller personnummer'),
   Email: z.string().optional().describe('E-postadress'),
   Phone1: z.string().optional().describe('Telefonnummer'),

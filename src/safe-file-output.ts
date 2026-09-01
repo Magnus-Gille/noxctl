@@ -16,6 +16,12 @@ export function privateOutputPath(prefix: string, fileName: string): string {
   return join(directory, safeName);
 }
 
+export function safeLocalOutputPath(prefix: string, fileName: string, extension = ''): string {
+  const candidate = basename(fileName);
+  const safeName = !candidate || candidate === '.' || candidate === '..' ? 'download' : candidate;
+  return resolve(`${prefix}${safeName}${extension}`);
+}
+
 export function writeBinaryFile(targetPath: string, data: Buffer, overwrite = false): string {
   const target = resolve(targetPath);
   const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
