@@ -10,6 +10,11 @@ updates:
     # rest to rebase. Batch the low-risk updates into one PR per week and leave
     # major bumps as individual PRs, since those are the ones worth reviewing
     # one at a time.
+    # Keep Node type definitions aligned with the oldest supported runtime major.
+    ignore:
+      - dependency-name: "@types/node"
+        update-types:
+          - "version-update:semver-major"
     groups:
       dev-minor-and-patch:
         dependency-type: "development"
