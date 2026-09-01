@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import { orderListColumns, orderDetailColumns, orderConfirmColumns } from '../views.js';
 import {
   confirmationResponse,
@@ -75,7 +76,17 @@ export function registerOrderTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listOrders, getOrder, createOrder, updateOrder, createInvoiceFromOrder } = operations;
+  const {
+    listOrders,
+    getOrder,
+    createOrder,
+    updateOrder,
+    createInvoiceFromOrder,
+    cancelOrder,
+    emailOrder,
+    externalPrintOrder,
+    getOrderPdf,
+  } = operations;
   server.tool(
     'fortnox_list_orders',
     'Lista/filtrera ordrar i Fortnox. Returnerar: DocumentNumber, CustomerName, OrderDate, DeliveryDate, Total.',
@@ -200,6 +211,92 @@ export function registerOrderTools(
         invoice,
         orderConfirmColumns,
       );
+    },
+  );
+
+  const orderActions = [
+    {
+      name: 'fortnox_cancel_order',
+      description: 'Makulera en order i Fortnox',
+      verb: 'cancel',
+      message: 'makulerad',
+      execute: cancelOrder,
+    },
+    {
+      name: 'fortnox_email_order',
+      description: 'Skicka en order via e-post från Fortnox',
+      verb: 'email',
+      message: 'skickad via e-post',
+      execute: emailOrder,
+    },
+    {
+      name: 'fortnox_external_print_order',
+      description: 'Markera en order som externt utskriven i Fortnox',
+      verb: 'external print',
+      message: 'markerad som externt utskriven',
+      execute: externalPrintOrder,
+    },
+  ] as const;
+  for (const action of orderActions) {
+    server.tool(
+      action.name,
+      action.description,
+      {
+        documentNumber: DocumentNumberSchema.describe('Ordernummer'),
+        confirm: z.boolean().optional().describe('Bekräfta åtgärden'),
+        dryRun: z.boolean().optional().describe('Visa åtgärden utan att utföra den'),
+        includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      },
+      async ({ documentNumber, confirm, dryRun, includeRaw }) => {
+        const target = `${action.verb} order ${documentNumber}`;
+        if (dryRun) return dryRunResponse(target);
+        if (!confirm) requireConfirmation(target);
+        const order = await action.execute(documentNumber);
+        return confirmationResponse(
+          `Order ${documentNumber} ${action.message}.`,
+          order,
+          orderConfirmColumns,
+          includeRaw,
+        );
+      },
+    );
+  }
+
+  server.tool(
+    'fortnox_order_pdf',
+    'Hämta en order som PDF och spara den säkert på disk',
+    {
+      documentNumber: DocumentNumberSchema.describe('Ordernummer'),
+      mode: z
+        .enum(['preview', 'print'])
+        .optional()
+        .describe('preview är läsning; print ändrar status'),
+      outputPath: z.string().optional().describe('Målsökväg; utelämna för privat tempkatalog'),
+      overwrite: z.boolean().optional().describe('Tillåt överskrivning av vanlig fil'),
+      confirm: z.boolean().optional().describe('Bekräfta print-åtgärden'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att hämta PDF'),
+    },
+    async ({ documentNumber, mode = 'preview', outputPath, overwrite, confirm, dryRun }) => {
+      const action = `${mode} order ${documentNumber} as PDF`;
+      if (dryRun) return dryRunResponse(action);
+      if (mode === 'print' && !confirm) requireConfirmation(action);
+      const pdf = await getOrderPdf(documentNumber, mode);
+      if (!pdf)
+        return confirmationResponse(
+          `Order ${documentNumber} utskriven; Fortnox returnerade ingen PDF.`,
+          {},
+        );
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `order-${documentNumber}.pdf`),
+        pdf,
+        overwrite,
+      );
+      return confirmationResponse(`Order ${documentNumber} sparad som PDF: ${target}.`, {
+        DocumentNumber: documentNumber,
+        Path: target,
+        Bytes: pdf.length,
+        Mode: mode,
+      });
     },
   );
 }

@@ -84,8 +84,58 @@ export function createOrderOperations(transport: FortnoxTransport) {
     return data.Invoice;
   }
 
-  return { listOrders, getOrder, createOrder, updateOrder, createInvoiceFromOrder };
+  async function runOrderAction(
+    documentNumber: string,
+    action: 'cancel' | 'externalprint',
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<OrderResponse>(
+      `orders/${documentSegment(documentNumber)}/${action}`,
+      { method: 'PUT' },
+    );
+    return data.Order ?? {};
+  }
+
+  const cancelOrder = (documentNumber: string) => runOrderAction(documentNumber, 'cancel');
+  const externalPrintOrder = (documentNumber: string) =>
+    runOrderAction(documentNumber, 'externalprint');
+
+  async function emailOrder(documentNumber: string): Promise<Record<string, unknown>> {
+    const data = await transport.request<OrderResponse>(
+      `orders/${documentSegment(documentNumber)}/email`,
+      { mutation: true },
+    );
+    return data.Order ?? {};
+  }
+
+  async function getOrderPdf(
+    documentNumber: string,
+    mode: 'preview' | 'print' = 'preview',
+  ): Promise<Buffer | undefined> {
+    const path = `orders/${documentSegment(documentNumber)}/${mode}`;
+    return mode === 'print' ? transport.requestPdfFromMutation(path) : transport.requestPdf(path);
+  }
+
+  return {
+    listOrders,
+    getOrder,
+    createOrder,
+    updateOrder,
+    createInvoiceFromOrder,
+    cancelOrder,
+    emailOrder,
+    externalPrintOrder,
+    getOrderPdf,
+  };
 }
 
-export const { listOrders, getOrder, createOrder, updateOrder, createInvoiceFromOrder } =
-  createOrderOperations(defaultFortnoxTransport);
+export const {
+  listOrders,
+  getOrder,
+  createOrder,
+  updateOrder,
+  createInvoiceFromOrder,
+  cancelOrder,
+  emailOrder,
+  externalPrintOrder,
+  getOrderPdf,
+} = createOrderOperations(defaultFortnoxTransport);

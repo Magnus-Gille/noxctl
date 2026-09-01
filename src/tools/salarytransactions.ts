@@ -18,6 +18,7 @@ export function registerSalaryTransactionTools(
     listSalaryTransactions,
     getSalaryTransaction,
     createSalaryTransaction,
+    updateSalaryTransaction,
     deleteSalaryTransaction,
   } = operations;
   server.tool(
@@ -111,6 +112,37 @@ export function registerSalaryTransactionTools(
 
       await deleteSalaryTransaction(salaryRow);
       return textResponse(`Salary transaction ${salaryRow} deleted.`);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_salarytransaction',
+    'Uppdatera en lönetransaktion i Fortnox (kräver Lön-behörigheten).',
+    {
+      salaryRow: z.string().describe('SalaryRow (radens ID)'),
+      EmployeeId: z.string().optional(),
+      SalaryCode: z.string().optional(),
+      Date: z.string().optional(),
+      Amount: z.string().optional(),
+      CostCenter: z.string().optional(),
+      Project: z.string().optional(),
+      Expense: z.string().optional(),
+      Number: z.string().optional(),
+      TextRow: z.string().optional(),
+      Total: z.string().optional(),
+      VAT: z.string().optional(),
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ salaryRow, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun)
+        return dryRunResponse(`update salary transaction ${salaryRow}`, {
+          SalaryTransaction: fields,
+        });
+      if (!confirm) requireConfirmation(`update salary transaction ${salaryRow}`);
+      const data = await updateSalaryTransaction(salaryRow, fields);
+      return detailResponse(data, salaryTransactionDetailColumns, data, includeRaw);
     },
   );
 }

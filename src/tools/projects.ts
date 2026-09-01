@@ -7,13 +7,14 @@ import {
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
 
 export function registerProjectTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listProjects, getProject, createProject, updateProject } = operations;
+  const { listProjects, getProject, createProject, updateProject, deleteProject } = operations;
   server.tool(
     'fortnox_list_projects',
     'Lista projekt i Fortnox. Returnerar: ProjectNumber, Description, Status, StartDate, EndDate.',
@@ -114,6 +115,22 @@ export function registerProjectTools(
 
       const data = await updateProject(projectNumber, fields);
       return detailResponse(data, projectDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_project',
+    'Ta bort ett projekt i Fortnox',
+    {
+      projectNumber: z.string().describe('Projektnummer'),
+      confirm: z.boolean().optional().describe('Bekräfta borttagningen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att ta bort'),
+    },
+    async ({ projectNumber, confirm, dryRun }) => {
+      if (dryRun) return dryRunResponse(`delete project ${projectNumber}`);
+      if (!confirm) requireConfirmation(`delete project ${projectNumber}`);
+      await deleteProject(projectNumber);
+      return textResponse(`Project ${projectNumber} deleted.`);
     },
   );
 }

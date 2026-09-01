@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import { offerListColumns, offerDetailColumns, offerConfirmColumns } from '../views.js';
 import {
   confirmationResponse,
@@ -73,6 +74,10 @@ export function registerOfferTools(
     updateOffer,
     createInvoiceFromOffer,
     createOrderFromOffer,
+    cancelOffer,
+    emailOffer,
+    externalPrintOffer,
+    getOfferPdf,
   } = operations;
   server.tool(
     'fortnox_list_offers',
@@ -224,6 +229,92 @@ export function registerOfferTools(
         order,
         offerConfirmColumns,
       );
+    },
+  );
+
+  const offerActions = [
+    {
+      name: 'fortnox_cancel_offer',
+      description: 'Makulera en offert i Fortnox',
+      verb: 'cancel',
+      message: 'makulerad',
+      execute: cancelOffer,
+    },
+    {
+      name: 'fortnox_email_offer',
+      description: 'Skicka en offert via e-post från Fortnox',
+      verb: 'email',
+      message: 'skickad via e-post',
+      execute: emailOffer,
+    },
+    {
+      name: 'fortnox_external_print_offer',
+      description: 'Markera en offert som externt utskriven i Fortnox',
+      verb: 'external print',
+      message: 'markerad som externt utskriven',
+      execute: externalPrintOffer,
+    },
+  ] as const;
+  for (const action of offerActions) {
+    server.tool(
+      action.name,
+      action.description,
+      {
+        documentNumber: DocumentNumberSchema.describe('Offertnummer'),
+        confirm: z.boolean().optional().describe('Bekräfta åtgärden'),
+        dryRun: z.boolean().optional().describe('Visa åtgärden utan att utföra den'),
+        includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      },
+      async ({ documentNumber, confirm, dryRun, includeRaw }) => {
+        const target = `${action.verb} offer ${documentNumber}`;
+        if (dryRun) return dryRunResponse(target);
+        if (!confirm) requireConfirmation(target);
+        const offer = await action.execute(documentNumber);
+        return confirmationResponse(
+          `Offert ${documentNumber} ${action.message}.`,
+          offer,
+          offerConfirmColumns,
+          includeRaw,
+        );
+      },
+    );
+  }
+
+  server.tool(
+    'fortnox_offer_pdf',
+    'Hämta en offert som PDF och spara den säkert på disk',
+    {
+      documentNumber: DocumentNumberSchema.describe('Offertnummer'),
+      mode: z
+        .enum(['preview', 'print'])
+        .optional()
+        .describe('preview är läsning; print ändrar status'),
+      outputPath: z.string().optional().describe('Målsökväg; utelämna för privat tempkatalog'),
+      overwrite: z.boolean().optional().describe('Tillåt överskrivning av vanlig fil'),
+      confirm: z.boolean().optional().describe('Bekräfta print-åtgärden'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att hämta PDF'),
+    },
+    async ({ documentNumber, mode = 'preview', outputPath, overwrite, confirm, dryRun }) => {
+      const action = `${mode} offer ${documentNumber} as PDF`;
+      if (dryRun) return dryRunResponse(action);
+      if (mode === 'print' && !confirm) requireConfirmation(action);
+      const pdf = await getOfferPdf(documentNumber, mode);
+      if (!pdf)
+        return confirmationResponse(
+          `Offert ${documentNumber} utskriven; Fortnox returnerade ingen PDF.`,
+          {},
+        );
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `offer-${documentNumber}.pdf`),
+        pdf,
+        overwrite,
+      );
+      return confirmationResponse(`Offert ${documentNumber} sparad som PDF: ${target}.`, {
+        DocumentNumber: documentNumber,
+        Path: target,
+        Bytes: pdf.length,
+        Mode: mode,
+      });
     },
   );
 }

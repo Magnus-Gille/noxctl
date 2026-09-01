@@ -23,7 +23,9 @@ export function registerSupplierInvoicePaymentTools(
     listSupplierInvoicePayments,
     getSupplierInvoicePayment,
     createSupplierInvoicePayment,
+    updateSupplierInvoicePayment,
     deleteSupplierInvoicePayment,
+    bookkeepSupplierInvoicePayment,
   } = operations;
   server.tool(
     'fortnox_list_supplier_invoice_payments',
@@ -105,6 +107,48 @@ export function registerSupplierInvoicePaymentTools(
 
       await deleteSupplierInvoicePayment(paymentNumber);
       return confirmationResponse(`Leverantörsbetalning ${paymentNumber} borttagen.`, {});
+    },
+  );
+
+  server.tool(
+    'fortnox_update_supplier_invoice_payment',
+    'Uppdatera en leverantörsbetalning i Fortnox',
+    {
+      paymentNumber: PaymentNumberSchema.describe('Betalningsnummer'),
+      InvoiceNumber: z.string().optional().describe('Leverantörsfakturanummer'),
+      Amount: z.number().optional().describe('Belopp'),
+      PaymentDate: z.string().optional().describe('Betalningsdatum (YYYY-MM-DD)'),
+      Source: z.string().optional().describe('Betalningskälla'),
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ paymentNumber, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) {
+        return dryRunResponse(`update supplier invoice payment ${paymentNumber}`, {
+          SupplierInvoicePayment: fields,
+        });
+      }
+      if (!confirm) requireConfirmation(`update supplier invoice payment ${paymentNumber}`);
+      const payment = await updateSupplierInvoicePayment(paymentNumber, fields);
+      return detailResponse(payment, supplierInvoicePaymentDetailColumns, payment, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_bookkeep_supplier_invoice_payment',
+    'Bokför en leverantörsbetalning i Fortnox',
+    {
+      paymentNumber: PaymentNumberSchema.describe('Betalningsnummer'),
+      confirm: z.boolean().optional().describe('Bekräfta bokföringen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att bokföra'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ paymentNumber, confirm, dryRun, includeRaw }) => {
+      if (dryRun) return dryRunResponse(`bookkeep supplier invoice payment ${paymentNumber}`);
+      if (!confirm) requireConfirmation(`bookkeep supplier invoice payment ${paymentNumber}`);
+      const payment = await bookkeepSupplierInvoicePayment(paymentNumber);
+      return detailResponse(payment, supplierInvoicePaymentDetailColumns, payment, includeRaw);
     },
   );
 }

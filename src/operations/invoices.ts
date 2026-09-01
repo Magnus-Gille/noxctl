@@ -56,6 +56,8 @@ export interface InvoiceAttachment {
   includeOnSend: boolean;
 }
 
+export type AttachmentEntityType = 'F' | 'OF' | 'O' | 'C';
+
 export interface AttachInvoiceFilesParams {
   documentNumber: string;
   filePaths: string[];
@@ -233,6 +235,35 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     return data?.Invoice || {};
   }
 
+  async function runInvoiceAction(
+    documentNumber: string,
+    action: 'cancel' | 'externalprint',
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<InvoiceResponse>(
+      `invoices/${documentSegment(documentNumber)}/${action}`,
+      { method: 'PUT' },
+    );
+    return data.Invoice ?? {};
+  }
+
+  const cancelInvoice = (documentNumber: string) => runInvoiceAction(documentNumber, 'cancel');
+  const externalPrintInvoice = (documentNumber: string) =>
+    runInvoiceAction(documentNumber, 'externalprint');
+
+  async function eprintInvoice(documentNumber: string): Promise<Record<string, unknown>> {
+    const data = await transport.request<InvoiceResponse>(
+      `invoices/${documentSegment(documentNumber)}/eprint`,
+      { mutation: true },
+    );
+    return data.Invoice ?? {};
+  }
+
+  async function getInvoiceReminderPdf(documentNumber: string): Promise<Buffer | undefined> {
+    return transport.requestPdfFromMutation(
+      `invoices/${documentSegment(documentNumber)}/printreminder`,
+    );
+  }
+
   const MIME_BY_EXT: Record<string, string> = {
     '.pdf': 'application/pdf',
     '.png': 'image/png',
@@ -293,26 +324,70 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
   }
 
   async function listInvoiceAttachments(documentNumber: string): Promise<InvoiceAttachment[]> {
-    return transport.request<InvoiceAttachment[]>('/api/fileattachments/attachments-v1', {
-      params: { entityid: documentNumber, entitytype: 'F' },
+    return (await listDocumentAttachments(documentNumber, 'F')) as unknown as InvoiceAttachment[];
+  }
+
+  async function listDocumentAttachments(
+    documentNumber: string,
+    entityType: AttachmentEntityType,
+  ): Promise<Record<string, unknown>[]> {
+    return transport.request<Record<string, unknown>[]>('/api/fileattachments/attachments-v1', {
+      params: { entityid: documentNumber, entitytype: entityType },
     });
   }
 
-  async function createInvoiceAttachment(
+  async function getAttachmentCounts(
+    entityIds: number[],
+    entityType: AttachmentEntityType,
+  ): Promise<Record<string, unknown>> {
+    return transport.request<Record<string, unknown>>(
+      '/api/fileattachments/attachments-v1/numberofattachments',
+      { params: { entityids: entityIds.join(','), entitytype: entityType } },
+    );
+  }
+
+  async function validateAttachmentsOnSend(attachments: Record<string, unknown>[]): Promise<void> {
+    await transport.request('/api/fileattachments/attachments-v1/validateincludedonsend', {
+      method: 'POST',
+      body: attachments,
+    });
+  }
+
+  async function updateDocumentAttachment(
+    attachmentId: string,
+    fields: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    return transport.request<Record<string, unknown>>(
+      `/api/fileattachments/attachments-v1/${encodeURIComponent(attachmentId)}`,
+      { method: 'PUT', body: fields },
+    );
+  }
+
+  async function detachDocumentAttachment(attachmentId: string): Promise<void> {
+    await transport.request(
+      `/api/fileattachments/attachments-v1/${encodeURIComponent(attachmentId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  async function createDocumentAttachment(
     documentNumber: string,
+    entityType: AttachmentEntityType,
     fileId: string,
     includeOnSend: boolean,
-  ): Promise<InvoiceAttachment> {
-    const data = await transport.request<InvoiceAttachment[]>(
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<Record<string, unknown>[]>(
       '/api/fileattachments/attachments-v1',
       {
         method: 'POST',
-        body: [{ entityId: Number(documentNumber), entityType: 'F', fileId, includeOnSend }],
+        body: [{ entityId: Number(documentNumber), entityType, fileId, includeOnSend }],
       },
     );
     const attachment = data[0];
     if (!attachment) {
-      throw new Error(`Fortnox did not return an attachment record for invoice ${documentNumber}.`);
+      throw new Error(
+        `Fortnox did not return an attachment record for document ${documentNumber}.`,
+      );
     }
     return attachment;
   }
@@ -330,11 +405,12 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     for (const filePath of params.filePaths) {
       try {
         const file = await uploadForInvoiceAttachment(filePath);
-        const attachment = await createInvoiceAttachment(
+        const attachment = (await createDocumentAttachment(
           params.documentNumber,
+          'F',
           file.ArchiveFileId,
           includeOnSend,
-        );
+        )) as unknown as InvoiceAttachment;
         results.push({
           fileName: file.Name,
           fileId: attachment.fileId,
@@ -362,8 +438,18 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     markInvoicePrinted,
     bookkeepInvoice,
     creditInvoice,
+    cancelInvoice,
+    externalPrintInvoice,
+    eprintInvoice,
+    getInvoiceReminderPdf,
     attachInvoiceFiles,
     listInvoiceAttachments,
+    createDocumentAttachment,
+    listDocumentAttachments,
+    getAttachmentCounts,
+    validateAttachmentsOnSend,
+    updateDocumentAttachment,
+    detachDocumentAttachment,
   };
 }
 
@@ -377,6 +463,16 @@ export const {
   markInvoicePrinted,
   bookkeepInvoice,
   creditInvoice,
+  cancelInvoice,
+  externalPrintInvoice,
+  eprintInvoice,
+  getInvoiceReminderPdf,
   attachInvoiceFiles,
   listInvoiceAttachments,
+  createDocumentAttachment,
+  listDocumentAttachments,
+  getAttachmentCounts,
+  validateAttachmentsOnSend,
+  updateDocumentAttachment,
+  detachDocumentAttachment,
 } = createInvoiceOperations(defaultFortnoxTransport);

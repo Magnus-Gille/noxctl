@@ -6,13 +6,19 @@ import {
   financialYearDetailColumns,
   lockedPeriodDetailColumns,
 } from '../views.js';
-import { detailResponse, listResponse, textResponse } from '../tool-output.js';
+import {
+  detailResponse,
+  dryRunResponse,
+  listResponse,
+  requireConfirmation,
+  textResponse,
+} from '../tool-output.js';
 
 export function registerFinancialYearTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listFinancialYears, getFinancialYear, getLockedPeriod } = operations;
+  const { listFinancialYears, getFinancialYear, createFinancialYear, getLockedPeriod } = operations;
   server.tool(
     'fortnox_list_financialyears',
     'Lista räkenskapsår i Fortnox. Returnerar: Id, FromDate, ToDate, AccountingMethod, AccountChartType. Kan filtreras till det räkenskapsår som innehåller ett visst datum.',
@@ -45,6 +51,26 @@ export function registerFinancialYearTools(
     async ({ id, includeRaw }) => {
       const data = await getFinancialYear(id);
       return detailResponse(data, financialYearDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_create_financialyear',
+    'Skapa ett räkenskapsår i Fortnox',
+    {
+      FromDate: z.string().describe('Startdatum (YYYY-MM-DD)'),
+      ToDate: z.string().describe('Slutdatum (YYYY-MM-DD)'),
+      AccountingMethod: z.enum(['ACCRUAL', 'CASH']).optional().describe('Bokföringsmetod'),
+      AccountChartType: z.string().optional().describe('Kontoplanstyp'),
+      confirm: z.boolean().optional().describe('Bekräfta att räkenskapsåret ska skapas'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att skapa'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse('create financial year', { FinancialYear: fields });
+      if (!confirm) requireConfirmation('create financial year');
+      const year = await createFinancialYear(fields);
+      return detailResponse(year, financialYearDetailColumns, year, includeRaw);
     },
   );
 

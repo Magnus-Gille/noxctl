@@ -33,6 +33,9 @@ import { registerSalaryTransactionTools } from './tools/salarytransactions.js';
 import { registerAttendanceTransactionTools } from './tools/attendancetransactions.js';
 import { registerAbsenceTransactionTools } from './tools/absencetransactions.js';
 import { registerScheduleTimeTools } from './tools/scheduletimes.js';
+import { registerReferenceDataTools } from './tools/reference-data.js';
+import { registerAccrualTools } from './tools/accruals.js';
+import { registerFileTools } from './tools/files.js';
 import { createStrictMcpServer } from './strict-mcp-server.js';
 
 export interface CreateServerOptions {
@@ -79,6 +82,9 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerAttendanceTransactionTools(server, operations);
   registerAbsenceTransactionTools(server, operations);
   registerScheduleTimeTools(server, operations);
+  registerReferenceDataTools(server, operations);
+  registerAccrualTools(server, operations);
+  registerFileTools(server, operations);
 
   return server;
 }

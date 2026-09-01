@@ -51,6 +51,17 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
     return data.AbsenceTransaction;
   }
 
+  async function getAbsenceTransactionByDateCode(
+    id: string,
+    date: string,
+    code: string,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<AbsenceTransactionResponse>(
+      `absencetransactions/${encodeURIComponent(id)}/${encodeURIComponent(date)}/${encodeURIComponent(code)}`,
+    );
+    return data.AbsenceTransaction;
+  }
+
   async function createAbsenceTransaction(
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
@@ -67,10 +78,23 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
     });
   }
 
+  async function updateAbsenceTransaction(
+    id: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<AbsenceTransactionResponse>(
+      `absencetransactions/${encodeURIComponent(id)}`,
+      { method: 'PUT', body: { AbsenceTransaction: params } },
+    );
+    return data.AbsenceTransaction;
+  }
+
   return {
     listAbsenceTransactions,
     getAbsenceTransaction,
+    getAbsenceTransactionByDateCode,
     createAbsenceTransaction,
+    updateAbsenceTransaction,
     deleteAbsenceTransaction,
   };
 }
@@ -78,6 +102,8 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
 export const {
   listAbsenceTransactions,
   getAbsenceTransaction,
+  getAbsenceTransactionByDateCode,
   createAbsenceTransaction,
+  updateAbsenceTransaction,
   deleteAbsenceTransaction,
 } = createAbsenceTransactionOperations(defaultFortnoxTransport);

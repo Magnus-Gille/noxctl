@@ -1,16 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  closeSync,
-  constants as fsConstants,
-  lstatSync,
-  mkdtempSync,
-  openSync,
-  writeSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import {
   supplierInvoiceListColumns,
   supplierInvoiceDetailColumns,
@@ -24,50 +15,6 @@ import {
   requireConfirmation,
   textResponse,
 } from '../tool-output.js';
-
-/**
- * Write a downloaded file to `target`, refusing to write through a symlink.
- * Mirrors writeBinaryFile() in tools/bookkeeping.ts — see that copy for the
- * rationale (paths here are model-generated tool arguments, so this closes
- * off a symlink-overwrite path).
- */
-function writeBinaryFile(target: string, data: Buffer, overwrite?: boolean): void {
-  const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
-  const flags = overwrite
-    ? O_WRONLY | O_CREAT | O_TRUNC | (O_NOFOLLOW ?? 0)
-    : O_WRONLY | O_CREAT | O_EXCL;
-
-  if (overwrite && !O_NOFOLLOW && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) {
-    throw new Error(
-      `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
-    );
-  }
-
-  try {
-    const fd = openSync(target, flags, 0o600);
-    try {
-      let written = 0;
-      while (written < data.length) {
-        written += writeSync(fd, data, written, data.length - written);
-      }
-    } finally {
-      closeSync(fd);
-    }
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST') {
-      throw new Error(
-        `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
-      );
-    }
-    if (code === 'ELOOP') {
-      throw new Error(
-        `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
-      );
-    }
-    throw err;
-  }
-}
 
 const SupplierInvoiceRowSchema = z.strictObject({
   Account: z.number().int().min(1000).max(9999).describe('Kontonummer (1000–9999)'),
@@ -124,9 +71,17 @@ export function registerSupplierInvoiceTools(
     listSupplierInvoices,
     getSupplierInvoice,
     createSupplierInvoice,
+    updateSupplierInvoice,
     bookkeepSupplierInvoice,
+    approvalBookkeepSupplierInvoice,
+    approvalPaymentSupplierInvoice,
+    cancelSupplierInvoice,
+    creditSupplierInvoice,
     listSupplierInvoiceAttachments,
     getSupplierInvoiceFile,
+    getSupplierInvoiceFileConnection,
+    createSupplierInvoiceFileConnection,
+    deleteSupplierInvoiceFileConnection,
     extensionForMime,
   } = operations;
   server.tool(
@@ -236,6 +191,89 @@ export function registerSupplierInvoiceTools(
   );
 
   server.tool(
+    'fortnox_update_supplier_invoice',
+    'Uppdatera en leverantörsfaktura i Fortnox',
+    {
+      givenNumber: z.string().describe('Leverantörsfakturanummer att uppdatera'),
+      SupplierNumber: z.string().optional().describe('Leverantörsnummer'),
+      InvoiceNumber: z.string().optional().describe('Leverantörens fakturanummer'),
+      InvoiceDate: z.string().optional().describe('Fakturadatum (YYYY-MM-DD)'),
+      DueDate: z.string().optional().describe('Förfallodatum (YYYY-MM-DD)'),
+      Total: z.number().optional().describe('Totalbelopp inkl. moms'),
+      OCR: z.string().optional().describe('OCR-nummer'),
+      Currency: z.string().optional().describe('Valutakod'),
+      Comments: z.string().optional().describe('Kommentarer'),
+      SupplierInvoiceRows: z
+        .array(SupplierInvoiceRowSchema.partial())
+        .optional()
+        .describe('Fakturarader (ersätter befintliga rader)'),
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ givenNumber, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) {
+        return dryRunResponse(`update supplier invoice ${givenNumber}`, {
+          SupplierInvoice: fields,
+        });
+      }
+      if (!confirm) requireConfirmation(`update supplier invoice ${givenNumber}`);
+      const invoice = await updateSupplierInvoice(givenNumber, fields);
+      return detailResponse(invoice, supplierInvoiceDetailColumns, invoice, includeRaw);
+    },
+  );
+
+  const supplierInvoiceActions = [
+    {
+      name: 'fortnox_approval_bookkeep_supplier_invoice',
+      description: 'Attestera och bokför en leverantörsfaktura i Fortnox',
+      verb: 'approval bookkeep',
+      message: 'attesterad och bokförd',
+      execute: approvalBookkeepSupplierInvoice,
+    },
+    {
+      name: 'fortnox_approval_payment_supplier_invoice',
+      description: 'Betalningsattestera en leverantörsfaktura i Fortnox',
+      verb: 'approval payment',
+      message: 'betalningsattesterad',
+      execute: approvalPaymentSupplierInvoice,
+    },
+    {
+      name: 'fortnox_cancel_supplier_invoice',
+      description: 'Makulera en leverantörsfaktura i Fortnox',
+      verb: 'cancel',
+      message: 'makulerad',
+      execute: cancelSupplierInvoice,
+    },
+    {
+      name: 'fortnox_credit_supplier_invoice',
+      description: 'Kreditera en leverantörsfaktura i Fortnox',
+      verb: 'credit',
+      message: 'krediterad',
+      execute: creditSupplierInvoice,
+    },
+  ] as const;
+  for (const action of supplierInvoiceActions) {
+    server.tool(
+      action.name,
+      action.description,
+      {
+        givenNumber: z.string().describe('Leverantörsfakturanummer'),
+        confirm: z.boolean().optional().describe('Bekräfta åtgärden'),
+        dryRun: z.boolean().optional().describe('Visa åtgärden utan att utföra den'),
+        includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      },
+      async ({ givenNumber, confirm, dryRun, includeRaw }) => {
+        const target = `${action.verb} supplier invoice ${givenNumber}`;
+        if (dryRun) return dryRunResponse(target);
+        if (!confirm) requireConfirmation(target);
+        const invoice = await action.execute(givenNumber);
+        return detailResponse(invoice, supplierInvoiceConfirmColumns, invoice, includeRaw);
+      },
+    );
+  }
+
+  server.tool(
     'fortnox_list_supplier_invoice_attachments',
     'Lista filer (t.ex. den inskannade/mottagna fakturan) som är kopplade till en leverantörsfaktura i Fortnox. Fungerar även för obokförda och ej godkända fakturor (unbooked/authorizepending) — till skillnad från verifikationsbilagor, som bara finns tillgängliga efter bokföring. Returnerar: File (filnamn), File ID. Använd fileId med fortnox_get_supplier_invoice_file för att hämta själva filen.',
     {
@@ -273,13 +311,64 @@ export function registerSupplierInvoiceTools(
     async ({ fileId, outputPath, overwrite }) => {
       const file = await getSupplierInvoiceFile(fileId);
       const ext = extensionForMime(file.contentType);
-      const target = outputPath
-        ? resolve(outputPath)
-        : join(mkdtempSync(join(tmpdir(), 'noxctl-')), `supplier-invoice-file-${fileId}${ext}`);
-      writeBinaryFile(target, file.buffer, overwrite);
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `supplier-invoice-file-${fileId}${ext}`),
+        file.buffer,
+        overwrite,
+      );
       return textResponse(
         `Sparade fil (${file.contentType}, ${file.buffer.length} bytes) till ${target}`,
       );
+    },
+  );
+
+  server.tool(
+    'fortnox_get_supplier_invoice_file_connection',
+    'Hämta metadata för en filkoppling till en leverantörsfaktura i Fortnox',
+    {
+      fileId: z.string().describe('Fil-ID'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ fileId, includeRaw }) => {
+      const connection = await getSupplierInvoiceFileConnection(fileId);
+      return detailResponse(connection, supplierInvoiceAttachmentColumns, connection, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_create_supplier_invoice_file_connection',
+    'Koppla en befintlig inkorgsfil till en leverantörsfaktura i Fortnox',
+    {
+      givenNumber: z.string().describe('Leverantörsfakturanummer'),
+      fileId: z.string().describe('Fil-ID från Fortnox inkorg'),
+      confirm: z.boolean().optional().describe('Bekräfta kopplingen'),
+      dryRun: z.boolean().optional().describe('Visa exakt payload utan att koppla'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ givenNumber, fileId, confirm, dryRun, includeRaw }) => {
+      const payload = { SupplierInvoiceNumber: givenNumber, FileId: fileId };
+      const target = `connect file ${fileId} to supplier invoice ${givenNumber}`;
+      if (dryRun) return dryRunResponse(target, { SupplierInvoiceFileConnection: payload });
+      if (!confirm) requireConfirmation(target);
+      const connection = await createSupplierInvoiceFileConnection(givenNumber, fileId);
+      return detailResponse(connection, supplierInvoiceAttachmentColumns, connection, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_supplier_invoice_file_connection',
+    'Koppla loss en fil från en leverantörsfaktura i Fortnox',
+    {
+      fileId: z.string().describe('Fil-ID'),
+      confirm: z.boolean().optional().describe('Bekräfta bortkopplingen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att koppla loss'),
+    },
+    async ({ fileId, confirm, dryRun }) => {
+      const target = `delete supplier invoice file connection ${fileId}`;
+      if (dryRun) return dryRunResponse(target);
+      if (!confirm) requireConfirmation(target);
+      await deleteSupplierInvoiceFileConnection(fileId);
+      return textResponse(`Supplier invoice file connection ${fileId} deleted.`);
     },
   );
 }

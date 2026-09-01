@@ -164,13 +164,13 @@
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
-        "enum": 1,
+        "enum": 0,
         "nullability": 0,
-        "constraint": 17,
+        "constraint": 15,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "7ba264823d4ad33f8dc01e943f19deeaa42206b354086474e4f80e6903287084"
+      "stateHash": "06dc1d69c6aca0b1d4dd5ef681bf861dc05beaf001891bf3b1ee510fc158db7b"
     },
     {
       "id": "contract-accrual-update",
@@ -183,13 +183,13 @@
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
-        "enum": 1,
+        "enum": 0,
         "nullability": 0,
-        "constraint": 17,
+        "constraint": 15,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "8cff587090432f84ef613ca565296e78dcdb79d7cada3d092f3fe647c70650d6"
+      "stateHash": "9b35e6ff6dd06798fd24991180ce9b349d32d92e779ee5c66274a1110874bf6d"
     },
     {
       "id": "contract-create",
@@ -430,13 +430,13 @@
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
-        "enum": 0,
+        "enum": 1,
         "nullability": 0,
-        "constraint": 19,
+        "constraint": 17,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "04e9e0a1fd75f9dc0266243db225c4941564da46704049296bc0f5bc54823d81"
+      "stateHash": "40df7f2250851d3375a27c72be34325f5d1780ac40abedfa2e80db5448c95fef"
     },
     {
       "id": "invoice-accrual-update",
@@ -449,13 +449,13 @@
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
-        "enum": 0,
+        "enum": 1,
         "nullability": 0,
-        "constraint": 19,
+        "constraint": 17,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "a1109cc32febde78edb86e0159c46f6d0eb3363fa327f3dbbded404df760c008"
+      "stateHash": "531ed849aa2aa63abddd7dd8c03adc50352e1839c996584c78344798f437e112"
     },
     {
       "id": "invoice-create",
@@ -924,13 +924,13 @@
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
-        "enum": 0,
+        "enum": 1,
         "nullability": 0,
-        "constraint": 19,
+        "constraint": 17,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "cadaa26ddb8b51e160488339e49ad77cb0a41cd5ea164b46e1e2cc7b292dcf12"
+      "stateHash": "e99ede559da1c32ce74235d4d798f9bf4d6ae2b1b2f2d04f068080bd3a449477"
     },
     {
       "id": "supplier-invoice-accrual-update",
@@ -943,13 +943,13 @@
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
-        "enum": 0,
+        "enum": 1,
         "nullability": 0,
-        "constraint": 19,
+        "constraint": 17,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "fd3f44626e4fa59ea6a97b6389eabed5b54b1900885b422913d9e40a3ac87caa"
+      "stateHash": "a08eb714fafd0d51b41903e92b95b81203e5e9cf4a67020908e8af3d14b06f14"
     },
     {
       "id": "supplier-invoice-create",

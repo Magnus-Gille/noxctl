@@ -2,6 +2,12 @@ import type { Column } from './formatter.js';
 
 const currency = (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : String(v ?? ''));
 
+export const referenceDataColumns: Column[] = [
+  { key: 'Code', header: 'Code', width: 16 },
+  { key: 'Name', header: 'Name', width: 24 },
+  { key: 'Description', header: 'Description', width: 36 },
+];
+
 // --- Invoice views (target ≤80 cols) ---
 
 // 7 + 2 + 20 + 2 + 10 + 2 + 10 + 2 + 10 + 2 + 10 = 77

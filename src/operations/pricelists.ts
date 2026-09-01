@@ -85,7 +85,7 @@ export interface PricesResponse {
 }
 
 export interface ListPricesParams {
-  priceListCode: string;
+  priceListCode?: string;
   articleNumber?: string;
   page?: number;
   limit?: number;
@@ -93,9 +93,11 @@ export interface ListPricesParams {
 
 export function createPriceOperations(transport: FortnoxTransport) {
   async function listPrices(params: ListPricesParams): Promise<PricesResponse> {
-    const endpoint = params.articleNumber
-      ? `prices/sublist/${encodeURIComponent(params.priceListCode)}/${encodeURIComponent(params.articleNumber)}`
-      : `prices/sublist/${encodeURIComponent(params.priceListCode)}`;
+    const endpoint = !params.priceListCode
+      ? 'prices'
+      : params.articleNumber
+        ? `prices/sublist/${encodeURIComponent(params.priceListCode)}/${encodeURIComponent(params.articleNumber)}`
+        : `prices/sublist/${encodeURIComponent(params.priceListCode)}`;
 
     return transport.request<PricesResponse>(endpoint, {
       params: { page: params.page || 1, limit: params.limit || 100 },
@@ -105,10 +107,11 @@ export function createPriceOperations(transport: FortnoxTransport) {
   async function getPrice(
     priceListCode: string,
     articleNumber: string,
-    fromQuantity = 0,
+    fromQuantity?: number,
   ): Promise<Record<string, unknown>> {
+    const quantitySegment = fromQuantity === undefined ? '' : `/${fromQuantity}`;
     const data = await transport.request<PriceResponse>(
-      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}/${fromQuantity}`,
+      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}${quantitySegment}`,
     );
     return data.Price;
   }
@@ -117,10 +120,11 @@ export function createPriceOperations(transport: FortnoxTransport) {
     priceListCode: string,
     articleNumber: string,
     fields: Record<string, unknown>,
-    fromQuantity = 0,
+    fromQuantity?: number,
   ): Promise<Record<string, unknown>> {
+    const quantitySegment = fromQuantity === undefined ? '' : `/${fromQuantity}`;
     const data = await transport.request<PriceResponse>(
-      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}/${fromQuantity}`,
+      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}${quantitySegment}`,
       {
         method: 'PUT',
         body: { Price: fields },
@@ -129,7 +133,27 @@ export function createPriceOperations(transport: FortnoxTransport) {
     return data.Price;
   }
 
-  return { listPrices, getPrice, updatePrice };
+  async function createPrice(fields: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await transport.request<PriceResponse>('prices', {
+      method: 'POST',
+      body: { Price: fields },
+    });
+    return data.Price;
+  }
+
+  async function deletePrice(
+    priceListCode: string,
+    articleNumber: string,
+    fromQuantity: number,
+  ): Promise<void> {
+    await transport.request(
+      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}/${fromQuantity}`,
+      { method: 'DELETE' },
+    );
+  }
+
+  return { listPrices, getPrice, createPrice, updatePrice, deletePrice };
 }
 
-export const { listPrices, getPrice, updatePrice } = createPriceOperations(defaultFortnoxTransport);
+export const { listPrices, getPrice, createPrice, updatePrice, deletePrice } =
+  createPriceOperations(defaultFortnoxTransport);

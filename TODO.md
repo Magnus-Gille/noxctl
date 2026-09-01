@@ -10,13 +10,22 @@ package metadata, changelog, and README rather than as snapshots here.
 
 Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and compares it against the committed **fingerprint** (`api-spec/openapi-fingerprint.json` — opaque hashes only; the full spec is not stored in the repo, per Fortnox Developer Agreement cl. 6.1/6.3). Opens a GitHub issue labeled `api-drift` when endpoints/schemas change. Run locally with `npm run check:api`. Can also be triggered manually from the Actions tab.
 
-After fetching the local, git-ignored cache, run `npm run audit:schemas` to compare
-selected MCP write schemas with their OpenAPI payload components. Normal output and
-`api-spec/tool-schema-coverage.json` contain counts and opaque hashes only. Use
+After fetching the local, git-ignored cache, run `npm run audit:schemas` to inventory
+every discovered mutating MCP tool and recursively compare every mapped structured
+input with its OpenAPI payload component. Normal output and
+`api-spec/tool-schema-coverage.json` contain stable IDs, counts, result classes, and
+opaque hashes only. Use
 `npm run audit:schemas -- --show-fields` for an explicit local diagnostic, and update
 the baseline with `npm run audit:schemas -- --update` only after reviewing an intended
-specification or tool-schema change. The coverage audit is deliberately local until
-its privacy boundary has been validated before CI integration.
+specification or tool-schema change. The weekly workflow runs this audit after fetching
+the spec.
+
+`npm run audit:api-coverage` verifies the complete operation inventory against
+`api-spec/api-implementation-map.json`, including real operation exports, MCP tool
+discovery, and CLI help. The committed map and baseline are opaque; raw paths and
+operation IDs are available only with `--show-details`. The release gate runs the
+offline evidence check, while the weekly workflow also detects new or removed upstream
+families and operations.
 
 ## Roadmap
 
@@ -36,6 +45,10 @@ its privacy boundary has been validated before CI integration.
 9. ~~**Price Lists / Prices**~~ ✅ Done
 10. ~~**Financial Years / Locked Period**~~ ✅ Done
 17. ~~**Payroll / Lön** — employees, salary/attendance/absence transactions, schedule times (opt-in `salary` scope)~~ ✅ Done
+18. ~~**Core API lifecycle parity** — complete current resource operations with explicit product-boundary exclusions~~ ✅ Done (#153)
+19. ~~**Reference/setup reads** — currencies, units, payment/delivery settings, voucher series, account charts and customer references~~ ✅ Done (#154)
+20. ~~**Accruals** — invoice, supplier-invoice and contract accrual CRUD~~ ✅ Done (#155)
+21. ~~**Archive, inbox and file connections** — binary-safe downloads and complete selected attachment lifecycles~~ ✅ Done (#156)
 
 ### Tier 4 — Backlog
 

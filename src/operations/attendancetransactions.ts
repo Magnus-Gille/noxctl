@@ -55,6 +55,17 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
     return data.AttendanceTransaction;
   }
 
+  async function getAttendanceTransactionByDateCode(
+    id: string,
+    date: string,
+    code: string,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<AttendanceTransactionResponse>(
+      `attendancetransactions/${encodeURIComponent(id)}/${encodeURIComponent(date)}/${encodeURIComponent(code)}`,
+    );
+    return data.AttendanceTransaction;
+  }
+
   async function createAttendanceTransaction(
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
@@ -71,10 +82,23 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
     });
   }
 
+  async function updateAttendanceTransaction(
+    id: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<AttendanceTransactionResponse>(
+      `attendancetransactions/${encodeURIComponent(id)}`,
+      { method: 'PUT', body: { AttendanceTransaction: params } },
+    );
+    return data.AttendanceTransaction;
+  }
+
   return {
     listAttendanceTransactions,
     getAttendanceTransaction,
+    getAttendanceTransactionByDateCode,
     createAttendanceTransaction,
+    updateAttendanceTransaction,
     deleteAttendanceTransaction,
   };
 }
@@ -82,6 +106,8 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
 export const {
   listAttendanceTransactions,
   getAttendanceTransaction,
+  getAttendanceTransactionByDateCode,
   createAttendanceTransaction,
+  updateAttendanceTransaction,
   deleteAttendanceTransaction,
 } = createAttendanceTransactionOperations(defaultFortnoxTransport);

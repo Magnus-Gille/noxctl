@@ -172,7 +172,7 @@ describe('price tools', () => {
       });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('prices/A/ART1/0');
+      expect(fetchCall[0]).toMatch(/prices\/A\/ART1$/);
       expect(fetchCall[1].method).toBe('PUT');
     });
 
