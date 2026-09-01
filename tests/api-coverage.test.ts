@@ -14,6 +14,12 @@ const partial = (overrides: Partial<ApiCoverageMapping> = {}): ApiCoverageMappin
   publicOperationCount: 2,
   implementedOperationIdentities: ['operation-a'],
   missingOperationIdentities: ['operation-b'],
+  excludedOperationIdentities: [],
+  evidence: {
+    operationExports: ['listExample'],
+    mcpTools: ['fortnox_list_examples'],
+    cliCommands: [['examples', 'list']],
+  },
   ...overrides,
 });
 
@@ -54,6 +60,7 @@ describe('API coverage manifest core', () => {
     [partial({ classification: 'complete' }), 'Complete mapping'],
     [partial({ classification: 'excluded' }), 'requires a rationale'],
     [partial({ classification: 'blocked' }), 'requires a rationale'],
+    [partial({ evidence: undefined }), 'requires export, MCP, and CLI evidence'],
     [
       partial({
         classification: 'partial',
@@ -78,14 +85,18 @@ describe('API coverage manifest core', () => {
         id: 'excluded',
         classification: 'excluded',
         implementedOperationIdentities: [],
-        missingOperationIdentities: ['operation-a', 'operation-b'],
+        missingOperationIdentities: [],
+        excludedOperationIdentities: ['operation-a', 'operation-b'],
+        evidence: undefined,
         rationale: 'Outside the public core product.',
       }),
       partial({
         id: 'blocked',
         classification: 'blocked',
         implementedOperationIdentities: [],
-        missingOperationIdentities: ['operation-a', 'operation-b'],
+        missingOperationIdentities: [],
+        excludedOperationIdentities: ['operation-a', 'operation-b'],
+        evidence: undefined,
         rationale: 'The upstream API does not expose this capability.',
       }),
     ]);

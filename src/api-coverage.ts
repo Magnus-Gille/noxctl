@@ -10,14 +10,22 @@ export interface ApiCoverageMapping {
   publicOperationCount: number;
   implementedOperationIdentities: readonly string[];
   missingOperationIdentities: readonly string[];
+  excludedOperationIdentities?: readonly string[];
+  evidence?: {
+    operationExports: readonly string[];
+    mcpTools: readonly string[];
+    cliCommands: readonly (readonly string[])[];
+  };
   rationale?: string;
 }
 
 export interface ApiCoverageResult extends ApiCoverageMapping {
   implementedOperationIdentities: string[];
   missingOperationIdentities: string[];
+  excludedOperationIdentities: string[];
   implementedCount: number;
   missingCount: number;
+  excludedCount: number;
   stateHash: string;
 }
 
@@ -27,6 +35,7 @@ export interface ApiCoverageBaselineRecord {
   publicOperationCount: number;
   implementedCount: number;
   missingCount: number;
+  excludedCount: number;
   stateHash: string;
   rationale?: string;
 }
@@ -59,13 +68,30 @@ function validateMapping(mapping: ApiCoverageMapping): void {
 
   assertUnique(mapping.implementedOperationIdentities, 'implemented', mapping.id);
   assertUnique(mapping.missingOperationIdentities, 'missing', mapping.id);
+  assertUnique(mapping.excludedOperationIdentities ?? [], 'excluded', mapping.id);
+  if (mapping.evidence) {
+    assertUnique(mapping.evidence.operationExports, 'operation-export evidence', mapping.id);
+    assertUnique(mapping.evidence.mcpTools, 'MCP-tool evidence', mapping.id);
+    assertUnique(
+      mapping.evidence.cliCommands.map((command) => JSON.stringify(command)),
+      'CLI-command evidence',
+      mapping.id,
+    );
+  }
   const implemented = new Set(mapping.implementedOperationIdentities);
   if (mapping.missingOperationIdentities.some((identity) => implemented.has(identity))) {
     throw new Error(`Operation appears as both implemented and missing for mapping ${mapping.id}`);
   }
+  const missing = new Set(mapping.missingOperationIdentities);
+  const excluded = mapping.excludedOperationIdentities ?? [];
+  if (excluded.some((identity) => implemented.has(identity) || missing.has(identity))) {
+    throw new Error(`Operation has more than one coverage state for mapping ${mapping.id}`);
+  }
 
   const accountedCount =
-    mapping.implementedOperationIdentities.length + mapping.missingOperationIdentities.length;
+    mapping.implementedOperationIdentities.length +
+    mapping.missingOperationIdentities.length +
+    excluded.length;
   if (accountedCount !== mapping.publicOperationCount) {
     throw new Error(
       `Mapping ${mapping.id} accounts for ${accountedCount} of ${mapping.publicOperationCount} public operations`,
@@ -78,7 +104,17 @@ function validateMapping(mapping: ApiCoverageMapping): void {
     throw new Error(`Partial mapping ${mapping.id} must have a missing operation`);
   }
   if (
-    (mapping.classification === 'excluded' || mapping.classification === 'blocked') &&
+    mapping.implementedOperationIdentities.length > 0 &&
+    (!mapping.evidence?.operationExports.length ||
+      !mapping.evidence.mcpTools.length ||
+      !mapping.evidence.cliCommands.length)
+  ) {
+    throw new Error(`Implemented mapping ${mapping.id} requires export, MCP, and CLI evidence`);
+  }
+  if (
+    (mapping.classification === 'excluded' ||
+      mapping.classification === 'blocked' ||
+      excluded.length > 0) &&
     !mapping.rationale?.trim()
   ) {
     throw new Error(`${mapping.classification} mapping ${mapping.id} requires a rationale`);
@@ -93,6 +129,16 @@ function calculateStateHash(mapping: ApiCoverageMapping): string {
     publicOperationCount: mapping.publicOperationCount,
     implemented: [...mapping.implementedOperationIdentities].sort(compareText),
     missing: [...mapping.missingOperationIdentities].sort(compareText),
+    excluded: [...(mapping.excludedOperationIdentities ?? [])].sort(compareText),
+    evidence: mapping.evidence
+      ? {
+          operationExports: [...mapping.evidence.operationExports].sort(compareText),
+          mcpTools: [...mapping.evidence.mcpTools].sort(compareText),
+          cliCommands: mapping.evidence.cliCommands
+            .map((command) => [...command])
+            .sort((left, right) => compareText(JSON.stringify(left), JSON.stringify(right))),
+        }
+      : undefined,
     rationale: mapping.rationale,
   });
   return createHash('sha256').update(canonical).digest('hex');
@@ -111,8 +157,12 @@ export function calculateApiCoverage(mappings: readonly ApiCoverageMapping[]): A
           compareText,
         ),
         missingOperationIdentities: [...mapping.missingOperationIdentities].sort(compareText),
+        excludedOperationIdentities: [...(mapping.excludedOperationIdentities ?? [])].sort(
+          compareText,
+        ),
         implementedCount: mapping.implementedOperationIdentities.length,
         missingCount: mapping.missingOperationIdentities.length,
+        excludedCount: mapping.excludedOperationIdentities?.length ?? 0,
         stateHash: calculateStateHash(mapping),
       };
     })
@@ -131,6 +181,7 @@ export function toApiCoverageBaseline(results: readonly ApiCoverageResult[]): Ap
           publicOperationCount,
           implementedCount,
           missingCount,
+          excludedCount,
           stateHash,
           rationale,
         }) => ({
@@ -139,6 +190,7 @@ export function toApiCoverageBaseline(results: readonly ApiCoverageResult[]): Ap
           publicOperationCount,
           implementedCount,
           missingCount,
+          excludedCount,
           stateHash,
           ...(rationale ? { rationale } : {}),
         }),
@@ -167,11 +219,31 @@ export function formatApiCoverageSummary(
   comparison?: ApiCoverageComparison,
 ): string {
   const status = comparison ? (comparison.matches ? 'ok' : 'drift') : 'generated';
-  const lines = [`API coverage: ${status}`];
-  for (const result of results) {
-    lines.push(
-      `${result.id}: ${result.classification} public=${result.publicOperationCount} implemented=${result.implementedCount} missing=${result.missingCount} state=${result.stateHash}`,
-    );
+  const totals = results.reduce(
+    (value, result) => ({
+      ...value,
+      [result.classification]: value[result.classification] + 1,
+      public: value.public + result.publicOperationCount,
+      implemented: value.implemented + result.implementedCount,
+      excludedOperations: value.excludedOperations + result.excludedCount,
+      missing: value.missing + result.missingCount,
+    }),
+    {
+      complete: 0,
+      partial: 0,
+      excluded: 0,
+      blocked: 0,
+      public: 0,
+      implemented: 0,
+      excludedOperations: 0,
+      missing: 0,
+    },
+  );
+  const lines = [
+    `API coverage: ${status} families=${results.length} complete=${totals.complete} partial=${totals.partial} excluded=${totals.excluded} blocked=${totals.blocked} public=${totals.public} implemented=${totals.implemented} excluded-operations=${totals.excludedOperations} missing=${totals.missing}`,
+  ];
+  if (comparison && !comparison.matches) {
+    lines.push(`Changed mappings: ${comparison.changedMappingIds.join(', ')}`);
   }
   return `${lines.join('\n')}\n`;
 }
