@@ -180,6 +180,11 @@ export const supplierInvoiceConfirmColumns: Column[] = [
   { key: 'Booked', header: 'Booked', width: 5 },
 ];
 
+export const supplierInvoiceAttachmentColumns: Column[] = [
+  { key: 'fileName', header: 'File', width: 40 },
+  { key: 'fileId', header: 'File ID', width: 36 },
+];
+
 // --- Invoice payment views (target ≤80 cols) ---
 
 // 8 + 2 + 10 + 2 + 10 + 2 + 12 + 2 + 10 + 2 + 10 = 70
