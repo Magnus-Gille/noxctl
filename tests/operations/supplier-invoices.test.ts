@@ -13,6 +13,16 @@ function mockFetch(response: unknown) {
   });
 }
 
+function mockBinary(bytes: Buffer, contentType: string) {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    headers: new Headers({ 'content-type': contentType }),
+    arrayBuffer: () =>
+      Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)),
+  });
+}
+
 describe('supplier invoice operations', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -100,6 +110,63 @@ describe('supplier invoice operations', () => {
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[0]).toContain('supplierinvoices/1/bookkeep');
       expect(fetchCall[1].method).toBe('PUT');
+    });
+  });
+
+  describe('listSupplierInvoiceAttachments', () => {
+    it('GETs supplierinvoicefileconnections filtered by supplierinvoicenumber and maps the response', async () => {
+      const { listSupplierInvoiceAttachments } =
+        await import('../../src/operations/supplier-invoices.js');
+      mockFetch({
+        SupplierInvoiceFileConnections: [
+          { FileId: 'f1', Name: 'invoice-scan.pdf', SupplierInvoiceNumber: '1' },
+        ],
+      });
+
+      const result = await listSupplierInvoiceAttachments('1');
+
+      const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).toContain('supplierinvoicefileconnections');
+      expect(url).toContain('supplierinvoicenumber=1');
+      expect(result).toEqual([
+        { fileName: 'invoice-scan.pdf', fileId: 'f1', supplierInvoiceNumber: '1' },
+      ]);
+    });
+
+    it('returns an empty array when the invoice has no attachments', async () => {
+      const { listSupplierInvoiceAttachments } =
+        await import('../../src/operations/supplier-invoices.js');
+      mockFetch({ SupplierInvoiceFileConnections: [] });
+
+      const result = await listSupplierInvoiceAttachments('2');
+
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('getSupplierInvoiceFile', () => {
+    it('GETs inbox/{fileId} and returns the raw bytes with content-type', async () => {
+      const { getSupplierInvoiceFile } = await import('../../src/operations/supplier-invoices.js');
+      const bytes = Buffer.from('fake-pdf-bytes');
+      mockBinary(bytes, 'application/pdf');
+
+      const result = await getSupplierInvoiceFile('f1');
+
+      const [url] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string];
+      expect(url).toContain('inbox/f1');
+      expect(result.fileId).toBe('f1');
+      expect(result.contentType).toBe('application/pdf');
+      expect(result.buffer.equals(bytes)).toBe(true);
+    });
+
+    it('throws when Fortnox answers 2xx with a JSON error envelope instead of file bytes', async () => {
+      const { getSupplierInvoiceFile } = await import('../../src/operations/supplier-invoices.js');
+      const bytes = Buffer.from(
+        JSON.stringify({ ErrorInformation: { message: 'not found', code: 123 } }),
+      );
+      mockBinary(bytes, 'application/json');
+
+      await expect(getSupplierInvoiceFile('missing')).rejects.toThrow(/not found/);
     });
   });
 });

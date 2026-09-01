@@ -45,6 +45,7 @@ import {
   supplierInvoiceListColumns,
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
+  supplierInvoiceAttachmentColumns,
   invoicePaymentListColumns,
   invoicePaymentDetailColumns,
   supplierInvoicePaymentListColumns,
@@ -2201,6 +2202,78 @@ supplierInvoices
       data,
       supplierInvoiceConfirmColumns,
       'SupplierInvoice',
+    );
+  });
+
+supplierInvoices
+  .command('attachments <givenNumber>')
+  .description(
+    'List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too',
+  )
+  .action(async (givenNumber: string) => {
+    const { listSupplierInvoiceAttachments } = await import('./operations/supplier-invoices.js');
+    const attachments = await listSupplierInvoiceAttachments(givenNumber);
+    if (json()) {
+      console.log(JSON.stringify({ Attachments: attachments }, null, 2));
+    } else {
+      outputList(
+        attachments as unknown as Record<string, unknown>[],
+        supplierInvoiceAttachmentColumns,
+        false,
+        attachments,
+      );
+    }
+  });
+
+supplierInvoices
+  .command('file <fileId>')
+  .description(
+    'Download a file attached to a supplier invoice (get the fileId from "supplier-invoices attachments")',
+  )
+  .option(
+    '-f, --file <path>',
+    'Write the file here (- for stdout; default: supplier-invoice-file-<fileId><ext>)',
+  )
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl supplier-invoices attachments 1
+  noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63
+  noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63 --file invoice-scan.pdf`,
+  )
+  .action(async (fileId: string, opts: { file?: string }) => {
+    const { getSupplierInvoiceFile } = await import('./operations/supplier-invoices.js');
+    const { extensionForMime } = await import('./operations/vouchers.js');
+    const toStdout = opts.file === '-';
+
+    if (toStdout && program.opts().output === 'json') {
+      throw new Error(
+        '--file - writes raw file bytes to stdout and cannot be combined with --output json.',
+      );
+    }
+
+    const file = await getSupplierInvoiceFile(fileId);
+
+    if (toStdout) {
+      await new Promise<void>((resolve, reject) => {
+        process.stdout.write(file.buffer, (err) => (err ? reject(err) : resolve()));
+      });
+      return;
+    }
+
+    const path =
+      opts.file ?? `supplier-invoice-file-${fileId}${extensionForMime(file.contentType)}`;
+    writeFileSync(path, file.buffer);
+    outputConfirmation(
+      `File saved to ${path} (${file.contentType}, ${file.buffer.length} bytes).`,
+      json(),
+      {
+        FileId: fileId,
+        Path: path,
+        ContentType: file.contentType,
+        Bytes: file.buffer.length,
+      },
     );
   });
 

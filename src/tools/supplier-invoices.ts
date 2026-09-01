@@ -1,17 +1,73 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import {
+  closeSync,
+  constants as fsConstants,
+  lstatSync,
+  mkdtempSync,
+  openSync,
+  writeSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import {
   supplierInvoiceListColumns,
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
+  supplierInvoiceAttachmentColumns,
 } from '../views.js';
 import {
   detailResponse,
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
+
+/**
+ * Write a downloaded file to `target`, refusing to write through a symlink.
+ * Mirrors writeBinaryFile() in tools/bookkeeping.ts — see that copy for the
+ * rationale (paths here are model-generated tool arguments, so this closes
+ * off a symlink-overwrite path).
+ */
+function writeBinaryFile(target: string, data: Buffer, overwrite?: boolean): void {
+  const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
+  const flags = overwrite
+    ? O_WRONLY | O_CREAT | O_TRUNC | (O_NOFOLLOW ?? 0)
+    : O_WRONLY | O_CREAT | O_EXCL;
+
+  if (overwrite && !O_NOFOLLOW && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) {
+    throw new Error(
+      `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
+    );
+  }
+
+  try {
+    const fd = openSync(target, flags, 0o600);
+    try {
+      let written = 0;
+      while (written < data.length) {
+        written += writeSync(fd, data, written, data.length - written);
+      }
+    } finally {
+      closeSync(fd);
+    }
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EEXIST') {
+      throw new Error(
+        `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
+      );
+    }
+    if (code === 'ELOOP') {
+      throw new Error(
+        `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
+      );
+    }
+    throw err;
+  }
+}
 
 const SupplierInvoiceRowSchema = z.strictObject({
   Account: z.number().int().min(1000).max(9999).describe('Kontonummer (1000–9999)'),
@@ -69,6 +125,9 @@ export function registerSupplierInvoiceTools(
     getSupplierInvoice,
     createSupplierInvoice,
     bookkeepSupplierInvoice,
+    listSupplierInvoiceAttachments,
+    getSupplierInvoiceFile,
+    extensionForMime,
   } = operations;
   server.tool(
     'fortnox_list_supplier_invoices',
@@ -173,6 +232,54 @@ export function registerSupplierInvoiceTools(
 
       const data = await bookkeepSupplierInvoice(givenNumber);
       return detailResponse(data, supplierInvoiceConfirmColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_list_supplier_invoice_attachments',
+    'Lista filer (t.ex. den inskannade/mottagna fakturan) som är kopplade till en leverantörsfaktura i Fortnox. Fungerar även för obokförda och ej godkända fakturor (unbooked/authorizepending) — till skillnad från verifikationsbilagor, som bara finns tillgängliga efter bokföring. Returnerar: File (filnamn), File ID. Använd fileId med fortnox_get_supplier_invoice_file för att hämta själva filen.',
+    {
+      givenNumber: z.string().describe('Leverantörsfakturanummer (GivenNumber)'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ givenNumber, includeRaw }) => {
+      const attachments = await listSupplierInvoiceAttachments(givenNumber);
+      return listResponse(
+        attachments as unknown as Record<string, unknown>[],
+        supplierInvoiceAttachmentColumns,
+        attachments,
+        undefined,
+        includeRaw,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_get_supplier_invoice_file',
+    'Ladda ner en fil som är kopplad till en leverantörsfaktura och spara den på disk. Returnerar sökvägen till filen (inte filinnehållet). Hämta fileId via fortnox_list_supplier_invoice_attachments.',
+    {
+      fileId: z.string().describe('Fil-ID, från fortnox_list_supplier_invoice_attachments'),
+      outputPath: z
+        .string()
+        .optional()
+        .describe(
+          'Sökväg att spara filen till. Skriver inte över en befintlig fil om inte overwrite är satt. Utelämnas: en ny privat temp-katalog används.',
+        ),
+      overwrite: z
+        .boolean()
+        .optional()
+        .describe('Tillåt att en befintlig fil på outputPath skrivs över'),
+    },
+    async ({ fileId, outputPath, overwrite }) => {
+      const file = await getSupplierInvoiceFile(fileId);
+      const ext = extensionForMime(file.contentType);
+      const target = outputPath
+        ? resolve(outputPath)
+        : join(mkdtempSync(join(tmpdir(), 'noxctl-')), `supplier-invoice-file-${fileId}${ext}`);
+      writeBinaryFile(target, file.buffer, overwrite);
+      return textResponse(
+        `Sparade fil (${file.contentType}, ${file.buffer.length} bytes) till ${target}`,
+      );
     },
   );
 }
