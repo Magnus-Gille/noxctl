@@ -39,9 +39,13 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function getArchiveEntry(id: string, params: { path?: string; fileId?: string } = {}) {
-    return transport.request<Record<string, unknown>>(`archive/${encodeURIComponent(id)}`, {
-      params: { path: params.path, fileid: params.fileId },
-    });
+    const { buffer, contentType } = await transport.requestFile(
+      `archive/${encodeURIComponent(id)}`,
+      {
+        params: { path: params.path, fileid: params.fileId },
+      },
+    );
+    return { id, buffer, contentType };
   }
 
   async function uploadArchiveFile(

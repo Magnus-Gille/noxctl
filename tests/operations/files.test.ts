@@ -16,7 +16,10 @@ describe('archive and inbox operations', () => {
     } as unknown as FortnoxTransport);
 
     await operations.listArchive({ path: 'docs', fileId: 'f1' });
-    await operations.getArchiveEntry('a/b', { path: 'docs' });
+    const archiveFile = await operations.getArchiveEntry('a/b', {
+      path: 'docs',
+      fileId: 'nested-file',
+    });
     await operations.deleteArchivePath('docs/old');
     await operations.deleteArchiveEntry('a/b', 'docs');
     await operations.listInbox();
@@ -25,13 +28,16 @@ describe('archive and inbox operations', () => {
 
     expect(request.mock.calls).toEqual([
       ['archive', { params: { path: 'docs', fileid: 'f1' } }],
-      ['archive/a%2Fb', { params: { path: 'docs', fileid: undefined } }],
       ['archive', { method: 'DELETE', params: { path: 'docs/old' } }],
       ['archive/a%2Fb', { method: 'DELETE', params: { path: 'docs' } }],
       ['inbox'],
       ['inbox/a%2Fb', { method: 'DELETE' }],
     ]);
-    expect(requestFile).toHaveBeenCalledWith('inbox/a%2Fb');
+    expect(requestFile.mock.calls).toEqual([
+      ['archive/a%2Fb', { params: { path: 'docs', fileid: 'nested-file' } }],
+      ['inbox/a%2Fb'],
+    ]);
+    expect(archiveFile.buffer.toString()).toBe('file');
     expect(file.buffer.toString()).toBe('file');
   });
 

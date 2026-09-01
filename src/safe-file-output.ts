@@ -7,10 +7,13 @@ import {
   writeSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 export function privateOutputPath(prefix: string, fileName: string): string {
-  return join(mkdtempSync(join(tmpdir(), prefix)), fileName);
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  const candidate = basename(fileName);
+  const safeName = !candidate || candidate === '.' || candidate === '..' ? 'download' : candidate;
+  return join(directory, safeName);
 }
 
 export function writeBinaryFile(targetPath: string, data: Buffer, overwrite = false): string {

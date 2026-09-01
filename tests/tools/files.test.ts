@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { readFileSync } from 'node:fs';
 import { createServer } from '../../src/index.js';
+import { privateOutputPath } from '../../src/safe-file-output.js';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
@@ -83,5 +85,27 @@ describe('archive, inbox, and attachment tools', () => {
       expect((result.content as { text: string }[])[0]?.text, name).toContain('Dry run');
     }
     expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('downloads archive responses as binary data to an exclusive destination', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(Buffer.from('archive-bytes'), {
+        status: 200,
+        headers: { 'content-type': 'image/png' },
+      }),
+    );
+    const { client } = await setup();
+    const outputPath = privateOutputPath('noxctl-test-', 'archive.bin');
+    const result = await client.callTool({
+      name: 'fortnox_get_archive_entry',
+      arguments: { id: 'a/b', path: 'docs', fileId: 'nested', outputPath },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(readFileSync(outputPath).toString()).toBe('archive-bytes');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/3/archive/a%2Fb?path=docs&fileid=nested'),
+      expect.objectContaining({ method: 'GET' }),
+    );
   });
 });

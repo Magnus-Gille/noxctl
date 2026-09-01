@@ -1,5 +1,5 @@
 import { lstatSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { privateOutputPath, writeBinaryFile } from '../src/safe-file-output.js';
 
@@ -9,6 +9,12 @@ describe('safe binary file output', () => {
     expect(writeBinaryFile(path, Buffer.from([0, 1, 2]))).toBe(path);
     expect(readFileSync(path)).toEqual(Buffer.from([0, 1, 2]));
     expect(lstatSync(path).mode & 0o777).toBe(0o600);
+  });
+
+  it('keeps untrusted default file names inside the private temporary directory', () => {
+    const path = privateOutputPath('noxctl-test-', 'archive-x/../../../../outside.bin');
+    expect(basename(path)).toBe('outside.bin');
+    expect(basename(dirname(path))).toMatch(/^noxctl-test-/);
   });
 
   it('refuses overwrite unless explicitly allowed', () => {

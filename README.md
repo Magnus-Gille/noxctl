@@ -541,7 +541,7 @@ strict and validated before any request is sent.
 
 | CLI group | MCP surface | Purpose |
 |---|---|---|
-| `noxctl archive` | `fortnox_*_archive*` | List/get, multipart upload, delete path/entry |
+| `noxctl archive` | `fortnox_*_archive*` | List/download, multipart upload, delete path/entry |
 | `noxctl inbox` | `fortnox_*_inbox*` | List, multipart upload, safe download, delete |
 | `noxctl attachments` | `fortnox_*_document_attachment*` | Attach/list/count/validate/update/detach for invoices, offers, orders, and contracts |
 

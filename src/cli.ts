@@ -4926,15 +4926,23 @@ archive
   .command('get <id>')
   .option('--path <path>', 'Archive path')
   .option('--file-id <fileId>', 'File ID')
+  .option('-o, --output <file>', 'Output file (default: private temporary directory)')
+  .option('--overwrite', 'Overwrite an existing regular file')
   .action(async (id: string, opts) => {
     const { getArchiveEntry } = await import('./operations/files.js');
-    const raw = await getArchiveEntry(id, opts);
-    outputDetail(
-      (raw.Folder ?? raw) as Record<string, unknown>,
-      referenceDataColumns,
-      json(),
-      'Archive',
+    const { privateOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
+    const file = await getArchiveEntry(id, { path: opts.path, fileId: opts.fileId });
+    const target = writeBinaryFile(
+      opts.output ?? privateOutputPath('noxctl-', `archive-${id}`),
+      file.buffer,
+      opts.overwrite,
     );
+    outputConfirmation(`Archive file ${id} saved to ${target}.`, json(), {
+      Id: id,
+      File: target,
+      Bytes: file.buffer.length,
+      ContentType: file.contentType,
+    });
   });
 archive
   .command('upload <file>')
@@ -5024,9 +5032,13 @@ inbox
   .option('--overwrite', 'Allow replacing an existing regular file')
   .action(async (id: string, opts) => {
     const { getInboxFile } = await import('./operations/files.js');
-    const { writeBinaryFile } = await import('./safe-file-output.js');
+    const { privateOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
     const file = await getInboxFile(id);
-    const path = writeBinaryFile(opts.file ?? `inbox-${id}`, file.buffer, opts.overwrite);
+    const path = writeBinaryFile(
+      opts.file ?? privateOutputPath('noxctl-', `inbox-${id}`),
+      file.buffer,
+      opts.overwrite,
+    );
     outputConfirmation(`Inbox file ${id} saved to ${path}.`, json(), {
       Path: path,
       Bytes: file.buffer.length,

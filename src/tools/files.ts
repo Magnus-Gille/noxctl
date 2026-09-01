@@ -51,17 +51,22 @@ export function registerFileTools(
 
   server.tool(
     'fortnox_get_archive_entry',
-    'Hämta metadata för en arkivpost i Fortnox',
+    'Ladda ner en fil från Fortnox arkiv till en säker lokal sökväg',
     {
       id: z.string().describe('Arkivpostens ID'),
       path: z.string().optional().describe('Arkivsökväg'),
       fileId: z.string().optional().describe('Valfritt fil-ID'),
-      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      outputPath: z.string().optional().describe('Målsökväg; utelämna för privat tempkatalog'),
+      overwrite: z.boolean().optional().describe('Tillåt överskrivning av vanlig fil'),
     },
-    async ({ id, path, fileId, includeRaw }) => {
-      const raw = await getArchiveEntry(id, { path, fileId });
-      const folder = (raw.Folder ?? raw) as Record<string, unknown>;
-      return detailResponse(folder, referenceDataColumns, raw, includeRaw);
+    async ({ id, path, fileId, outputPath, overwrite }) => {
+      const file = await getArchiveEntry(id, { path, fileId });
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `archive-${id}`),
+        file.buffer,
+        overwrite,
+      );
+      return textResponse(`Archive file ${id} saved to ${target} (${file.buffer.length} bytes).`);
     },
   );
 
