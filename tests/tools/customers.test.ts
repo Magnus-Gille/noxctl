@@ -239,6 +239,7 @@ describe('customer tools', () => {
   // Fortnox's Customer resource doesn't have (only Phone1/Phone2 exist).
   describe('customer write schemas cover the real Customer resource', () => {
     const extendedFields = {
+      CustomerNumber: 'CUSTOM-3',
       Type: 'PRIVATE',
       Phone1: '08-123456',
       Phone2: '070-1234567',
@@ -272,6 +273,17 @@ describe('customer tools', () => {
       InvoiceRemark: 'Handle with care',
       ShowPriceVATIncluded: false,
       EmailInvoice: 'invoices@example.test',
+      DefaultDeliveryTypes: {
+        Invoice: 'EMAIL',
+        Offer: 'PRINT',
+        Order: 'PRINTSERVICE',
+      },
+      DefaultTemplates: {
+        CashInvoice: 'CASH-TEMPLATE',
+        Invoice: 'INVOICE-TEMPLATE',
+        Offer: 'OFFER-TEMPLATE',
+        Order: 'ORDER-TEMPLATE',
+      },
       Active: true,
     };
 
@@ -353,6 +365,38 @@ describe('customer tools', () => {
       });
 
       expect(result.isError).toBe(true);
+    });
+
+    it('rejects unsupported nested delivery defaults', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_customer',
+        arguments: {
+          Name: 'Bad Delivery Default',
+          DefaultDeliveryTypes: { Invoice: 'SMS' },
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown nested customer-default fields', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_update_customer',
+        arguments: {
+          customerNumber: '3',
+          DefaultTemplates: { Invoice: 'INVOICE-TEMPLATE', Unknown: 'TYPO' },
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
     });
   });
 });

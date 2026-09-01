@@ -1,7 +1,11 @@
 import { lstatSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { privateOutputPath, writeBinaryFile } from '../src/safe-file-output.js';
+import {
+  privateOutputPath,
+  safeLocalOutputPath,
+  writeBinaryFile,
+} from '../src/safe-file-output.js';
 
 describe('safe binary file output', () => {
   it('creates private temporary destinations and exact bytes', () => {
@@ -17,6 +21,12 @@ describe('safe binary file output', () => {
     const path = privateOutputPath('noxctl-test-', 'archive-x/../../../../outside.bin');
     expect(basename(path)).toBe('outside.bin');
     expect(basename(dirname(path))).toMatch(/^noxctl-test-/);
+  });
+
+  it('keeps untrusted local download names inside the working directory', () => {
+    const path = safeLocalOutputPath('supplier-invoice-file-', '../../nested/scan', '.pdf');
+    expect(dirname(path)).toBe(process.cwd());
+    expect(basename(path)).toBe('supplier-invoice-file-scan.pdf');
   });
 
   it('refuses overwrite unless explicitly allowed', () => {

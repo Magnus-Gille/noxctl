@@ -2450,6 +2450,7 @@ supplierInvoices
     '-f, --file <path>',
     'Write the file here (- for stdout; default: supplier-invoice-file-<fileId><ext>)',
   )
+  .option('--overwrite', 'Allow replacing an existing regular file')
   .addHelpText(
     'after',
     `
@@ -2458,9 +2459,10 @@ Examples:
   noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63
   noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63 --file invoice-scan.pdf`,
   )
-  .action(async (fileId: string, opts: { file?: string }) => {
+  .action(async (fileId: string, opts: { file?: string; overwrite?: boolean }) => {
     const { getSupplierInvoiceFile } = await import('./operations/supplier-invoices.js');
     const { extensionForMime } = await import('./operations/vouchers.js');
+    const { safeLocalOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
     const toStdout = opts.file === '-';
 
     if (toStdout && program.opts().output === 'json') {
@@ -2479,14 +2481,15 @@ Examples:
     }
 
     const path =
-      opts.file ?? `supplier-invoice-file-${fileId}${extensionForMime(file.contentType)}`;
-    writeFileSync(path, file.buffer);
+      opts.file ??
+      safeLocalOutputPath('supplier-invoice-file-', fileId, extensionForMime(file.contentType));
+    const savedPath = writeBinaryFile(path, file.buffer, opts.overwrite);
     outputConfirmation(
-      `File saved to ${path} (${file.contentType}, ${file.buffer.length} bytes).`,
+      `File saved to ${savedPath} (${file.contentType}, ${file.buffer.length} bytes).`,
       json(),
       {
         FileId: fileId,
-        Path: path,
+        Path: savedPath,
         ContentType: file.contentType,
         Bytes: file.buffer.length,
       },
