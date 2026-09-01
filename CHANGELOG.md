@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Supplier-invoice attachments can now be listed and downloaded.**
+  `noxctl supplier-invoices attachments <givenNumber>` and
+  `fortnox_list_supplier_invoice_attachments` list files (e.g. the scanned or
+  emailed invoice itself) attached to a supplier invoice; `noxctl
+  supplier-invoices file <fileId>` and `fortnox_get_supplier_invoice_file`
+  download them. Unlike voucher attachments, this reaches the original
+  document directly, so it works for `unbooked`/`authorizepending` invoices —
+  before they've been bookkept into a voucher. No new scope required.
+
 ## [0.9.0] - 2026-08-31
 
 ### Added
