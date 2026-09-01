@@ -1,16 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  closeSync,
-  constants as fsConstants,
-  lstatSync,
-  mkdtempSync,
-  openSync,
-  writeSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import {
   invoiceListColumns,
   invoiceDetailColumns,
@@ -86,59 +77,6 @@ const InvoiceRowSchema = z.strictObject({
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
 
-/**
- * Write a PDF to `target`, refusing to write through a symlink.
- *
- * These paths come from tool arguments, i.e. they are model-generated and can be
- * influenced by whatever the model just read. `O_EXCL` already refuses to follow
- * a symlink; `O_NOFOLLOW` gives the overwrite path the same guarantee, so
- * "replace this file" can never silently truncate a symlink's target instead.
- * O_NOFOLLOW is POSIX-only, so Windows falls back to an explicit lstat check.
- */
-function writePdf(target: string, pdf: Buffer, overwrite?: boolean): void {
-  const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
-  const flags = overwrite
-    ? O_WRONLY | O_CREAT | O_TRUNC | (O_NOFOLLOW ?? 0)
-    : O_WRONLY | O_CREAT | O_EXCL;
-
-  // Windows has no O_NOFOLLOW, so the flag above degrades to a no-op there.
-  // Check explicitly instead. This is a TOCTOU-racy fallback rather than an
-  // atomic guarantee, but it closes the ordinary case on the one platform the
-  // kernel flag cannot cover.
-  if (overwrite && !O_NOFOLLOW && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) {
-    throw new Error(
-      `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
-    );
-  }
-
-  try {
-    const fd = openSync(target, flags, 0o600);
-    try {
-      // writeSync may return a short count; keep going until the whole buffer
-      // has landed. writeFileSync used to do this loop internally.
-      let written = 0;
-      while (written < pdf.length) {
-        written += writeSync(fd, pdf, written, pdf.length - written);
-      }
-    } finally {
-      closeSync(fd);
-    }
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST') {
-      throw new Error(
-        `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
-      );
-    }
-    if (code === 'ELOOP') {
-      throw new Error(
-        `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
-      );
-    }
-    throw err;
-  }
-}
-
 export function registerInvoiceTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
@@ -153,8 +91,18 @@ export function registerInvoiceTools(
     markInvoicePrinted,
     bookkeepInvoice,
     creditInvoice,
+    cancelInvoice,
+    externalPrintInvoice,
+    eprintInvoice,
+    getInvoiceReminderPdf,
     attachInvoiceFiles,
     listInvoiceAttachments,
+    createDocumentAttachment,
+    listDocumentAttachments,
+    getAttachmentCounts,
+    validateAttachmentsOnSend,
+    updateDocumentAttachment,
+    detachDocumentAttachment,
   } = operations;
   server.tool(
     'fortnox_list_invoices',
@@ -348,12 +296,12 @@ export function registerInvoiceTools(
       // Arguments here are agent-generated, so a stray path must not silently
       // truncate an existing file. Without an explicit path we use a fresh
       // private directory rather than a predictable, clobber-prone temp name.
-      const target = outputPath
-        ? resolve(outputPath)
-        : join(mkdtempSync(join(tmpdir(), 'noxctl-')), `invoice-${documentNumber}.pdf`);
-
       const pdf = await getInvoicePdf(documentNumber);
-      writePdf(target, pdf, overwrite);
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `invoice-${documentNumber}.pdf`),
+        pdf,
+        overwrite,
+      );
 
       // Only now that the PDF is safely on disk do we change anything in Fortnox.
       // If that fails, the download still succeeded — say so, or the caller has
@@ -379,7 +327,7 @@ export function registerInvoiceTools(
       let refreshNote = '';
       if (printed?.pdf) {
         try {
-          writePdf(target, printed.pdf, true);
+          writeBinaryFile(target, printed.pdf, true);
           bytes = printed.pdf.length;
         } catch (err) {
           refreshNote = ` Den sparade filen är /preview-versionen; kunde inte skriva om den med den utskrivna versionen: ${
@@ -465,6 +413,87 @@ export function registerInvoiceTools(
     },
   );
 
+  const invoiceActions = [
+    {
+      name: 'fortnox_cancel_invoice',
+      description: 'Makulera en faktura i Fortnox',
+      verb: 'cancel',
+      message: 'makulerad',
+      execute: cancelInvoice,
+    },
+    {
+      name: 'fortnox_eprint_invoice',
+      description: 'Skicka en faktura via Fortnox e-print',
+      verb: 'e-print',
+      message: 'skickad via e-print',
+      execute: eprintInvoice,
+    },
+    {
+      name: 'fortnox_external_print_invoice',
+      description: 'Markera en faktura som externt utskriven i Fortnox',
+      verb: 'external print',
+      message: 'markerad som externt utskriven',
+      execute: externalPrintInvoice,
+    },
+  ] as const;
+  for (const action of invoiceActions) {
+    server.tool(
+      action.name,
+      action.description,
+      {
+        documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
+        confirm: z.boolean().optional().describe('Bekräfta åtgärden'),
+        dryRun: z.boolean().optional().describe('Visa åtgärden utan att utföra den'),
+        includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+      },
+      async ({ documentNumber, confirm, dryRun, includeRaw }) => {
+        const target = `${action.verb} invoice ${documentNumber}`;
+        if (dryRun) return dryRunResponse(target);
+        if (!confirm) requireConfirmation(target);
+        const invoice = await action.execute(documentNumber);
+        return confirmationResponse(
+          `Faktura ${documentNumber} ${action.message}.`,
+          invoice,
+          invoiceConfirmColumns,
+          includeRaw,
+        );
+      },
+    );
+  }
+
+  server.tool(
+    'fortnox_invoice_reminder_pdf',
+    'Skapa en påminnelseutskrift för en faktura och spara PDF:en på disk',
+    {
+      documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
+      outputPath: z.string().optional().describe('Målsökväg; utelämna för privat tempkatalog'),
+      overwrite: z.boolean().optional().describe('Tillåt överskrivning av vanlig fil'),
+      confirm: z.boolean().optional().describe('Bekräfta påminnelseutskriften'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att skriva ut'),
+    },
+    async ({ documentNumber, outputPath, overwrite, confirm, dryRun }) => {
+      const action = `print reminder for invoice ${documentNumber}`;
+      if (dryRun) return dryRunResponse(action);
+      if (!confirm) requireConfirmation(action);
+      const pdf = await getInvoiceReminderPdf(documentNumber);
+      if (!pdf) {
+        return confirmationResponse(
+          `Påminnelseutskrift utförd för faktura ${documentNumber}; Fortnox returnerade ingen PDF.`,
+          {},
+        );
+      }
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `invoice-reminder-${documentNumber}.pdf`),
+        pdf,
+        overwrite,
+      );
+      return confirmationResponse(
+        `Påminnelse för faktura ${documentNumber} sparad som PDF: ${target}.`,
+        { DocumentNumber: documentNumber, Path: target, Bytes: pdf.length },
+      );
+    },
+  );
+
   server.tool(
     'fortnox_attach_invoice_files',
     'Ladda upp kvitto/underlagsfiler och koppla dem till en kundfaktura i Fortnox. Kräver "archive"-behörigheten (noxctl init --with-archive).',
@@ -522,6 +551,134 @@ export function registerInvoiceTools(
         undefined,
         includeRaw,
       );
+    },
+  );
+
+  const AttachmentEntityType = z.enum(['F', 'OF', 'O', 'C']);
+  const AttachmentFields = {
+    entityId: z.number().int().optional(),
+    entityType: AttachmentEntityType.optional(),
+    fileId: z.string().optional(),
+    id: z.string().uuid().optional(),
+    includeOnSend: z.boolean().optional(),
+  };
+
+  server.tool(
+    'fortnox_create_document_attachment',
+    'Koppla en befintlig arkivfil till en faktura, offert, order eller ett avtal i Fortnox',
+    {
+      documentNumber: DocumentNumberSchema.describe('Dokumentnummer'),
+      entityType: AttachmentEntityType.describe('F=faktura, OF=offert, O=order, C=avtal'),
+      fileId: z.string().min(1).describe('Arkivfilens ID'),
+      includeOnSend: z.boolean().optional().describe('Bifoga filen när dokumentet skickas'),
+      confirm: z.boolean().optional().describe('Bekräfta kopplingen'),
+      dryRun: z.boolean().optional().describe('Visa kopplingen utan att utföra den'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ documentNumber, entityType, fileId, includeOnSend, confirm, dryRun, includeRaw }) => {
+      const target = `attach archive file ${fileId} to ${entityType} document ${documentNumber}`;
+      const body = { documentNumber, entityType, fileId, includeOnSend: includeOnSend ?? true };
+      if (dryRun) return dryRunResponse(target, body);
+      if (!confirm) requireConfirmation(target);
+      const attachment = await createDocumentAttachment(
+        documentNumber,
+        entityType,
+        fileId,
+        includeOnSend ?? true,
+      );
+      return confirmationResponse(
+        'Bilagan kopplades till dokumentet.',
+        attachment,
+        undefined,
+        includeRaw,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_list_document_attachments',
+    'Lista bilagor för en offert, order eller ett avtal i Fortnox',
+    {
+      documentNumber: DocumentNumberSchema.describe('Dokumentnummer'),
+      entityType: z.enum(['OF', 'O', 'C']).describe('OF=offert, O=order, C=avtal'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ documentNumber, entityType, includeRaw }) => {
+      const attachments = await listDocumentAttachments(documentNumber, entityType);
+      return listResponse(
+        attachments,
+        invoiceAttachmentListColumns,
+        attachments,
+        undefined,
+        includeRaw,
+      );
+    },
+  );
+
+  server.tool(
+    'fortnox_get_attachment_counts',
+    'Hämta antal bilagor för dokument i Fortnox',
+    {
+      entityIds: z.array(z.number().int()).min(1).describe('Dokument-ID:n'),
+      entityType: AttachmentEntityType.describe('Dokumenttyp'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ entityIds, entityType, includeRaw }) => {
+      const counts = await getAttachmentCounts(entityIds, entityType);
+      return detailResponse(counts, invoiceAttachmentListColumns, counts, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_validate_attachments_on_send',
+    'Validera att valda bilagor kan inkluderas när ett dokument skickas från Fortnox',
+    {
+      attachments: z.array(z.strictObject(AttachmentFields)).min(1),
+      confirm: z.boolean().optional().describe('Bekräfta valideringsanropet'),
+      dryRun: z.boolean().optional().describe('Visa exakt payload utan att anropa Fortnox'),
+    },
+    async ({ attachments, confirm, dryRun }) => {
+      const target = 'validate attachments included on send';
+      if (dryRun) return dryRunResponse(target, attachments);
+      if (!confirm) requireConfirmation(target);
+      await validateAttachmentsOnSend(attachments);
+      return textResponse('Fortnox accepted the attachment send validation.');
+    },
+  );
+
+  server.tool(
+    'fortnox_update_document_attachment',
+    'Uppdatera metadata för en dokumentbilaga i Fortnox',
+    {
+      attachmentId: z.string().uuid().describe('Bilagans ID'),
+      ...AttachmentFields,
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa exakt payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ attachmentId, confirm, dryRun, includeRaw, ...fields }) => {
+      const target = `update attachment ${attachmentId}`;
+      if (dryRun) return dryRunResponse(target, fields);
+      if (!confirm) requireConfirmation(target);
+      const attachment = await updateDocumentAttachment(attachmentId, fields);
+      return detailResponse(attachment, invoiceAttachmentListColumns, attachment, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_detach_document_attachment',
+    'Koppla loss en dokumentbilaga i Fortnox utan att hämta fjärr-URL:er',
+    {
+      attachmentId: z.string().uuid().describe('Bilagans ID'),
+      confirm: z.boolean().optional().describe('Bekräfta bortkopplingen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att koppla loss'),
+    },
+    async ({ attachmentId, confirm, dryRun }) => {
+      const target = `detach attachment ${attachmentId}`;
+      if (dryRun) return dryRunResponse(target);
+      if (!confirm) requireConfirmation(target);
+      await detachDocumentAttachment(attachmentId);
+      return textResponse(`Attachment ${attachmentId} detached.`);
     },
   );
 }

@@ -24,7 +24,7 @@ const patchOperation = z
     path: z.string().startsWith('/').describe('JSON Pointer-sökväg'),
     value: z.unknown().optional().describe('Nytt värde (ej för remove)'),
   })
-  .passthrough();
+  .strict();
 
 function withMetadata(result: {
   recurring: Record<string, unknown>;

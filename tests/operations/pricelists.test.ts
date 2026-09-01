@@ -146,7 +146,7 @@ describe('price operations', () => {
       await updatePrice('A', 'ART1', { Price: 200 });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('prices/A/ART1/0');
+      expect(fetchCall[0]).toMatch(/prices\/A\/ART1$/);
       expect(fetchCall[1].method).toBe('PUT');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Price.Price).toBe(200);

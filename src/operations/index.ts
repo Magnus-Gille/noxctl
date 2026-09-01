@@ -1,5 +1,6 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { createAbsenceTransactionOperations } from './absencetransactions.js';
+import { createAccrualOperations } from './accruals.js';
 import { createAccountOperations } from './accounts.js';
 import { createAnalyticsOperations } from './analytics.js';
 import { createArticleOperations } from './articles.js';
@@ -11,6 +12,7 @@ import { createCustomerOperations } from './customers.js';
 import { createEmployeeOperations } from './employees.js';
 import { createFinancialReportOperations } from './financial-reports.js';
 import { createFinancialYearOperations } from './financial-years.js';
+import { createFileOperations } from './files.js';
 import { createInvoicePaymentOperations } from './invoice-payments.js';
 import { createInvoiceOperations } from './invoices.js';
 import { createOfferOperations } from './offers.js';
@@ -18,6 +20,7 @@ import { createOrderOperations } from './orders.js';
 import { createPriceListOperations, createPriceOperations } from './pricelists.js';
 import { createProjectOperations } from './projects.js';
 import { createRecurringOperations } from './recurrings.js';
+import { createReferenceDataOperations } from './reference-data.js';
 import { createSalaryTransactionOperations } from './salarytransactions.js';
 import { createScheduleTimeOperations } from './scheduletimes.js';
 import { createSupplierInvoicePaymentOperations } from './supplier-invoice-payments.js';
@@ -31,6 +34,7 @@ import { createVoucherOperations } from './vouchers.js';
 export function createFortnoxOperations(transport: FortnoxTransport) {
   return Object.freeze({
     ...createAbsenceTransactionOperations(transport),
+    ...createAccrualOperations(transport),
     ...createAccountOperations(transport),
     ...createAnalyticsOperations(transport),
     ...createArticleOperations(transport),
@@ -42,6 +46,7 @@ export function createFortnoxOperations(transport: FortnoxTransport) {
     ...createEmployeeOperations(transport),
     ...createFinancialReportOperations(transport),
     ...createFinancialYearOperations(transport),
+    ...createFileOperations(transport),
     ...createInvoicePaymentOperations(transport),
     ...createInvoiceOperations(transport),
     ...createOfferOperations(transport),
@@ -50,6 +55,7 @@ export function createFortnoxOperations(transport: FortnoxTransport) {
     ...createPriceOperations(transport),
     ...createProjectOperations(transport),
     ...createRecurringOperations(transport),
+    ...createReferenceDataOperations(transport),
     ...createSalaryTransactionOperations(transport),
     ...createScheduleTimeOperations(transport),
     ...createSupplierInvoicePaymentOperations(transport),

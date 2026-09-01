@@ -65,10 +65,22 @@ export function createSalaryTransactionOperations(transport: FortnoxTransport) {
     });
   }
 
+  async function updateSalaryTransaction(
+    salaryRow: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<SalaryTransactionResponse>(
+      `salarytransactions/${encodeURIComponent(String(salaryRow))}`,
+      { method: 'PUT', body: { SalaryTransaction: params } },
+    );
+    return data.SalaryTransaction;
+  }
+
   return {
     listSalaryTransactions,
     getSalaryTransaction,
     createSalaryTransaction,
+    updateSalaryTransaction,
     deleteSalaryTransaction,
   };
 }
@@ -77,5 +89,6 @@ export const {
   listSalaryTransactions,
   getSalaryTransaction,
   createSalaryTransaction,
+  updateSalaryTransaction,
   deleteSalaryTransaction,
 } = createSalaryTransactionOperations(defaultFortnoxTransport);

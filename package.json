@@ -37,9 +37,11 @@
     "version:check": "node scripts/version.mjs check",
     "version:set": "node scripts/version.mjs set",
     "verify": "npm run version:check && npm run lint && npm run format:check && npm run build && npm test",
-    "check:release": "npm run verify && npm audit --omit=dev && node scripts/check-embedded-consumer.mjs && npm pack --dry-run --ignore-scripts",
+    "check:release": "npm run verify && npm run audit:api-coverage:offline && npm audit --omit=dev && node scripts/check-embedded-consumer.mjs && npm pack --dry-run --ignore-scripts",
     "check:api": "bash scripts/check-api-changes.sh",
     "audit:schemas": "npm run build --silent && node scripts/audit-tool-schemas.mjs",
+    "audit:api-coverage": "npm run build --silent && node scripts/audit-api-coverage.mjs",
+    "audit:api-coverage:offline": "node scripts/audit-api-coverage.mjs --offline",
     "prepublishOnly": "npm run check:release",
     "prepare": "husky"
   },

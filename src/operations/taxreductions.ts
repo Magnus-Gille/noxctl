@@ -56,8 +56,34 @@ export function createTaxReductionOperations(transport: FortnoxTransport) {
     return data.TaxReduction;
   }
 
-  return { listTaxReductions, getTaxReduction, createTaxReduction };
+  async function updateTaxReduction(
+    id: number,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<TaxReductionResponse>(`taxreductions/${id}`, {
+      method: 'PUT',
+      body: { TaxReduction: params },
+    });
+    return data.TaxReduction;
+  }
+
+  async function deleteTaxReduction(id: number): Promise<void> {
+    await transport.request(`taxreductions/${id}`, { method: 'DELETE' });
+  }
+
+  return {
+    listTaxReductions,
+    getTaxReduction,
+    createTaxReduction,
+    updateTaxReduction,
+    deleteTaxReduction,
+  };
 }
 
-export const { listTaxReductions, getTaxReduction, createTaxReduction } =
-  createTaxReductionOperations(defaultFortnoxTransport);
+export const {
+  listTaxReductions,
+  getTaxReduction,
+  createTaxReduction,
+  updateTaxReduction,
+  deleteTaxReduction,
+} = createTaxReductionOperations(defaultFortnoxTransport);

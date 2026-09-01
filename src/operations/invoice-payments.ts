@@ -65,6 +65,17 @@ export function createInvoicePaymentOperations(transport: FortnoxTransport) {
     });
   }
 
+  async function updateInvoicePayment(
+    paymentNumber: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<InvoicePaymentResponse>(
+      `invoicepayments/${documentSegment(paymentNumber)}`,
+      { method: 'PUT', body: { InvoicePayment: params } },
+    );
+    return data.InvoicePayment;
+  }
+
   async function bookkeepInvoicePayment(paymentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<InvoicePaymentResponse>(
       `invoicepayments/${documentSegment(paymentNumber)}/bookkeep`,
@@ -79,6 +90,7 @@ export function createInvoicePaymentOperations(transport: FortnoxTransport) {
     listInvoicePayments,
     getInvoicePayment,
     createInvoicePayment,
+    updateInvoicePayment,
     deleteInvoicePayment,
     bookkeepInvoicePayment,
   };
@@ -88,6 +100,7 @@ export const {
   listInvoicePayments,
   getInvoicePayment,
   createInvoicePayment,
+  updateInvoicePayment,
   deleteInvoicePayment,
   bookkeepInvoicePayment,
 } = createInvoicePaymentOperations(defaultFortnoxTransport);

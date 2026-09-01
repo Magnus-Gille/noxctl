@@ -1,16 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import {
-  closeSync,
-  constants as fsConstants,
-  lstatSync,
-  mkdtempSync,
-  openSync,
-  writeSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import {
   accountListColumns,
   voucherAttachmentColumns,
@@ -25,57 +16,6 @@ import {
   requireConfirmation,
   textResponse,
 } from '../tool-output.js';
-
-/**
- * Write a downloaded file to `target`, refusing to write through a symlink.
- * Mirrors writePdf() in tools/invoices.ts, generalized to an arbitrary
- * buffer/content-type rather than an assumed PDF — voucher attachments can be
- * PDF, JPEG, PNG, etc.
- *
- * These paths come from tool arguments, i.e. they are model-generated and can
- * be influenced by whatever the model just read. O_EXCL already refuses to
- * follow a symlink; O_NOFOLLOW gives the overwrite path the same guarantee,
- * so "replace this file" can never silently truncate a symlink's target
- * instead. O_NOFOLLOW is POSIX-only, so Windows falls back to an explicit
- * lstat check.
- */
-function writeBinaryFile(target: string, data: Buffer, overwrite?: boolean): void {
-  const { O_WRONLY, O_CREAT, O_TRUNC, O_EXCL, O_NOFOLLOW } = fsConstants;
-  const flags = overwrite
-    ? O_WRONLY | O_CREAT | O_TRUNC | (O_NOFOLLOW ?? 0)
-    : O_WRONLY | O_CREAT | O_EXCL;
-
-  if (overwrite && !O_NOFOLLOW && lstatSync(target, { throwIfNoEntry: false })?.isSymbolicLink()) {
-    throw new Error(
-      `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
-    );
-  }
-
-  try {
-    const fd = openSync(target, flags, 0o600);
-    try {
-      let written = 0;
-      while (written < data.length) {
-        written += writeSync(fd, data, written, data.length - written);
-      }
-    } finally {
-      closeSync(fd);
-    }
-  } catch (err) {
-    const code = (err as NodeJS.ErrnoException).code;
-    if (code === 'EEXIST') {
-      throw new Error(
-        `${target} already exists. Pass a different outputPath, or overwrite: true to replace it.`,
-      );
-    }
-    if (code === 'ELOOP') {
-      throw new Error(
-        `${target} is a symbolic link. Refusing to write through it — pass the real path instead.`,
-      );
-    }
-    throw err;
-  }
-}
 
 // The full writable VoucherRow field set (Fortnox `VoucherRowSinglePayloadItem`).
 // The MCP SDK strips any key the schema does not declare, so an undeclared field
@@ -113,18 +53,51 @@ const VoucherSeriesSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,9}$/, 'Voucher series must be alphanumeric')
   .optional();
 
+const AccountNumberSchema = z.number().int().min(1000).max(9999);
+const AccountSettingsSchema = z.enum(['ALLOWED', 'MANDATORY', 'NOTALLOWED']);
+const AccountWritableFields = {
+  Active: z.boolean().optional().describe('Om kontot är aktivt'),
+  BalanceBroughtForward: z.number().optional().describe('Ingående balans'),
+  CostCenter: z.string().optional().describe('Standardkostnadsställe'),
+  CostCenterSettings: AccountSettingsSchema.optional().describe('Kostnadsställesregel'),
+  Description: z.string().optional().describe('Kontobeskrivning'),
+  OpeningQuantities: z
+    .array(
+      z.strictObject({
+        Project: z.string().optional().describe('Projektnummer'),
+        Balance: z.number().int().optional().describe('Ingående antal'),
+      }),
+    )
+    .optional()
+    .describe('Ingående antal per projekt'),
+  Project: z.string().optional().describe('Standardprojekt'),
+  ProjectSettings: AccountSettingsSchema.optional().describe('Projektregel'),
+  SRU: z.number().int().optional().describe('SRU-kod'),
+  TransactionInformation: z.string().optional().describe('Standardtransaktionsinformation'),
+  TransactionInformationSettings: AccountSettingsSchema.optional().describe(
+    'Regel för transaktionsinformation',
+  ),
+  VATCode: z.string().optional().describe('Momskod'),
+};
+
 export function registerBookkeepingTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
   const {
     listAccounts,
+    getAccount,
+    createAccount,
+    updateAccount,
+    deleteAccount,
     listVouchers,
     getVoucher,
     createVoucher,
     attachVoucherFiles,
     listVoucherAttachments,
     getVoucherFile,
+    getVoucherFileConnection,
+    deleteVoucherFileConnection,
     extensionForMime,
   } = operations;
   server.tool(
@@ -228,6 +201,72 @@ export function registerBookkeepingTools(
   );
 
   server.tool(
+    'fortnox_get_account',
+    'Hämta ett konto från kontoplanen i Fortnox',
+    {
+      number: AccountNumberSchema.describe('Kontonummer'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ number, includeRaw }) => {
+      const data = await getAccount(number);
+      return detailResponse(data, accountListColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_create_account',
+    'Skapa ett konto i Fortnox',
+    {
+      ...AccountWritableFields,
+      Number: AccountNumberSchema.describe('Kontonummer'),
+      Description: z.string().describe('Kontobeskrivning'),
+      confirm: z.boolean().optional().describe('Bekräfta att kontot ska skapas'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att skapa kontot'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse(`create account ${fields.Number}`, { Account: fields });
+      if (!confirm) requireConfirmation(`create account ${fields.Number}`);
+      const data = await createAccount(fields);
+      return detailResponse(data, accountListColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_account',
+    'Uppdatera ett konto i Fortnox',
+    {
+      number: AccountNumberSchema.describe('Kontonummer att uppdatera'),
+      ...AccountWritableFields,
+      confirm: z.boolean().optional().describe('Bekräfta att kontot ska uppdateras'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera kontot'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ number, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse(`update account ${number}`, { Account: fields });
+      if (!confirm) requireConfirmation(`update account ${number}`);
+      const data = await updateAccount(number, fields);
+      return detailResponse(data, accountListColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_account',
+    'Ta bort ett konto i Fortnox',
+    {
+      number: AccountNumberSchema.describe('Kontonummer att ta bort'),
+      confirm: z.boolean().optional().describe('Bekräfta att kontot ska tas bort'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att ta bort kontot'),
+    },
+    async ({ number, confirm, dryRun }) => {
+      if (dryRun) return dryRunResponse(`delete account ${number}`);
+      if (!confirm) requireConfirmation(`delete account ${number}`);
+      await deleteAccount(number);
+      return textResponse(`Account ${number} deleted.`);
+    },
+  );
+
+  server.tool(
     'fortnox_attach_voucher_files',
     'Ladda upp kvitto/underlagsfiler och koppla dem till en verifikation i Fortnox',
     {
@@ -319,13 +358,44 @@ export function registerBookkeepingTools(
     async ({ fileId, outputPath, overwrite }) => {
       const file = await getVoucherFile(fileId);
       const ext = extensionForMime(file.contentType);
-      const target = outputPath
-        ? resolve(outputPath)
-        : join(mkdtempSync(join(tmpdir(), 'noxctl-')), `voucher-file-${fileId}${ext}`);
-      writeBinaryFile(target, file.buffer, overwrite);
+      const target = writeBinaryFile(
+        outputPath ?? privateOutputPath('noxctl-', `voucher-file-${fileId}${ext}`),
+        file.buffer,
+        overwrite,
+      );
       return textResponse(
         `Sparade fil (${file.contentType}, ${file.buffer.length} bytes) till ${target}`,
       );
+    },
+  );
+
+  server.tool(
+    'fortnox_get_voucher_file_connection',
+    'Hämta metadata för en filkoppling till en verifikation i Fortnox',
+    {
+      fileId: z.string().describe('Fil-ID'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ fileId, includeRaw }) => {
+      const connection = await getVoucherFileConnection(fileId);
+      return detailResponse(connection, voucherAttachmentColumns, connection, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_voucher_file_connection',
+    'Koppla loss en fil från en verifikation i Fortnox',
+    {
+      fileId: z.string().describe('Fil-ID'),
+      confirm: z.boolean().optional().describe('Bekräfta bortkopplingen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att koppla loss'),
+    },
+    async ({ fileId, confirm, dryRun }) => {
+      const target = `delete voucher file connection ${fileId}`;
+      if (dryRun) return dryRunResponse(target);
+      if (!confirm) requireConfirmation(target);
+      await deleteVoucherFileConnection(fileId);
+      return textResponse(`Voucher file connection ${fileId} deleted.`);
     },
   );
 }

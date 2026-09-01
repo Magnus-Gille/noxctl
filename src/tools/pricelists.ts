@@ -12,6 +12,7 @@ import {
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
 
 export function registerPriceListTools(
@@ -25,7 +26,9 @@ export function registerPriceListTools(
     updatePriceList,
     listPrices,
     getPrice,
+    createPrice,
     updatePrice,
+    deletePrice,
   } = operations;
   server.tool(
     'fortnox_list_pricelists',
@@ -119,7 +122,7 @@ export function registerPriceListTools(
     'fortnox_list_prices',
     'Lista priser i en prislista i Fortnox. Returnerar: ArticleNumber, Price, FromQuantity, Percent.',
     {
-      priceListCode: z.string().describe('Prislistekod'),
+      priceListCode: z.string().optional().describe('Prislistekod; utelämna för alla priser'),
       articleNumber: z.string().optional().describe('Filtrera på artikelnummer'),
       page: z.number().optional().describe('Sidnummer (default 1)'),
       limit: z.number().optional().describe('Antal per sida (default 100, max 500)'),
@@ -148,6 +151,27 @@ export function registerPriceListTools(
     },
     async ({ priceListCode, articleNumber, fromQuantity, includeRaw }) => {
       const data = await getPrice(priceListCode, articleNumber, fromQuantity);
+      return detailResponse(data, priceDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_create_price',
+    'Skapa ett pris i Fortnox',
+    {
+      PriceList: z.string().describe('Prislistekod'),
+      ArticleNumber: z.string().describe('Artikelnummer'),
+      FromQuantity: z.number().optional().describe('Från antal'),
+      Price: z.number().optional().describe('Pris'),
+      Percent: z.number().optional().describe('Rabatt i procent'),
+      confirm: z.boolean().optional().describe('Bekräfta att priset ska skapas'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att skapa priset'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse('create price', { Price: fields });
+      if (!confirm) requireConfirmation('create price');
+      const data = await createPrice(fields);
       return detailResponse(data, priceDetailColumns, data, includeRaw);
     },
   );
@@ -184,6 +208,25 @@ export function registerPriceListTools(
 
       const data = await updatePrice(priceListCode, articleNumber, fields, fromQuantity);
       return detailResponse(data, priceDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_price',
+    'Ta bort ett kvantitetspris från Fortnox',
+    {
+      priceListCode: z.string().describe('Prislistekod'),
+      articleNumber: z.string().describe('Artikelnummer'),
+      fromQuantity: z.number().describe('Från antal'),
+      confirm: z.boolean().optional().describe('Bekräfta borttagningen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att ta bort'),
+    },
+    async ({ priceListCode, articleNumber, fromQuantity, confirm, dryRun }) => {
+      const target = `delete price ${priceListCode}/${articleNumber}/${fromQuantity}`;
+      if (dryRun) return dryRunResponse(target);
+      if (!confirm) requireConfirmation(target);
+      await deletePrice(priceListCode, articleNumber, fromQuantity);
+      return textResponse(`Price ${priceListCode}/${articleNumber}/${fromQuantity} deleted.`);
     },
   );
 }

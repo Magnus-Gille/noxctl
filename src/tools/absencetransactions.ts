@@ -17,7 +17,9 @@ export function registerAbsenceTransactionTools(
   const {
     listAbsenceTransactions,
     getAbsenceTransaction,
+    getAbsenceTransactionByDateCode,
     createAbsenceTransaction,
+    updateAbsenceTransaction,
     deleteAbsenceTransaction,
   } = operations;
   server.tool(
@@ -48,10 +50,17 @@ export function registerAbsenceTransactionTools(
     'Hämta en enskild frånvarotransaktion från Fortnox (kräver Lön-behörigheten).',
     {
       id: z.string().describe('id (UUID) för frånvarotransaktionen'),
+      date: z.string().optional().describe('Datum för sammansatt Fortnox-nyckel (YYYY-MM-DD)'),
+      code: z.string().optional().describe('Frånvarokod för sammansatt Fortnox-nyckel'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ id, includeRaw }) => {
-      const data = await getAbsenceTransaction(id);
+    async ({ id, date, code, includeRaw }) => {
+      if ((date && !code) || (code && !date))
+        throw new Error('date and code must be supplied together');
+      const data =
+        date && code
+          ? await getAbsenceTransactionByDateCode(id, date, code)
+          : await getAbsenceTransaction(id);
       return detailResponse(data, absenceTransactionDetailColumns, data, includeRaw);
     },
   );
@@ -109,6 +118,32 @@ export function registerAbsenceTransactionTools(
 
       await deleteAbsenceTransaction(id);
       return textResponse(`Absence transaction ${id} deleted.`);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_absencetransaction',
+    'Uppdatera en frånvarotransaktion i Fortnox (kräver Lön-behörigheten).',
+    {
+      id: z.string().describe('id (UUID) för frånvarotransaktionen'),
+      EmployeeId: z.string().optional(),
+      CauseCode: z.string().optional(),
+      Date: z.string().optional(),
+      Hours: z.number().optional(),
+      Extent: z.number().optional(),
+      HolidayEntitling: z.boolean().optional(),
+      CostCenter: z.string().optional(),
+      Project: z.string().optional(),
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ id, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun)
+        return dryRunResponse(`update absence transaction ${id}`, { AbsenceTransaction: fields });
+      if (!confirm) requireConfirmation(`update absence transaction ${id}`);
+      const data = await updateAbsenceTransaction(id, fields);
+      return detailResponse(data, absenceTransactionDetailColumns, data, includeRaw);
     },
   );
 }

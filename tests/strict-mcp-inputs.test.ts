@@ -106,7 +106,7 @@ describe('strict MCP tool inputs', () => {
     }
   });
 
-  it('preserves additional fields in the intentional contract-row passthrough', async () => {
+  it('rejects additional fields in structured contract rows', async () => {
     const { client } = await setupClientServer();
 
     const result = await client.callTool({
@@ -125,7 +125,6 @@ describe('strict MCP tool inputs', () => {
       },
     });
 
-    expect(result.isError).not.toBe(true);
-    expect(textOf(result)).toContain('"FutureFortnoxField": "bevaras"');
+    expect(result.isError).toBe(true);
   });
 });

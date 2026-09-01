@@ -182,6 +182,19 @@ export function createVoucherOperations(transport: FortnoxTransport) {
     return data.VoucherFileConnection;
   }
 
+  async function getVoucherFileConnection(fileId: string): Promise<Record<string, unknown>> {
+    const data = await transport.request<VoucherFileConnectionResponse>(
+      `voucherfileconnections/${encodeURIComponent(fileId)}`,
+    );
+    return data.VoucherFileConnection;
+  }
+
+  async function deleteVoucherFileConnection(fileId: string): Promise<void> {
+    await transport.request(`voucherfileconnections/${encodeURIComponent(fileId)}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Resolve the financial year from the voucher's transaction date when not given.
   // Throws (rather than silently leaving the year undefined) when it can't be
   // determined, so the user knows to pass --year explicitly — e.g. for a voucher
@@ -296,6 +309,8 @@ export function createVoucherOperations(transport: FortnoxTransport) {
     createVoucher,
     uploadInboxFile,
     createVoucherFileConnection,
+    getVoucherFileConnection,
+    deleteVoucherFileConnection,
     attachVoucherFiles,
     listVoucherAttachments,
     getVoucherFile,
@@ -309,6 +324,8 @@ export const {
   createVoucher,
   uploadInboxFile,
   createVoucherFileConnection,
+  getVoucherFileConnection,
+  deleteVoucherFileConnection,
   attachVoucherFiles,
   listVoucherAttachments,
   getVoucherFile,

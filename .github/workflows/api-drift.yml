@@ -90,6 +90,10 @@ jobs:
             echo "error=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Check implementation coverage
+        if: steps.diff.outputs.error != 'true' && steps.schema_audit.outputs.error != 'true'
+        run: npm run audit:api-coverage --silent
+
       - name: Commit updated snapshot
         if: steps.diff.outputs.changed == 'true'
         run: |

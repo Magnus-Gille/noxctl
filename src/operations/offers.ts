@@ -92,6 +92,37 @@ export function createOfferOperations(transport: FortnoxTransport) {
     return data.Order;
   }
 
+  async function runOfferAction(
+    documentNumber: string,
+    action: 'cancel' | 'externalprint',
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<OfferResponse>(
+      `offers/${documentSegment(documentNumber)}/${action}`,
+      { method: 'PUT' },
+    );
+    return data.Offer ?? {};
+  }
+
+  const cancelOffer = (documentNumber: string) => runOfferAction(documentNumber, 'cancel');
+  const externalPrintOffer = (documentNumber: string) =>
+    runOfferAction(documentNumber, 'externalprint');
+
+  async function emailOffer(documentNumber: string): Promise<Record<string, unknown>> {
+    const data = await transport.request<OfferResponse>(
+      `offers/${documentSegment(documentNumber)}/email`,
+      { mutation: true },
+    );
+    return data.Offer ?? {};
+  }
+
+  async function getOfferPdf(
+    documentNumber: string,
+    mode: 'preview' | 'print' = 'preview',
+  ): Promise<Buffer | undefined> {
+    const path = `offers/${documentSegment(documentNumber)}/${mode}`;
+    return mode === 'print' ? transport.requestPdfFromMutation(path) : transport.requestPdf(path);
+  }
+
   return {
     listOffers,
     getOffer,
@@ -99,6 +130,10 @@ export function createOfferOperations(transport: FortnoxTransport) {
     updateOffer,
     createInvoiceFromOffer,
     createOrderFromOffer,
+    cancelOffer,
+    emailOffer,
+    externalPrintOffer,
+    getOfferPdf,
   };
 }
 
@@ -109,4 +144,8 @@ export const {
   updateOffer,
   createInvoiceFromOffer,
   createOrderFromOffer,
+  cancelOffer,
+  emailOffer,
+  externalPrintOffer,
+  getOfferPdf,
 } = createOfferOperations(defaultFortnoxTransport);

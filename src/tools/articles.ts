@@ -7,13 +7,14 @@ import {
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
 
 export function registerArticleTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listArticles, getArticle, createArticle, updateArticle } = operations;
+  const { listArticles, getArticle, createArticle, updateArticle, deleteArticle } = operations;
   server.tool(
     'fortnox_list_articles',
     'Lista/sök artiklar i Fortnox. Returnerar: ArticleNumber, Description, SalesPrice, Unit, Active.',
@@ -109,6 +110,26 @@ export function registerArticleTools(
 
       const data = await updateArticle(articleNumber, fields);
       return detailResponse(data, articleDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_article',
+    'Ta bort en artikel i Fortnox',
+    {
+      articleNumber: z.string().describe('Artikelnummer att ta bort'),
+      confirm: z.boolean().optional().describe('Bekräfta att artikeln ska tas bort'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Visa vad som skulle göras utan att ta bort artikeln'),
+    },
+    async ({ articleNumber, confirm, dryRun }) => {
+      if (dryRun) return dryRunResponse(`delete article ${articleNumber}`);
+      if (!confirm) requireConfirmation(`delete article ${articleNumber}`);
+
+      await deleteArticle(articleNumber);
+      return textResponse(`Article ${articleNumber} deleted.`);
     },
   );
 }

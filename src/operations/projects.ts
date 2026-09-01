@@ -63,8 +63,12 @@ export function createProjectOperations(transport: FortnoxTransport) {
     return data.Project;
   }
 
-  return { listProjects, getProject, createProject, updateProject };
+  async function deleteProject(projectNumber: string): Promise<void> {
+    await transport.request(`projects/${encodeURIComponent(projectNumber)}`, { method: 'DELETE' });
+  }
+
+  return { listProjects, getProject, createProject, updateProject, deleteProject };
 }
 
-export const { listProjects, getProject, createProject, updateProject } =
+export const { listProjects, getProject, createProject, updateProject, deleteProject } =
   createProjectOperations(defaultFortnoxTransport);

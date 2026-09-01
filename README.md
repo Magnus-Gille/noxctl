@@ -31,6 +31,20 @@ no shared credential and no backend operated by this project.
   Secret Service, or a DPAPI-protected Windows store.
 - **Multiple companies:** named profiles keep Fortnox tenants separate.
 
+### API coverage boundary
+
+noxctl tracks the complete published Fortnox operation inventory in an opaque,
+privacy-safe implementation manifest. Every family is classified as complete,
+partial, excluded, or blocked, and implemented families are verified against actual
+operation exports, discovered MCP tools, and CLI commands.
+
+The open-source core deliberately excludes separate product domains such as warehouse
+management, partner onboarding/KYC, integration-marketplace administration, and the
+standalone time-reporting API. Shared reference/configuration resources are read-first:
+their reads are supported, while writes are explicitly excluded from the v1 core.
+Remote URL attachment connections are also excluded because they introduce a separate
+remote-fetch trust boundary. These are product-boundary decisions, not hidden gaps.
+
 ## Quick start
 
 You need Node.js 22.12+, a Fortnox account with API access, and your own Fortnox
@@ -377,6 +391,8 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl supplier-invoices get <givenNumber>` | `fortnox_get_supplier_invoice` | Get a single supplier invoice |
 | `noxctl supplier-invoices create --supplier <n> --input <file>` | `fortnox_create_supplier_invoice` | Create a supplier invoice (mutation) |
 | `noxctl supplier-invoices bookkeep <givenNumber>` | `fortnox_bookkeep_supplier_invoice` | Bookkeep a supplier invoice (mutation) |
+| `noxctl supplier-invoices attachments <givenNumber>` | `fortnox_list_supplier_invoice_attachments` | List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too, read-only, default scopes only |
+| `noxctl supplier-invoices file <fileId> [-f <path>]` | `fortnox_get_supplier_invoice_file` | Download a file attached to a supplier invoice (get `fileId` from `supplier-invoices attachments`) — read-only, default scopes only |
 
 ### Supplier invoice payments (utbetalningar)
 
@@ -495,6 +511,44 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl financial-years list [--date <date>]` | `fortnox_list_financialyears` | List financial years (räkenskapsår) |
 | `noxctl financial-years get <id>` | `fortnox_get_financialyear` | Get a single financial year |
 | `noxctl financial-years locked-period` | `fortnox_get_lockedperiod` | Show through which date bookkeeping is locked |
+
+### Reference and setup data (read-only)
+
+The following command groups expose `list` and, where Fortnox provides it, `get` in
+both CLI and MCP: `currencies`, `units`, `modes-of-payments`,
+`terms-of-deliveries`, `terms-of-payments`, `ways-of-delivery`, `voucher-series`,
+`predefined-voucher-series`, `account-charts`, `predefined-accounts`, and
+`customer-references`.
+
+```bash
+noxctl currencies list
+noxctl terms-of-payments get 30
+noxctl account-charts list
+```
+
+### Accruals (periodiseringar)
+
+| CLI group | MCP tool prefix | Operations |
+|---|---|---|
+| `noxctl invoice-accruals` | `fortnox_*_invoice_accrual` | list, get, create, update, delete |
+| `noxctl supplier-invoice-accruals` | `fortnox_*_supplier_invoice_accrual` | list, get, create, update, delete |
+| `noxctl contract-accruals` | `fortnox_*_contract_accrual` | list, get, create, update, delete |
+
+Every mutation supports confirmation and dry-run preview. Nested accrual rows are
+strict and validated before any request is sent.
+
+### Archive, inbox, and cross-document attachments
+
+| CLI group | MCP surface | Purpose |
+|---|---|---|
+| `noxctl archive` | `fortnox_*_archive*` | List/download, multipart upload, delete path/entry |
+| `noxctl inbox` | `fortnox_*_inbox*` | List, multipart upload, safe download, delete |
+| `noxctl attachments` | `fortnox_*_document_attachment*` | Attach/list/count/validate/update/detach for invoices, offers, orders, and contracts |
+
+Voucher and supplier-invoice file connections additionally expose get/connect/detach
+commands under their existing CLI groups. Binary downloads default to a private
+temporary directory, use mode `0600`, refuse symlink targets and accidental overwrite,
+and only replace an existing regular file when `--overwrite` is explicit.
 
 ### Payroll (Lön)
 
@@ -671,7 +725,8 @@ npm run test:watch   # watch mode
 npm run lint         # ESLint with typescript-eslint
 npm run format       # format
 npm run check:api    # refresh the git-ignored OpenAPI cache and detect API drift
-npm run audit:schemas # compare selected MCP write schemas with the local cache
+npm run audit:schemas # inventory and recursively audit every mutating MCP input
+npm run audit:api-coverage # verify the full operation inventory and implementation evidence
 ```
 
 ## Architecture

@@ -1,0 +1,2086 @@
+{
+  "formatVersion": 1,
+  "families": [
+    {
+      "id": "company-order-bank-process-api-companyorderbankprocess",
+      "tagHash": "d6dee35428a2cb1873e653c00151ed89a9a02172966e64d5961e185157712e6a",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "07e67569fdc68de4c3fdbaa2e175df8d9e133a045ae61444cd01a43e060f634c",
+          "1e75dac6dfa7b5b4b16377c3ed70f29e631396f0977a827ad248ab0505ce9481",
+          "3a67adb25501091993c5aef222fa08d10dbc57611d53de807b0a8342244710e2",
+          "86e0f7c57004e07d39fa582c0a9c7b1dfb189eab0facab02bbe801da6aa2e74a",
+          "8f208effeda050b38e1f1f35f2f1e736c8be1012cebfacf61de4d501686b8fe9",
+          "a14a116ea858def1965f799fae9b79ea3f790cc6e27e7375e9886b73dcc02c4b",
+          "b13655322410dd7c0b58846f1836685bcf00f69bb5d8a83da82090179e69294a",
+          "b48a2631ab5cc0ab4319335abf4009d246d3c9ac8895c04d19f14fa59ab41913"
+        ]
+      },
+      "rationale": "Bank onboarding and company-order processes are privileged onboarding workflows outside the local core."
+    },
+    {
+      "id": "company-order-bank-process-api-startcompanyorderbankprocess",
+      "tagHash": "040c410f624624b5107275ee1ffdc87a69f4f29b043233ea7c96a4b4e80b3bfb",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "00fb322aea39cf0dcb99468456ae13b5f0321564ca33d4724ed5a23c84e8fd0c",
+          "302dcb15dd69f575d8b685c49ea07e305b3487b7f44958f5356c34de7d65da52",
+          "45b8c06ca102da0272f664f02bdc87c43641c5777b259096506ace34ccd9d593",
+          "4c92b1c05bb6179ced1c91b7bc1f35c0d3c82a6052f1d2d2e2cb8cb9cf72c973",
+          "642da3801a7717e475689caf46add543aab1c513fc5b12ae406256ce3b6f9ad9",
+          "e90103d476458fa0de15cb0f2f4f19b34e47a101bf406918d6c38773f8282173"
+        ]
+      },
+      "rationale": "Bank onboarding and company-order processes are privileged onboarding workflows outside the local core."
+    },
+    {
+      "id": "company-order-bank-process-webhook-api-bankprocesswebhook",
+      "tagHash": "cb4687ce6306424097fb1db1a8e2fa0f8c9d3ac4c83bc22cf045cb33eeb380b2",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "0615bab8c98cdb4b287dfd4a94e30ad56627a94b31d99b1910b7dbf6ca68da64",
+          "1fee8fc532c970486a73271d03d21bd4468d3a0f1c40e8737bf85846a6bc194b",
+          "c1426c7dae3a31aca70984561bc87d1435db9b052857355a479427fd5478e6b6",
+          "c8a9909120fe734db0fbb90281661b30847a241cb9bde9a4d52f8dfc44e67f88",
+          "f12098179189acc1a290aa27d5fa35a1dd8fef032a79ce7a3e7d6f053ff8ca9d",
+          "fe884a0a54803b2c93be94e1952ed24f2e7bdb8cf0bc84e718639b514f7c1ebf"
+        ]
+      },
+      "rationale": "Bank onboarding and company-order processes are privileged onboarding workflows outside the local core."
+    },
+    {
+      "id": "fileattachments-attachment",
+      "tagHash": "49ce84af943fea37b7d7c53a56cc84aab9ba5c96150bef146c3aa99df6edab8a",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "0547354a41fdb1c91eb2dd1ad3be20dd7a3863c8cef093b30571492427d6881b",
+          "0a353a0b4de271098f7c6d8175f92c73e954fb47f1882ac5078c2f1420d6c131",
+          "4e706b6c2b879662a7ccda46e80059b69c33fa9384c5d07cf896051405d9b9ca",
+          "63bb898d9d44befe8c5d5371886e54bd1fc2b1b3316e010fc9cd6a5a79b9aae3",
+          "a99ec989d26420f50e37e6537ed9a352f5d9302e0ef861db16e35ad3f5f3a61a",
+          "eb4afefcef3fd63834e5815f7de53a372395e74b8b345fb89c78420e91b61622"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listDocumentAttachments"
+        ],
+        "mcpTools": [
+          "fortnox_list_document_attachments"
+        ],
+        "cliCommands": [
+          [
+            "attachments",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-absencetransactions",
+      "tagHash": "85f5a5a208f52705b7897ec316d5c4b88a7dd5f7e59922ac3c2c48315b68bed3",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "10db035ffa01a8870bb3dd7fa8de607db25f3300b275f1a7e40031208a1b7e0d",
+          "7826a88f7f216a1936267900342487796a00efbb929b1691cd40d71c0f959624",
+          "a4007d9b6989e67199fc1e20f60123ed8450ec09ce889a6203724bb47c104307",
+          "a82425817dfec2ac71eddf6d41350dfe37a62c60458f39d8727ad6c2a844de80",
+          "b7fe1a9e301245532ee2f8738627232d95433def98ed00e3c5f0dc974b0c9a44",
+          "f8988e6f9cfb7094a2be1376477e64ba0e379870ce4f0d7e026feea9129b76e6"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listAbsenceTransactions"
+        ],
+        "mcpTools": [
+          "fortnox_list_absencetransactions"
+        ],
+        "cliCommands": [
+          [
+            "absence-transactions",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-accountcharts",
+      "tagHash": "8c52e39bc82f689584cd0c556b35a5965f9a969c6f8d7d360f359e4df591b86f",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "d209c97496c94ce4bbdad70209c562167cb8bc8814cde7650423a02a26e30b9d"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listAccountCharts"
+        ],
+        "mcpTools": [
+          "fortnox_list_account_charts"
+        ],
+        "cliCommands": [
+          [
+            "account-charts",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-accounts",
+      "tagHash": "25cb61196675fe99101fcaa13f48e8fdf3fd735927606cf0958119a449d762cc",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "0afcbd07be5cfd5afe1be558cf7511ba924d319b9d60f07e931aa8a6dd94ebdc",
+          "2ec9cf2b85ba8ca08780f992b8dac92dd9c8fa1854cbc606f17af6cca2b1f44d",
+          "708e69e5d064b7ed6525944bb9bcd8bef2fe6c87e2ac63d05d5506932f28bb50",
+          "89e0b561680d3b2d9fead0aeed418af7891ea69e88d01a240c81bbd71d55cdbf",
+          "f6c31c71fb26ca09fa28d7988a90937f4dd3b17ea0e7d0886544638d8a6ea1dd"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listAccounts"
+        ],
+        "mcpTools": [
+          "fortnox_list_accounts"
+        ],
+        "cliCommands": [
+          [
+            "accounts",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-archive",
+      "tagHash": "e7255667738dcdc873695f86fb993d8c0ee16e22f77d261698b9f2bec358aec0",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "199cce47b138d222105cc5b63a8a2acd812b6c5f894f164b8b20a1d8decc3450",
+          "8ed57af83d02bd838edbd652a3f030be8d8dc28f14dd22f62d5bb34b1a546f7d",
+          "923ae805985a2cc9852d3c4beedbf42cb623f835528a9ef9bebb4a83e5c2c771",
+          "a2c951c74416c21fdb79e83395b234f7f172a6c0ecf2682819bd2d6c9cb3c7bc",
+          "c939d95f8128427ec66f35877cc9740180186db81f480d506651bb2d789f8a47"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listArchive"
+        ],
+        "mcpTools": [
+          "fortnox_list_archive"
+        ],
+        "cliCommands": [
+          [
+            "archive",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-articlefileconnections",
+      "tagHash": "514a6f588c21942199514185749cf11c39f86644f4754fa0469128670923af8c",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "2d98a8cf029ec0450a06444c7b23cce9bd93bc1f7c6f8ce6a851fae876fb729c",
+          "50a2d228e917042e6ef4c892c41687930106be4bed7fc7721904769468443b9b",
+          "68ff77e214a60b17f005eee5fdb1a5083bad4dbbec78dcb86df7cc2f0d7d5890",
+          "cb9d9a4a78380579a09610d8138f6ecd5b9b8391d891c5119bb6fd14aca81a72"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-articles",
+      "tagHash": "954a7f57b5a6fb81be9a13805147c4ca96ad78231e91911354396c93c82c3bbb",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "14471aaf6a0cbdf871e02b1e574d12b2511287dcaf6d940368d63a5ddf46fa78",
+          "3d37a1d93b2e627266e54a7f0a2f65423f5c45cce131a6ca8e77122bc8c052e8",
+          "3dd4550cbebcebd09888085285f1a07ed1abe9f096033f4530e1bad96794f547",
+          "dbfe59d810117a1657b98ac255d663ae7d760a9833081bcfdabf5d8996e5ffe6",
+          "f19f4c34a5c411c4de53ed9f3b848b00f61397f420040fc39b42ef36be617383"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listArticles"
+        ],
+        "mcpTools": [
+          "fortnox_list_articles"
+        ],
+        "cliCommands": [
+          [
+            "articles",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-articleurlconnection",
+      "tagHash": "ec636e332b6bd39bd46c3cb70a4458b5ac089d738efe14d9d801db088974a8e7",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "40fb57dd393bd9bdeb2b5384c43481d96e1e897cc2691c82cc7c7b33554fba6f",
+          "5777aad1e3fc1810a78643276e4e29abd96949f63045d536fa98e41e7b93af20",
+          "6e91f375943a7167b694b17d849afc5b3860710eed3d86913b0f563bd761cae6",
+          "be4e820b58c26889569267156c120a797149b1f78ff0b74cb97c68db476187fa"
+        ]
+      },
+      "rationale": "Remote URL attachment connections are excluded to avoid introducing an arbitrary remote-fetch trust boundary."
+    },
+    {
+      "id": "fortnox-articleurlconnections",
+      "tagHash": "9c1414b78aaca8b87f59b85f3f8732755c1dffa0509965ad95c6f02033e29d2b",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "b015c9164188a24775077f5b9e1c9c211a8a39700d27475c0ce46ab5309b0a87"
+        ]
+      },
+      "rationale": "Remote URL attachment connections are excluded to avoid introducing an arbitrary remote-fetch trust boundary."
+    },
+    {
+      "id": "fortnox-assetfileconnection",
+      "tagHash": "3ec44f85556b60cae7540efb52c7953176fd7a1f02baa265977faf2587578e71",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "184d47db5f50333aa4ff48e54fffe830943e017a2d0e2dc50449e9c397ca2f07",
+          "3eb4556ce843c5862c5f8e27b1d5a0b1557b757f4ec0ed6e62a42b092a1a65de",
+          "bd9c00ea8b95e7d634456b49bddff854922cd54b7bdc9363387d88cc10f3843b"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-assets",
+      "tagHash": "65d4236ea8be82f854d9cb2ecd0874c9b56dfca82628f3d25f1bba88daf8b589",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "1f1d5f21ce2dd53d4bb1c3c5a1db127f86d4b4f2aa67cfdb87d1c068df643558",
+          "25eac60612c36c57acd20159c783187734d8ee34eda3b5f4d97206996dd1eaa7",
+          "44dc5ee886292dd21b799074e0d703f919f93277e954786b022cc551fc7812ea",
+          "70c968c54cefad703931fbca6c920bef5edf2668249eea8530c4e4bacd237cc6",
+          "80cee6ddc2fb7672a979555613742fec07a75711f2102922cbb989dd23a1257f",
+          "87a97c569fb30eaad24ae097b08ee27de6356d4a7496f7462bde671207ecebfa",
+          "8e6e2c476a9394017f85c6512f5e604c45ba47d42174ba344d69ed872cdca229",
+          "a5721c554539166259aa0ffeecbf5eca34d19930bd720afeadf28b794d34c371",
+          "a76cd48680cc21c055ca101f88c3260a48321d23bf50ac89e32b445093333c83",
+          "ba8df91427615615c1aa6e785848e94f698a2138188dbc9d91543780938989cc",
+          "d64b2d0f3e77a6a880b4983d93506754fa65c552bf33f713ea31f7fffac85135",
+          "f008ada0775866b8f4750e0eaa221be4ef6988201edc7aa84bb20f5cbc240d6a"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-assettypes",
+      "tagHash": "abd1f717f169bdb94fd0b9878f9b48ed958e3897f3e21d9394ce31d2f9ccc9b5",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "0ace994f8b856e118cf4f2e7eebd499832cc2667def6b677006d9b56ac24f982",
+          "24232636d8a2036bbc387a6da7a8af205074e88e426d3d76c75a01b79670b966",
+          "39890b4d931096eafa22a609c6726490937bb6f1595a06a1f572ce52cabed61f",
+          "8870023652d9d40c791d6e98312f7d25b2be425b33d9cbcd8830124e7c6ce0f2",
+          "bb7587569095e3303e65c11e4c026102440f83af340b254b9de9f5dab987c6da"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-attendancetransactions",
+      "tagHash": "0f50d4436e3e3d0e5432d1e0324360f618aa168132090cf5cc4149706e127988",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "28e2faf5abd29d4680094d97d9e395548bc53b29ac703089c391e9a9071e23a5",
+          "4fadebba5a844950c943aa9432b24e787e5c490db62ae4d17b970c141fa3fa2d",
+          "b83376feef6aa977be104a2c81b8459d12df11999894c9053b9486ff40bd5f4c",
+          "bdf8261526319ee63406682f6abfab176736ed0746befb0257d83c2275397181",
+          "e8c68e9a8e4e976ac239cdecc7a308f94a2f8b7a77d9062eff8a3bfbffc28de9",
+          "ea656fa54df8062a7a19631a1a56806c28b80b6d32d05b1ccda4fab7f93569a9"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listAttendanceTransactions"
+        ],
+        "mcpTools": [
+          "fortnox_list_attendancetransactions"
+        ],
+        "cliCommands": [
+          [
+            "attendance-transactions",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-companyinformation",
+      "tagHash": "e54a5ef2be2bcba0ca9a70e9fcb37eeba0b874cd47901b10b012af3aef5f6d1e",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "04fb390ef78b839fbbb66dddc092d4c6a77dab13021a81ced7c1a7e15abf5acb"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "getCompanyInfo"
+        ],
+        "mcpTools": [
+          "fortnox_company_info"
+        ],
+        "cliCommands": [
+          [
+            "company",
+            "info"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-companysettings",
+      "tagHash": "9e8b0b01c1067e03fdd205f3b9ecb6a27493cb13b9a8f075a5669daf89ce6072",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "a3fcef131aa4e14fc48bc081dad044afd605cbe7394884e0ba3ce23d6348952f"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-contractaccruals",
+      "tagHash": "631a75844dc39f8824902f7184e0a05b568d5771b9689e14a7a1da0d80e280e2",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "53ac318d9e2e5353e3d412b988f680c2c58a2d170416ab9f3a56bc44b31dc5c8",
+          "6461268756ef6026f9480cb4d28dac02f8c08b916ca436e7a2c3d369ed749357",
+          "8984ae8863e56eb47335f9171d6bd66da7fddd0be7181b919a2322e4de427dbb",
+          "cc5909f10ad7dc1f9e849966b3c9825f212e271a7edf8acd8d7cf41cb4144c72",
+          "df46dfa971aa3b8b78a8e1c6e821a98c844d3a68552571ff4b338f75c7011c5a"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listContractAccruals"
+        ],
+        "mcpTools": [
+          "fortnox_list_contract_accruals"
+        ],
+        "cliCommands": [
+          [
+            "contract-accruals",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-contracts",
+      "tagHash": "5369acdfce28887b9878a3b00c23cbc7766f2da1d19c8418bb05d9b8f0381086",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "17b8d44b108b2588fe246870b80e4256ae1149566228cbe7bbd86f41cf44c3b6",
+          "1f14afedb334329c4203ba04bfe83b0a1b34f172c9d8ecae4fe3627880ba0527",
+          "314c7818f4678589836da56ee9f18535b0b0fa7a7c0a2c275ae0777c8cd404c0",
+          "45140895f263a1103539b56c4c445765d1cac5f695c545a7dde4064912b02829",
+          "a9b96c5094bf111d25283dd4ddf35d5c8085ad79b284eeb5e2e4efa4fb28b58c",
+          "b38b7f82cc5c177609b415a2ee036867cfadaffc6fcee1848972381499eea979",
+          "e1a023d7517d76e36cb1ae3a00e32c043e63df42132b99e47c367bd401d8714d"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listContracts"
+        ],
+        "mcpTools": [
+          "fortnox_list_contracts"
+        ],
+        "cliCommands": [
+          [
+            "contracts",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-contracttemplates",
+      "tagHash": "d83caaf5db3a182680c5be8a6277e3bf030678761ff41508e0f31336efda0c6d",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "537a7e5ce90ac63dfe027d565fd8bd4c5fed3e176be52ca500b0d38da33f55a8",
+          "574f05ac58ef4376298d696ee361c259e2b2aaba57677ca7bc15ec9e1c58f31c",
+          "6f3eddd5c34b9577c4c7520f4beb06e95cba561515ae10a193fb4df36eec1f16",
+          "78f1af1e71d478d4f8a8ef0a3a94a1505998137478a272606ca4522ac6ec2ef8"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-costcenters",
+      "tagHash": "65f757bb4ea3227b95972a6b922759b1d665aec8ef7a01dbc4a02414ccf4a0d9",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "0dd73f8985c91e9bf535ba0da5ee56cdee2565959289ea24788835d5d78d2d79",
+          "2390a11d8993073e0ba8ef1317aae1508697001b56957a9151b8c07f16fc0eb4",
+          "46b225724d2e73c8541d8bc007ec32535c18f1a54bbf05f115daebe5160721b1",
+          "760339f71f387c107eaa9dcad6796637c8342cfb2e0a726655f2f57662ee8ee1",
+          "8e4b19fd2dfda52769256717955fbc37b1b6a1de76a8e64d6d2a05e7c19256cd"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listCostCenters"
+        ],
+        "mcpTools": [
+          "fortnox_list_costcenters"
+        ],
+        "cliCommands": [
+          [
+            "costcenters",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-currencies",
+      "tagHash": "72b0d1d2a04d8c671ff4a26ebe8eec686f983c3eb2410ac391a83f29fe3b2271",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "6f61226e4030038336bc0b61327df089e95d2bd6d37222692de1df73b2bfbfff",
+          "d1fee5647415ea4c1e4f642be900b0ee326b7665186f1620aa7ef234228ec3dc"
+        ],
+        "missing": [],
+        "excluded": [
+          "6ac749db29d23fc2f02aa2e15dedff9fdc8aee515c8e485998b994458df88077",
+          "7df178af48e123a5947aa37551644c8a7d8a94eb60bdea12cf4c6f0b51a19238",
+          "82799e49a7a93f7b3543d15318015860ac204156851ff7189560398c5182eff3"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listCurrencies"
+        ],
+        "mcpTools": [
+          "fortnox_list_currencies"
+        ],
+        "cliCommands": [
+          [
+            "currencies",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-customerreferences",
+      "tagHash": "9d7e128f2276fe07b9adf9090b7723718ee43106e082670bd81e29213800b129",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "1728519ce60fcd1c3d53fec2f1922d9e03c25d237229bdd6aaa5d8002db780c4",
+          "db98ba612503fb4461325a16bb2aab241c6c8126071b9735866b4aebf82d24e5"
+        ],
+        "missing": [],
+        "excluded": [
+          "3cd48816beaf9030088bb27876c75878fa3391d447aeef2ac2c14fd6a79151a4",
+          "b56601e726cab5f93c6e3e0b2860aca9c2ccf241d8bb4292afa9c405ab6a9044",
+          "ec3d4a73f2791f8e357dfc2af2e3844776810f1ca692d019ee362bd522807719"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listCustomerReferences"
+        ],
+        "mcpTools": [
+          "fortnox_list_customer_references"
+        ],
+        "cliCommands": [
+          [
+            "customer-references",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-customers",
+      "tagHash": "5050c9e5271ae1754c81eb6a805d0834ae045ef4515135fff58cc3d2fdc306a9",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "194b10e2ae04ecf36cb1ea139262ccd2d2713a6e949cb99cb3e15ae3bab8c273",
+          "9b280e3c4f3d193a319545ac63442d8ac6186bac9088d80ba881530650e5dcd3",
+          "a7a1ebc56b9e5bbefe784a22161e8d1c43bdc9bccbe9f5946e6496ba6e44272e",
+          "cb76c9af1c4c06f2af0aa16b55d776c3845046a6ac543e7c157c589f8d4e813a",
+          "f462afc2dca3bde3da4f4a63c291e0b2c3c93196a685724a74fa5afb62e91857"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listCustomers"
+        ],
+        "mcpTools": [
+          "fortnox_list_customers"
+        ],
+        "cliCommands": [
+          [
+            "customers",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-employees",
+      "tagHash": "1ac1b5824dc55d10fae003986ab919e267f1ae521c46af4b2fd978ba7fcdf5ec",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "738dddd10282c36ccd86b405e481d390be744204448511a9bc4c4c02c3810ced",
+          "80dd2ddc9d160ee5402a8411445445cb82d2ea058a70baa060b814ada1d678ef",
+          "a5bad2f57e43b65571adc6ca96606e13546e5e1d8dc13c6b2108f40b1b6f4ecd",
+          "d109d0ff4ad259d79a92531b0e21df66b214b3c4fbfdb9691ecb0d30fb1bd901"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listEmployees"
+        ],
+        "mcpTools": [
+          "fortnox_list_employees"
+        ],
+        "cliCommands": [
+          [
+            "employees",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-euvatlimitregulation",
+      "tagHash": "2a0d2b9868eca27e6fb106740007e213f1c229b07b4766e60970f2f5fbe398f5",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "c077a9aca6b16f404f114cd1c9e081e31f9707f79c33f21644388dde91e8999b"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-expenses",
+      "tagHash": "f0a29aeb859b575f6be101239a35ff18b8b43635d1ac76e470eabc0a61766bca",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "1ac84fbf7b977c909e06ad1190a990a46ad86ff2068ff532111cdcfe90e667c1",
+          "4cf581472f9c85b0940157a55d3a1886129c4cef735e5026ee3c7768d5fdef6c",
+          "dfec136397f65efc187be5eb496441ef6c24b36c0b25f4be564695d02c84eb01"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-financeinvoices",
+      "tagHash": "67b70b2c68c3aab7f617e0470e7a514ed21276471720b8bf1e705e7a870c093c",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "223a12b451e1349fce2b98bea76b81c1dc539bff6e87c3d09c463fd61b3e77d8",
+          "48e12404dede3e1e3f02d901c09c180eee0ba2c4427200fcbe12f808c391e147",
+          "5099ce41002fe83677ba299559bd670de369ba9ef403188ae5acdf87589ed5f1",
+          "6d7718f9f3f62fd4dc7b2b9bac82bf3d16052a244f013c0787a9361fff73822d",
+          "9c3325daf9049a9a0e137c0db1f791cc9de339bb63cdad59aa93b781af05ffbe",
+          "b2dff4b01676f99b266279f3216bd35496bafd3c0487b16c874c7678d0742a45",
+          "e09fb43a70f119ed8ff86caf6d26046f4d4066a8516c7baa8abc57cd52e79630"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-financialyears",
+      "tagHash": "0fdcbf1701a58d3c206616ccfda0da993456531ee26be446e571835c10c12348",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "059ad2fa45e7b51a2b16a0a354dfa017ba2c426bd7c07a4155a310d866f4b426",
+          "294482062b6395c048e5364de2fac16b74b1fb2bd1b03be8c3fdcbfdfa8b4d15",
+          "3ce8178f8c2645715365b563fcd2139ddf83075bdd6e09cba4323e3f2dbb197e"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listFinancialYears"
+        ],
+        "mcpTools": [
+          "fortnox_list_financialyears"
+        ],
+        "cliCommands": [
+          [
+            "financial-years",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-inbox",
+      "tagHash": "15a6a599d699da9377a561cebed03ef5e307cbc2c5343808942ca9654a602513",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "2ae5a41c4aa5e35ddc6fd8f794bd06a86acbea9948c68ae6e7e44f48310944db",
+          "4a876ea3bec78e3f65bed5acb41d332c41c026b38fbcd61ac19ee407638690e8",
+          "50de50d64fb164604b7f6a6bfa1de7e1bd77cf7428c1a418949e69f6fe53650e",
+          "7629e55437682a574b4f6f3255654fbac48992387ba7c773a247031e92c0b298"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listInbox"
+        ],
+        "mcpTools": [
+          "fortnox_list_inbox"
+        ],
+        "cliCommands": [
+          [
+            "inbox",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-invoiceaccruals",
+      "tagHash": "d8a2aafe1878f1236e49c08a2adb2446015d3e2aeb926de9535e6eafab6759ca",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "03021a75254a27c1f7064e349eb38d4a54ce976598682db1197171f4290ff70b",
+          "2b0b938cef86075873adfcbd43e6bbe22ba2bb2aa43a9b76bc2bb9ac4842fa91",
+          "4d665a44b08e927d19299403eae01cee6cf6e3c7d471fd59c025a35f32d179ec",
+          "b6c34b56d3f0abe70a9082c13ce63920d0201dc5b04fba73039344f3eeac624e",
+          "f30cc9105fdea0dc9da062605c50d4b3b998e9a41cc99e8e37710c4e92b11244"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listInvoiceAccruals"
+        ],
+        "mcpTools": [
+          "fortnox_list_invoice_accruals"
+        ],
+        "cliCommands": [
+          [
+            "invoice-accruals",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-invoicepayments",
+      "tagHash": "87a4acf07054646d18147002b67a64dbb679e35001bf72e8ee40ede88038d427",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "05d1a697d9fa3f04a41d3964d8dbad19f21e4eb1a47b071129249c0d8225b69e",
+          "3709b83897de613978e9abccea291ffb07c0b03908695a111a8b3d099a2872f8",
+          "42f199282aaa939909e2c2b2977b7a956aa3a4144c733f724268ced7c178c45c",
+          "54217ce2dd2b7eaaba60a635c4a0a1b3e098e1b55db968bea5d964c594e86949",
+          "7f9ba604ec1d85a7272cd7892d667c6d41dd4903ced7555d4efed6c6b22ec49e",
+          "ce343adee3d44cf1d2f3433c09b64ecf360dfa3204466fd7e78a8c15df6693ec"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listInvoicePayments"
+        ],
+        "mcpTools": [
+          "fortnox_list_invoice_payments"
+        ],
+        "cliCommands": [
+          [
+            "invoice-payments",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-invoices",
+      "tagHash": "cdef34489047aa708d3119eb2509554560dbae2cbdae7842372e9ff324b33175",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "232844c36bf13765be368a17038f64d10b9684850222ac63386eb061bad47a15",
+          "2b2a5290b9b4d45e69604bb1b2eedf02b5ab12dfb6c96105d1d4db4a2f2b1dd5",
+          "34399b8c3df307f70e599de61fbe2396e804f39cc0ff64c17eb7420330d8722a",
+          "351948cadbc90eac8c0e2b1950a945095a2f841f45a1b521c556f234f810ba9a",
+          "602d7d594039d4faf66f9bb8d39c423d6e5a2fde9c65a7359a5c83f51351920f",
+          "67bc143127755e11c7d1eae5a14a6b5831d3bd38e1b86f3308a03dc1c8d289f0",
+          "7226f7d520665128e71303e56adc1f5c548a1501ad7178bcc1ef8cb224f1f4e2",
+          "779ac983c802a51a2d832cb7d9802ffe946f8b2f287af30ef6669aedbfcdc097",
+          "7d2040d39389830c9160b2b7c648c22e814affd7856496dbc76bca7081b744db",
+          "8c09efbcb680a163d00bab394470a56a05cc049c3faba5e19e4fd82f8b25e0b9",
+          "b4b56c5f85e81e1663b5dd00462235a52e0d5885a9e5846ace99b540ded8e3e0",
+          "cdb07edcd2994cfe68e43fb3183bfef9ce6ac8b87942045e4ff3a924149f3355",
+          "d3a8ed8e6fc16e1570b91617f63b9a450e8a105fa7078dcdeec4a1e76ec65759",
+          "e81e49503ea3d356215f1c4faeb9ca291118ffc254b74235105d348204779f53"
+        ],
+        "missing": [],
+        "excluded": [
+          "9d3117da2a01d94fe1015e3ca5c850763b244cdfe1c943e2e048fb082cbe93e2"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listInvoices"
+        ],
+        "mcpTools": [
+          "fortnox_list_invoices"
+        ],
+        "cliCommands": [
+          [
+            "invoices",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Warehouse lifecycle transitions are outside the core accounting boundary."
+    },
+    {
+      "id": "fortnox-labels",
+      "tagHash": "ea4801a5d0fe0369833d0058daeb89eeed1d16cbeae93a84844085a4a5630b00",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "126364cd81f4f2ba6435b90a8f20a3a5329482d2bbaafc6e671b00838081094e",
+          "5b6095435b24a9bbf75077c113f73c7ad96075280fb5e5b146f0f18f9e2493fb",
+          "8edcae2b0daec67caad2db8b69ed3b8f16feb627124378a7b6a810a3248b168a",
+          "e0f721f49022e61f9f339edd3fc43ca8b73f8cfbd08b5a2d5c4bfbe2b8bf72e4"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-lockedperiod",
+      "tagHash": "9fa65e63d9d38c5cac554f1cc4e1a7f808e2bcb13ce752224f1873f325c395bc",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "b153c972c9ffc8fcab675d3e96d64d79ccdee2bfd3d445cdc4d54fe31e7e3d3b"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "getLockedPeriod"
+        ],
+        "mcpTools": [
+          "fortnox_get_lockedperiod"
+        ],
+        "cliCommands": [
+          [
+            "locked-period"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-me",
+      "tagHash": "7db403cf1acd9a30d38caf7b8d502bda67ce48b6933ddfa7ef491d293aff9515",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "81431b911353616e7ad355c8060f5e700965afea589d9105cc04ba310b7ff3f2"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-modesofpayments",
+      "tagHash": "e20a36dccbf8c358547d4d692f77f392c0b7817b9e8f12e04068976d95df656a",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "b8bb70d2fa44a914035d382632b4605b8680bc17d191558a7ae2fed25ad682c8",
+          "d1dfbfd602fe5cf83eb41c8dd35eb7b525bf536f753f0bee12e6713c2d33e0da"
+        ],
+        "missing": [],
+        "excluded": [
+          "37f668c2e4aace49d7756d8093ec82852d15811f4396d01d63b04a15e29b30cd",
+          "94c1e7d70ad44d2a497afb6e202cbb46007f9afb9c37dc330c54a349ed71019f",
+          "b9250becdd42c8982452c36cadd5fa0b247925ff2e90d2ae3a48664018a0981f"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listModesOfPayments"
+        ],
+        "mcpTools": [
+          "fortnox_list_modes_of_payments"
+        ],
+        "cliCommands": [
+          [
+            "modes-of-payments",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-offers",
+      "tagHash": "31e8601f08dabd9ce986f744d9c15eb61c91999a48c21c295d5a03498c45460b",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "2604464a64da20fb87ea8005972bee13fe286c1bc464979ff1d94f9813cd910a",
+          "2707d9dc15ab8198cbf99283c36cf0128e6c463e9ccb6f5478c0a1f36de38c8d",
+          "38fef0618f4c9fc66c67e1977d57f4d985d0f5f66769821b9249154ff7fa6590",
+          "485550935937c9555ceec0ab2a553c4b8649cf89b2bbacd9769eabc92e00a898",
+          "512580ad4767040b5ee93a127681e1e8c81dfc4cb37bb4024ed719ade16e73a5",
+          "5d4b9bb500e3ea2ea2eab57e1e4dd6f6b16ae04d273c28471dd9734b8d8494ba",
+          "5e5f4df753384ae962afc43bf7377c58625a9bfd326afbdc503e431737d5c9bf",
+          "6eaa660f878b5797864ad7ef70c59f36ed6812fe6bbfb608fa75020a0ba071bc",
+          "8dccbe1a5b190840cdf4c2bbf8efbda210b6b9a2d941eac8c01586e81a2eefff",
+          "a019da7a4b9217c2014e74e27dc9e4c473338ae306e0651a519c26553e783cd2",
+          "a857b279b53ea4de67261dd0ad9b696f0e5e1ad6833b705a5bc2ae80ec2935f3"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listOffers"
+        ],
+        "mcpTools": [
+          "fortnox_list_offers"
+        ],
+        "cliCommands": [
+          [
+            "offers",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-orders",
+      "tagHash": "462139acb32b1a34b7deb902a8588246743f8f37e942a014da492b00d46d78bc",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "04874a90aabc86a499dfa87e71f133f04539feff14ae60be12b929bba37ee65b",
+          "391d72fdd49f0f49c2a8b724662de68c6c56d5e2cc91bb20ca7c4c307c41be9e",
+          "55e9ee41f1cd6735b8d395898378738204af470884ddb1a4bd52b34766c95013",
+          "58111196090b9a83d575435412647bc8306c11f54a044d8f3444847273b5e979",
+          "aada5046af7246544c15c80d9ef6c2f58d3c95c88c4b102d710a04b947359b77",
+          "b357f1849550c9b9fd1605f340ced326bfa9add8ebdfc4cc1ed0a6cb9d771005",
+          "c4723b7152b4b1c3d10b206878fc61dc00a31e3c43811695b691f0aeec4ede52",
+          "cabc28f57b1ce5c64e20af0aac9bb7fc31a2be70ec61152f94dfec3605eb1743",
+          "cb79d041438b74874b0a03d55a947b73b800f4da6fc31ba28d9e5229c6732c3a",
+          "eb4f53fb6b81300ef21e73b6e8c663e90d6cb730e07d12a93d7a5fed5724fa81"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listOrders"
+        ],
+        "mcpTools": [
+          "fortnox_list_orders"
+        ],
+        "cliCommands": [
+          [
+            "orders",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-predefinedaccounts",
+      "tagHash": "2da0865726b5c2c1ce6cdde3ce9d3acf1016ecc118b2cc966385c8c706e7ee7c",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "44785f8aa1082dd6bda7f112a6296f63a5d66d9771960fd2489dfd272739d59b",
+          "56bea4dd7a41dd716906517a26c4d24e59fe581eff026a0a087952d9a70c4687"
+        ],
+        "missing": [],
+        "excluded": [
+          "dad2ca31a157cf44704d1a0fb16fe03e2f21552ab7670f30ce5d70ea1afcd049"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listPredefinedAccounts"
+        ],
+        "mcpTools": [
+          "fortnox_list_predefined_accounts"
+        ],
+        "cliCommands": [
+          [
+            "predefined-accounts",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-predefinedvoucherseries",
+      "tagHash": "783b385fe55b0c19f44774733720e35532809551a91b4dadec11f8a9c0527651",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "b8e9ff63abdbe75c9aa173d9f8fdcb1290740bd3b014369ccb565dca5298d9c3",
+          "e64b2ca0421996d33529186b146b47bd6cdc6852c1871efbaf835bcd70b79135"
+        ],
+        "missing": [],
+        "excluded": [
+          "3873bc7417a63ca2c9fbf9ada143fabeb5e31aa39820ee129e45d625750d56cd"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listPredefinedVoucherSeries"
+        ],
+        "mcpTools": [
+          "fortnox_list_predefined_voucher_series"
+        ],
+        "cliCommands": [
+          [
+            "predefined-voucher-series",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-pricelists",
+      "tagHash": "9dd931b5f702260f630b7b62dd309c93ac1c9523c4fee804c685ca5e3196bab2",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "b1c124d61cf779f61435e849956363fbdd58bc65c20809fb13c2912789e7fc30",
+          "bf0cdb3abbc7397cefc9f0088ef1b9dc5fedbfbb1a1e9bb43a7e21f393358383",
+          "e211b5922f92fa65f37a4933a72f1a8f00cdf938519cdefcb710403243b110bc",
+          "f144a49766b7dd0952b8dee0028186bae6220d357de839595221869a12bf6a16"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listPriceLists"
+        ],
+        "mcpTools": [
+          "fortnox_list_pricelists"
+        ],
+        "cliCommands": [
+          [
+            "pricelists",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-prices",
+      "tagHash": "e8af91a98cc4dc1bf98edbffac275e79dbe8d5bc0326ec32e57dbd3e2b3a34da",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "274df52fc31dac05edd5be8d70f215d601c944582be45929fc2f6e9b75bff6d8",
+          "2e3306105c630c5b344aafd5e0e77c7006b3fcbac32310db5c1ada09646e5c24",
+          "33f417bcfa877e2039728342b51c3f0781811fd354e4fd126551a3573c28b7cc",
+          "4505a4ba609ca851adf6aba959145e6f1f561461f26b08aa891457e1d5524a7e",
+          "5adcc51070ab49ea7a67129bb703cf36f57187c53b1f702cb9edc720e55c0037",
+          "615a3cb219f4a86e0808984950a3b068f8118edaf52fa183028a8d3410686d7d",
+          "91dc203881c1ba519aa2a4d96de69e9ad1732afa53dce47bfce8f1cab2808b0e",
+          "fa6044975f47749daadab47784b86ee2362e768fd69c900ba40612e3f0ca397a"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listPrices"
+        ],
+        "mcpTools": [
+          "fortnox_list_prices"
+        ],
+        "cliCommands": [
+          [
+            "prices",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-printtemplates",
+      "tagHash": "666e95401acc0fe6a26465dc70a834aeb1268aa3c494adde4ea1205016d5a483",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "c41323fbe09abb81409501479fd37f2bc0d83ea24763df9368da561351c81f8e"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-projects",
+      "tagHash": "aee524e88bc72989407e23ec4f53154fdec32b1ead7b39a6e24c639d3bd8f6b2",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "0a5d9cd3d4016d1afb1647e00f80476b0592993b113fa67618a4d8c0c9dab384",
+          "1ad005fc392d16c28a376d3b1c11eb9f3b8540018808d31584b88dc0e704b4a2",
+          "2dc83224d5c9120d28508f7843e3c3c1cde1e69919eb8d5cfb4aac2fbad38e22",
+          "74cf87332474ecb873f5695c9d68b99d737e3e23ee979ccc4bbd1fb70524fb49",
+          "e432f6380330ed836110edcc3042202d84b339e3ff18db7f44346416a7408e19"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listProjects"
+        ],
+        "mcpTools": [
+          "fortnox_list_projects"
+        ],
+        "cliCommands": [
+          [
+            "projects",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-salarytransactions",
+      "tagHash": "ad479e7d34a9d6178424675d235f246ea6cf41742a5920d1bc55255efe9d47cf",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "31d04d0fa34ca5a1ec841be31166042a9c328c3f3972a835788bc2e688df3652",
+          "4a1eb1eae2021886f9ddfebd22408d2d0614044ffea868bf83407cd5cb3a128a",
+          "529b249463391f8948f5011954ef270d65e66f3980f3d29502f2feb7638d8d06",
+          "7d9d323d65be91cdb24a04c69c769dab142ca9b54fc9b39f832276310c58969b",
+          "abd4bc33ce9ae823b1e5cc698a337fb91b29d4c2f8470ed95b261160d56886b2"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listSalaryTransactions"
+        ],
+        "mcpTools": [
+          "fortnox_list_salarytransactions"
+        ],
+        "cliCommands": [
+          [
+            "salary-transactions",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-scheduletimes",
+      "tagHash": "6ee60f6724b017550c478b7e4b3bf9eb4374af613a2e9b9f115aeecd0e7dfe64",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "2b610e8f275b2894588e5939c642c599959ceaf4d6f1f335c5a675f9f2bf0482",
+          "8aadebdd33ff538111280286738091f9bbf197d711eb0e449a59df32de8f94ee",
+          "e6a4838e1a685e30acdd6786b0bbf4e6d9b4d54d8e358f31190a367b88e807b2"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "getScheduleTime"
+        ],
+        "mcpTools": [
+          "fortnox_get_scheduletime"
+        ],
+        "cliCommands": [
+          [
+            "schedule-times",
+            "get"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-sie",
+      "tagHash": "3d7f1a6cbbc36bcb75e16b950c5907b44392d1aef4b67f44e9203003bd41f3e3",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "27f9f290930c9e39895f6788261b48b7157be1b9153fa772175d9624e006ecac"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-supplierinvoiceaccruals",
+      "tagHash": "5563ffdf6ec829ab534199d5746766f1fe3190c2ad37e515e55f668e7e4dac5c",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "1f7cc9c3e9e27652c6e4fd1f69719d9191e11689f64daa850c9f65335ce9c8c7",
+          "52aec38b6e4484d9ffec6c12426525e20d1f106eeee6dc1edc720cfcf1ec6e08",
+          "924d6315e55b01cf71bfa3db71692160aea64c6aa5572db61186b2d297e1a3d7",
+          "a9c4e05e28784fe62d9ccb24f6c0418a73c46938fc456a9b32f85e6ee797e633",
+          "e2528a1c3c8edada28bbfcbc627dee92ac06bae0757de1f5b6b12b8f20873e3f"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listSupplierInvoiceAccruals"
+        ],
+        "mcpTools": [
+          "fortnox_list_supplier_invoice_accruals"
+        ],
+        "cliCommands": [
+          [
+            "supplier-invoice-accruals",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-supplierinvoiceexternalurlconnections",
+      "tagHash": "68f5d5e60fb770af936ff3a053f82643c6228c2377104761ba7c6c2768040cf2",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "16213c021ff903f25e1429bab684ce875b27255206b250020c413f8bd90b0e88",
+          "47bde3e593e9af7ad06a12c991795fa446eed6ea373b80cd66b258e1260b1200",
+          "9c2c832842c5a89105323d7871a2c18ee5c164ab61d9b875f8a16c4a772407f6",
+          "b37e448e853d22c8396f83acb3cf3e647d87879721aa573b6dbc177374a2ae08"
+        ]
+      },
+      "rationale": "Remote URL attachment connections are excluded to avoid introducing an arbitrary remote-fetch trust boundary."
+    },
+    {
+      "id": "fortnox-supplierinvoicefileconnections",
+      "tagHash": "73a5fdc101fa9cb6642b2b39797318aac75b6e27148c5fc9100603fd502a94e7",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "49664dac7d72ab4fa5954a573037b39237961c574e885cdcf99dc3312724efb1",
+          "64846dd44a4c53ac76b2f2df693a566f1ec3fb45d9d7662652a73d0a5492c5ee",
+          "99fb6f52cc33b0839f7bf284353cef7cfca30c6bc2853477109245b6b631c8ae",
+          "bc0cc751aae00a55c3d54d3caa4d46e0229d6cf374c079fa1768801630da1cbc"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "getSupplierInvoiceFileConnection"
+        ],
+        "mcpTools": [
+          "fortnox_get_supplier_invoice_file_connection"
+        ],
+        "cliCommands": [
+          [
+            "supplier-invoices",
+            "connection"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-supplierinvoicepayments",
+      "tagHash": "567763a9039037bd790939f15ea518aba0774373607321dea59e27174c1dc317",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "7cc3d0b3598f29af720ad501eb21bda0adde257a65d5a2d1daa7e100017b75e9",
+          "86f2611e7de36f2b0ec24678f92b324e9e378ca28c6e9cc4a5e238bba1fe8e7f",
+          "895799afd4f45bc78caee99dcbb40956f97ec211e0de8d246f5f2f74ba32a9a7",
+          "b6392993e151f97d72e04b99b44c15112ae43b61b38509663286036a9cd7beaf",
+          "bfef24882a679f481bb0546d4acf47497c26cae63f609de39aed147e0c020757",
+          "fafd1d3830251083fabc9abaa3a87db193ed5a86bf4e354a0861e5104f006ba2"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listSupplierInvoicePayments"
+        ],
+        "mcpTools": [
+          "fortnox_list_supplier_invoice_payments"
+        ],
+        "cliCommands": [
+          [
+            "supplier-invoice-payments",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-supplierinvoices",
+      "tagHash": "31ec0738a8694709c83763b2f8ad4bd8d4447ed5f11c08df8a391344732505fe",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "18100a599f890b93ccbb48bfe318fa83bcc9b077227497d1dac3472a620e15bc",
+          "22d6debafa805e0acebaca41c60c6db135a2054b457fc232323d5f73be9ab32e",
+          "8e038169759226e1781180e5fce3cc87caeede593956937c1cffa18b745c60ac",
+          "9a0e1132227fc6d2551055bc76cb208f8c0775b259685114be2394d5f4497648",
+          "ad48bf916ad2843e9e981f55510e51ca17d871c1085b7072bd33d225da9a49a2",
+          "b6c744fff16cad747c17dcf3c0704290dcc66606676212c22119a307ad05f068",
+          "c00bb27ccf619eb579d4d9bb3dd0e514421879b01b6fc8d87b5a5ec21ccd10d6",
+          "e0a247238206f49bb9b8da6943ac267a132ae8c03512a067fc23a3609b001179",
+          "ea416c860704ac22f6a5329fdcf68c151a88a3823556e19f75ce2ce5f55542c5"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listSupplierInvoices"
+        ],
+        "mcpTools": [
+          "fortnox_list_supplier_invoices"
+        ],
+        "cliCommands": [
+          [
+            "supplier-invoices",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-suppliers",
+      "tagHash": "d165d4c0a8fffeff243c52beea85250b5ec056f514eb985208f9defca0623edc",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "324abf62650ecfff5712eedd3122e582b6e7ba9564e1933d80da408f80faa808",
+          "4cd015563e37dcad0cc514bdbe5cba811762e15508e21faf04190e081f7046f0",
+          "7750b3c93e90eadacc7f96a20c6552b553b59ce9e91041e1a70eacbd30f9a9c9",
+          "fb58a72a7e8a6857018c8f08914dd93e83077795a5a5e43f5c208f70df356664"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listSuppliers"
+        ],
+        "mcpTools": [
+          "fortnox_list_suppliers"
+        ],
+        "cliCommands": [
+          [
+            "suppliers",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-taxreductions",
+      "tagHash": "2ca14459ecca2778b7662c9ceb726ab7112d84af5a194160b16f5814f799cbe2",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "440853752be40ad8759738142cd363f2c0df4535c9035a7b6d00e5b3f74572fa",
+          "5546c5481fbde423214708581a892d308813097e6847d9628da619b7c9b3d4f8",
+          "639f6338e913ede174574d874d94a9d8db6e398570a327cea98e7e0afc5320b4",
+          "e1d71bab5322a7b2950bee0c29120657fd09dcfc99d228647ab459096e056848",
+          "ed34ec0ad5ba0f0b8046f3ac2e3f9a795da895fb11dbd9e8a7c012e86916caf7"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listTaxReductions"
+        ],
+        "mcpTools": [
+          "fortnox_list_taxreductions"
+        ],
+        "cliCommands": [
+          [
+            "tax-reductions",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-termsofdeliveries",
+      "tagHash": "15213791c78e3c5ce06b6fdfd3f074df5c348616e410235b1b3618f2141168bf",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "0a96cfb41f33005439d1e0c7d72ce5e91e5d4a60aeafcd6a90c5deaa030890ba",
+          "d61ca4f240034c0d10d410df3e5e29087c7bde756bcdb23802bbec46a6cb677d"
+        ],
+        "missing": [],
+        "excluded": [
+          "76c36eb563912e1ba6b95387220d1120cebaaca5089cd0b43a43365441075413",
+          "c007eb12e876f6b32c553eaae3276eba1b44972c90e4aaa70bfcefdee651b02e"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listTermsOfDeliveries"
+        ],
+        "mcpTools": [
+          "fortnox_list_terms_of_deliveries"
+        ],
+        "cliCommands": [
+          [
+            "terms-of-deliveries",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-termsofpayments",
+      "tagHash": "915d51993c7f2105a672b2a45adad6d0de204519a18eba47237c14e40f52f40c",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "ad95c55a71fe8637ea305070c51a6eb197b6859560261d53b6357c5990dbd455",
+          "e2f6442fbc7c3f8e36415b52a7a95ef0ff4d15670a633a3775829514d737b6ae"
+        ],
+        "missing": [],
+        "excluded": [
+          "213d895847916453283ba2eb4f9315b7d4c1a6c1f04fba2b1e591c013d5b0a42",
+          "242e7f11ca858a250acdcbd141b2f1c956eebcdeefbb283f8a6d965cd1c6e942",
+          "62839d1c1e195d5f93a67a645a385f2c8ee0f247cf799e9350921be5865d1efb"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listTermsOfPayments"
+        ],
+        "mcpTools": [
+          "fortnox_list_terms_of_payments"
+        ],
+        "cliCommands": [
+          [
+            "terms-of-payments",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-trustedemailsenders",
+      "tagHash": "64a3cf572b26cbd5909509259d95d9152d672bec12f5d11a33f589e9f0f95cc8",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "2367ea80022592732a31a0457e7bcece152eff93c1fba26fce1ab04d61a073c0",
+          "49ed5d38d06ab382ef9bc404afcd90b2cc2d46505d4ad865396031b0cde059fa",
+          "ffdab3f54b2a2f8e360b9bc55e38a0b6c644bb27a978c555e496aaa2d7fb8e71"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-units",
+      "tagHash": "7cfe76d2e25cbebc10541bbd17cddf5ff051774ca05af86a8d2cb76676dbe0ca",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "99a1258983adc1adf20c62978b7a5b47eb9b8f4a6a12039cd8aa6525dba2e843",
+          "d1f9a0e7eb9363010bf9b08341ae8bc71314de1fc8393ea0fe84df8f572025be"
+        ],
+        "missing": [],
+        "excluded": [
+          "153e246e2273c07890a9890b08297379d3e5a8df3fc7075aabc2a0db26c426e5",
+          "aecfee2b0844533cd989d27771a68f3202be75311f970bb979ab82ffc0134b38",
+          "b8a82e33d598f330910c4cf3bdd86936c242b9aec9543f42124f9511eab08763"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listUnits"
+        ],
+        "mcpTools": [
+          "fortnox_list_units"
+        ],
+        "cliCommands": [
+          [
+            "units",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-vacationdebtbasis",
+      "tagHash": "5efd92986ec0ac205ec16ea4d90303c594c8d18d21e7a13d84f9c459db0a46f8",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "deb27fb94543f9b580e3df8fd53bbbe9e0b038cbca69ce78bd8e97d97e05649b"
+        ]
+      },
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-voucherfileconnections",
+      "tagHash": "a2f200f145d1c03d202e565015f4ce4a0db29293841413a098313a633ff99fb2",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "4b355a810510abc7e1a3dc61ff42c751b60a0c0364a456c0b12441ec836c5cc4",
+          "c823f7be9c580c2b76b1fb86a026e5fece563577a0a6218d9540cfe456da61ff",
+          "deed9763c550e89b158f7cb28b38547091711b542bc01d5d2bc5d1bfb48bb66d",
+          "fa4a1c162c3021b906ee2d0011dd4bce2328301e36d86349102a6738ddc5dc55"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "getVoucherFileConnection"
+        ],
+        "mcpTools": [
+          "fortnox_get_voucher_file_connection"
+        ],
+        "cliCommands": [
+          [
+            "vouchers",
+            "connection"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-vouchers",
+      "tagHash": "75650f7352d6dec60dd65976cd49a366c5a01683116391b2a03d8470ef8b05d1",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "49db01f30251cd04017b3b1a80c2f94fa1035795377d5d3a794b756a67c0ef40",
+          "4bdf67ec6d2eeb40cab1f04cccccb91ebf496851dcb3f05210cce52cda7866ad",
+          "97b17074c842f79bb64d1f695998ce4449af4912351b9be12608cb3aab04ba20",
+          "bbb0c3aaaec2ad31b5d6da9c89031d1cc08ccafbbe1c14e9a1803ac0faad6b78",
+          "d0fcb98d4b9d62b5623e733b2b15ee3c29c140c97eb9dcf45da21ece25f3eecc"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listVouchers"
+        ],
+        "mcpTools": [
+          "fortnox_list_vouchers"
+        ],
+        "cliCommands": [
+          [
+            "vouchers",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "fortnox-voucherseries",
+      "tagHash": "ca2601cb73b6f99dd8f79093f52f0b249bcf8236659e9628db7125c08f4c3913",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "4dda43965c0f6a2174ce63d2d9ab7fe6160ae0d13e17bab726e4fa9bb7a24040",
+          "cdcf473eee4210d9f8cb1889da637fe7071e93090c4262ccb9a28c5776b32a99"
+        ],
+        "missing": [],
+        "excluded": [
+          "092b48a9d4763c2a4db3b6730cd31985f8c2111bb646442e8bb689f01d711cf2",
+          "ed800d2f62e7e1ef3a94662089a66da16516ffe5e862ff27290e984efb8167da"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listVoucherSeries"
+        ],
+        "mcpTools": [
+          "fortnox_list_voucher_series"
+        ],
+        "cliCommands": [
+          [
+            "voucher-series",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-wayofdeliveries",
+      "tagHash": "3531af407d179d123c77b0d9929fa416bcbacecb278438dea7d534d4e63a21a3",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "494b49e621d35dba06c3a39140743d1eca442b2e51827ba38665871c5ad3d9b7",
+          "ceee9c691c77b93b313a1bd62088e2343e76ec9c3499ff0fdaeb4c90d52c100c"
+        ],
+        "missing": [],
+        "excluded": [
+          "4488d41be1245f40c8b666987d4ed214749f013cb78edddbfb2c88bc1d3b0bc0",
+          "6a25e37b6ca1606b8cccb35034b21ce237208fb06eae3c17bcb8498cc44037da",
+          "7834e95736f8d23b16fcfc4d3aaf581a2a010cb45162d6ea5d48ffdd77c32c9f"
+        ]
+      },
+      "evidence": {
+        "operationExports": [
+          "listWaysOfDelivery"
+        ],
+        "mcpTools": [
+          "fortnox_list_ways_of_delivery"
+        ],
+        "cliCommands": [
+          [
+            "ways-of-delivery",
+            "list"
+          ]
+        ]
+      },
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "integration-developer-integration-ratings",
+      "tagHash": "4ed9411235d23dd5c17e3b3898dff93b5bfe7e3f219100b3c228f77affc80150",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "bb4adb61decc00d526cbe74d13cbd731bc596bc1a8ccd58f5a2f262fd356b52c"
+        ]
+      },
+      "rationale": "Integration marketplace administration is not an end-user accounting workflow."
+    },
+    {
+      "id": "integration-developer-integration-sales",
+      "tagHash": "4e9d31266757e3d690ec8f030ee1d45b07eaace74a23d5dac72ba33f0b04c8ff",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "076f665c24539c9ee3a4692e48de13716333aa716d035313236f46b16b3aa20b"
+        ]
+      },
+      "rationale": "Integration marketplace administration is not an end-user accounting workflow."
+    },
+    {
+      "id": "integration-developer-users",
+      "tagHash": "7e333b44ada4fd6f79f837069721d82a2cf9b92179f5b30b36333a4883f06c9f",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "a0a8533773dbb711f4a31979228cd5a1caa0981c81c8b678c3e013215a266946"
+        ]
+      },
+      "rationale": "Integration marketplace administration is not an end-user accounting workflow."
+    },
+    {
+      "id": "recurring-api-invoicerequests",
+      "tagHash": "d2f9585da1a9862ea898c6ceafe87ed9133516bc0b5073def5ee01fd114e328e",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "0868123031a1e4c338fd2ad049517bb7c5aca0a0fee7bb573de6fcaa4eb18077",
+          "3f2aba3868176565efab330aeb4793bd4d52c11a3d8956f8afa3e9e867b898ed",
+          "4058cdca8372ed81e21beb8411c46e140dce2691556f2b77e2e3e61d60094d89"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listInvoiceRequests"
+        ],
+        "mcpTools": [
+          "fortnox_list_recurring_invoice_requests"
+        ],
+        "cliCommands": [
+          [
+            "recurrings",
+            "list-invoice-requests"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "recurring-api-recurringdeviations",
+      "tagHash": "35aa60c56166a8889cccf8147b41ef88b58785d5ecae1a5920bdd3b2d5917693",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "ba12f21ed06c11d4d52457a772af949c7013a28b84c9a94981cb4896b20decb6",
+          "e2d73bca0b107285c4f83afc16cf8c2285f52de2c48fe520c5d2eaf9cca420e5"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listRecurringDeviations"
+        ],
+        "mcpTools": [
+          "fortnox_list_recurring_deviations"
+        ],
+        "cliCommands": [
+          [
+            "recurrings",
+            "list-deviations"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "recurring-api-recurrings",
+      "tagHash": "ae64c89777c41c7a14083f9dc104ad0d5ce20f3a10d35d26d3479676737cf12d",
+      "classification": "complete",
+      "operations": {
+        "implemented": [
+          "52593ef71850d9b436158304fae213774d82402c45b4883b39e20e2610343090",
+          "83861b366428f20e0de087818df017b0a0ef9a4ff52a928355a62b6f97c13945",
+          "8d86e68fe8a54dcc9fc9a7b3b9e0f8abfd2a5bbdf88a0eb8e7c6dabd20b0a317",
+          "d49bdc7c67e1f3485e4f70d0f0fc09f81675397bd0a5d5866b47b6b9061197ce",
+          "ec6dbcb9485546bb853348e23ea4bb136a2f700315dd782743873003979e64cd"
+        ],
+        "missing": [],
+        "excluded": []
+      },
+      "evidence": {
+        "operationExports": [
+          "listRecurrings"
+        ],
+        "mcpTools": [
+          "fortnox_list_recurrings"
+        ],
+        "cliCommands": [
+          [
+            "recurrings",
+            "list"
+          ]
+        ]
+      }
+    },
+    {
+      "id": "time-reporting-articles",
+      "tagHash": "0a71591df6861dc08de6b60e74e6ec476238c30a82a62885a9aace3a64d7f548",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "1e64f65a15c553d2208deaec15419e4e5ad26af5ea5e7e9c3686b6691b7f668e"
+        ]
+      },
+      "rationale": "The separate time-reporting API is outside the initial payroll transaction boundary."
+    },
+    {
+      "id": "time-reporting-registrations",
+      "tagHash": "080ca683118c8f13228ba9c2efbe44f6e6ba1d32d7dcf597913754947bccd78a",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "fa7c732910540068984f88275cf7145b06991dfde5fc688450bbbfaf9e69a5b5"
+        ]
+      },
+      "rationale": "The separate time-reporting API is outside the initial payroll transaction boundary."
+    },
+    {
+      "id": "warehouse-customdocumenttype",
+      "tagHash": "6c0ffffd6486b7a22434ace28adf40c56cfe9da7815bb72e4dcc542ddc52ec0f",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "4948f6bf780cd6d507ee136f898ea678e0b7a3635cfde281bfbefdfd5357fa20",
+          "681c0ba6bb883ab3a0983082a09a298cf9cbb77133415020260bd5e5325fb8a2",
+          "f3eeee86c444d9617ad187b0584865cebfb03609e6d46e6d6a473ca4592fa878"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-custominbounddocument",
+      "tagHash": "935d427079ab103f60c8bb4f4f3c42343c7687b700be5e5a45c0fb19ead0199a",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "459e64e060c91d24c3abb17c9a15fbe51027f07e60cef206351fb1f03d857fe8",
+          "7562778e96c46f47c731f31e28a4484c7dd239ccd9a3efb1e91696d5c9433836",
+          "79683addcb3c7cb0dec203d2763ea09abbfb2388d5750154a053fe8f81149818",
+          "e62f553de399d5f58d09f50894240fd72ad8f5a3a021725a89390341a0803997"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-customoutbounddocument",
+      "tagHash": "3d649089c9aafcf1ab6a69b403b316a2c6ba76a5b111d6f46f3aceef36e35bda",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "0dceca0647d99bc28966da15772a1eaefe5bce1a03477ef7d177292b477f72a3",
+          "33a2c221338a574b0b5bccb1a2ecda3dd044429a57f0dcbefeb4b67f9c5059c5",
+          "b23a2fa4702f8ae01d4f65538c633d64872f0900a8c20ce181046e3876d1739b",
+          "b88f4edc69d76903b27bea41e1c4e74e342220f7b70a3e0fad6372604aec153d"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-incominggoods",
+      "tagHash": "612ddc82f7ed470dce1ccdd0295d8a2eacb8167d3a85495293fe45758f494414",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "25483b8ef8d3f25a29c7f894ea19fc08072cbb75e704d3d92547a2c00fc14e33",
+          "3ff5d2cbd292dba366e9ff333acb931a8bcd1d3fd29017b57f99b59efd6c1c24",
+          "4def7593b50f9860481e061a2da0b27439080e8c68933d7c44a7b06977103675",
+          "6000e89a7d10639a4dea9d1802f167b49931a057561bd9dad86d20af4f539130",
+          "79f2e028da9a4ce723b7a841cbb9305aac39a9df3c9951a92a2018091c076863",
+          "7dc36e3ca67aa4a57d3ae1464957450ebc1152c1d0853a29ffc3906faaeda2bf",
+          "d19e5345e9456d910a25bb3b4899ab678466fe4733330100f7ccaab73cf7ec20",
+          "e9046846269203030ce52f952835d36b89a94bf0973c1976369ef0843b133ad5"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-manualdocument",
+      "tagHash": "adacd04a28b5a0ab6898c577d666c3eda3decaa80d5b449240c3d7a732f2a1ce",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "6e163bc876a89739966a98e4e509c4a649d12d0b6c6e8b28593408710449cccc"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-manualinbounddocument",
+      "tagHash": "15b3ee2c17fad25259d9f605fac4740ef6d6f73bf4485d741f00fe0eee5c2596",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "148a1d9bce72d3fd720bb37e7a57baa54f1255e40ec5193904b79cdf3c1132b2",
+          "3097016d01a33953b9824e008401ec3154539752a71bd63972a09ae5e298a6e7",
+          "7845c60ecf06db0dc4663ac7468939627da9b008ed59da599413537762000e5e",
+          "82a6565c12271997f07f38d6d81d081c7342f3fbdc7ce10005fd7021e591ef29",
+          "9a772e30195ba1c6a0498322835018a8ea53eac9cf38898da99a2fe08d13a49a",
+          "fbcfc3ccd83c04c77c775650f61e25e3bf098817660b4d4f6f4be759e5a85256"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-manualoutbounddocument",
+      "tagHash": "6b064c4473fed4cf4a71be4903c0d85afbf86c4698aa5132bc2659789b9427a6",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "080e8ea583fc5cb5a3e6b69c1a422415c6d38b93b9240f68b85c032eae94f902",
+          "628fe5974520e416114eeeb0658e91857926bef270b7ebb0436be0153fedb58a",
+          "820821872fdcabc741ea4d68308e9d1d188b77a2355af29e3ace4330fc7f9a27",
+          "a4332ce64671801569633947e88b313580a9d8c0dec4ab0a43e493c245d68b02",
+          "e012ad8bb0651459508e9ec4bf7681275591754f28f051bc0383131522baf5e6",
+          "f8f656d95f2090bb51536506299bab4de5a7b0a8d159016b124dc1daa6898d12"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-productionorder",
+      "tagHash": "922bff42321990b14e7af7f10234a775c2e7aa68cdf9cfa4488655b636101810",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "3610f12ec0b40fb20950aa6ead55fa792f2c7e99f4a385d4d71322d546a4bdad",
+          "4a6e2c3bcd792255a9a5a92e40b734d85e7ee6a05080449442c0c02566d1a381",
+          "827dc1453399fb1b5c98bd214ab5de2e3aacff25ceb0d1fd93e70140ba3338ae",
+          "966caa7d08ada9d0f410fbe0642b9ca214593374ca92488968ddceee322aca96",
+          "a6d91da7f1991d0159f62de1797c24e19a2c18d0fe04990e8818a9ab69920c81",
+          "bb72f1860d682d2200b41690b1e90596f4dbc3cbf9a212da0b009a8e1bbecea1",
+          "dfd34a088c978c481dfcedc51a93b81b8ab7fe916a7c5537faa146876369e487",
+          "e9db8c56608fec12fa2267360558f90c17454ba935e78057bf9bf1e6fe217187"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-purchaseorder",
+      "tagHash": "b7839f8c70a4f0aea95baacbe5d4e3274c32dc676765d3fa1ee2dbfcf149dda2",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "0fb89e0e04ccdb28456c5d1e904d1c088109e7d856804077d1a714d76ab01dca",
+          "1103c615c725e214763f2c829ce90230e68f35dcb0e870abb93e831cf6041b5a",
+          "16295ae23e47772454a4bf02d356d5d919e18eb6e88dbffc8e498c48258db146",
+          "1c87d7ce8af4b75a8dc6f5b07cf94bce3c944c465a7731b028d4806f918963d0",
+          "3b7107eee8317973f90c6d83846f91ce8825c8319e69879a6db06f4c067f6eba",
+          "4180ef1e1c015e0e6f736288710947a797efd1076da8efcd3ca03d61a4b7dcf5",
+          "4af36cc5b112eb030220a977b60a91b77a9ab4caf27e7ac471de1a302877fbc2",
+          "580308fc3526dd355bbe56e323213f1f935a65589b60594ba076a91c706ebcc6",
+          "5c2eb509956323c1010f26860062df911c6ffedef6e4cda277ce3ce439141904",
+          "5dba23862956db27bfa0f660b08328a7d2a906ba43beb779817c330c5c16f57f",
+          "6309048440c495485e4b7883f77b1865265bde6398e3df0f277a2f77e3321d8c",
+          "66ed737b7a3b15325fea73724c46c7851cbb3f2b6067766ec339e99b97d330ad",
+          "773000b25e1322d74d30c0c158c9bbdc334d311f833bdc71b85cb0492c2c00b7",
+          "bfc5f8b765fc0fa90d998b3f082fc30d6e5f0b86cd078d488b51704ec61ab910",
+          "e5a60835c48ce19b32e6c8bf70d3204856cb5e60238433cc83c536e442394065"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stockpoint",
+      "tagHash": "3ea3931d32893888cb3ac3b213b919fb8f3c04fe98249f2ae7d3710221c3da8c",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "114e7ce689ba770a9c6f5d58a730be05073ce307c8751bf19edebe8cbc9aa4ff",
+          "1b39fb2ad5230dcccbfa288b90a61b30db74799cab4b2cafa0e7d099af3c4d38",
+          "37b0a07a0cef98f5e1733a30729befd9ac4c50dcf6502f832a85ea1c2b62c3c2",
+          "55b8a74c7a7e70800c76b0ad4d753082bf1e1e4bf7499623eee7b2b620aa3c6e",
+          "9e3af6bd031fe72e73186a40b5f912e73f38a936c8b499ac70a9720873983cac",
+          "acaa934a226e88c2bed6bbb77f4151e5065d8cac65183052871663814ea51ac4",
+          "cbf8a01f7f377605d16abffb5b040272810694cfb44a851912f74430bcfd146f",
+          "f245f484ddde820a601d3ce56ec7aa08028fa13d7930d255efbe0a2d2cfd1f13"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stockstatus",
+      "tagHash": "501e00cd261cb72e934a604dd97c57efbdd3981fa5915ad9f3f789d9956d3337",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "45c720e156174f4cf2692057651d6325b2b25546fc8af4763dcd99f6b6fefba0"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stocktaking",
+      "tagHash": "593a4c3c40e3e82fc864cec83c0c0819d6a38bf96d96fc1e92eb709564b3f219",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "03096c39b21f2572e1f6ae611668c61ba1d543622601c80ece5b313e5b30879e",
+          "1ddacca38c6093fb4991f1d8589c1b46262f09517477881ab97af53f1eda0725",
+          "2f7c6ab7192461105e2b12902df239b4040a86f67b45436e84e9d21887d14de2",
+          "599cc5b9c5a46556f68864ca8a31b85b741c5276db501c994bb5a5df12b5fd79",
+          "5ad11c90964bdb26d14a9767d2207f735e0fcf4f2988dd5450f8ff1eeb71b6dd",
+          "63f5e2ccdbac81c708830f15e2ad4d95b82e54ad9dd5588c155493c96181ae0b",
+          "816690d67a4e5b7b40ffbd24d5843704186f43347ad359097f31ee1063773728",
+          "9fd4f86093983633d5379a9221fad13a5051827e67f0ca35d4ec5970a1eefb5c",
+          "a9f30ab3e2504f1c53428c64c4ed84a1d21595237a26b1dc92434fe6865810ae",
+          "b0aba81f5f24d4800dba98edecad1a9ad7d638cb9ee5772b47fb3764eb31ae09",
+          "b5c358231fdb3a4fd4cfc2409f3831aad8b69b766cac36d8058eb7b7647f0269",
+          "bb4152d3b61fd9cf504bede6bb4a029cc25001fb9e1ea8e749e107acfdd817e1",
+          "ca8c71958ab1003ca6306e63cd95f37e34cb1e58ec38e3134ff29350c22cd113"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stocktransfer",
+      "tagHash": "e1e9d0bb2a281016832de36a67e40331c0ea29a346212a28e29c82a004a395d0",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "49804322816cef01876faa1a5c306ee0de5b2e2d491c5cefae8583d625b32e1c",
+          "4d2a32116a4e7f18ede66d18ff26c2c2ece2b87e5520c754cc247d050ecfcf20",
+          "89e2eef42497bdcb19fa86b11944aa702cb975e19fa320292062274b72a9e0f0",
+          "8d33205c3f55cbbc07ce4305870e55c8f2663de3756a11186383b80126f90e61",
+          "af1f4051cd1f8f49766104c92923ce060d692e45bae549ae1aeb854f68745dad"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-tenant",
+      "tagHash": "ccfa483740e67dbd17b1828c68c5766ebe4fd6602704d4882a45fa66c762b57d",
+      "classification": "excluded",
+      "operations": {
+        "implemented": [],
+        "missing": [],
+        "excluded": [
+          "fc731aef45f915142486439c35c32cbad2669f86b1007e9f1ce7a454c31e1ccf"
+        ]
+      },
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    }
+  ]
+}

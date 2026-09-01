@@ -17,7 +17,9 @@ export function registerAttendanceTransactionTools(
   const {
     listAttendanceTransactions,
     getAttendanceTransaction,
+    getAttendanceTransactionByDateCode,
     createAttendanceTransaction,
+    updateAttendanceTransaction,
     deleteAttendanceTransaction,
   } = operations;
   server.tool(
@@ -48,10 +50,17 @@ export function registerAttendanceTransactionTools(
     'Hämta en enskild närvarotransaktion från Fortnox (kräver Lön-behörigheten).',
     {
       id: z.string().describe('id (UUID) för närvarotransaktionen'),
+      date: z.string().optional().describe('Datum för sammansatt Fortnox-nyckel (YYYY-MM-DD)'),
+      code: z.string().optional().describe('Närvarokod för sammansatt Fortnox-nyckel'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ id, includeRaw }) => {
-      const data = await getAttendanceTransaction(id);
+    async ({ id, date, code, includeRaw }) => {
+      if ((date && !code) || (code && !date))
+        throw new Error('date and code must be supplied together');
+      const data =
+        date && code
+          ? await getAttendanceTransactionByDateCode(id, date, code)
+          : await getAttendanceTransaction(id);
       return detailResponse(data, attendanceTransactionDetailColumns, data, includeRaw);
     },
   );
@@ -111,6 +120,32 @@ export function registerAttendanceTransactionTools(
 
       await deleteAttendanceTransaction(id);
       return textResponse(`Attendance transaction ${id} deleted.`);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_attendancetransaction',
+    'Uppdatera en närvarotransaktion i Fortnox (kräver Lön-behörigheten).',
+    {
+      id: z.string().describe('id (UUID) för närvarotransaktionen'),
+      EmployeeId: z.string().optional(),
+      CauseCode: z.string().optional(),
+      Date: z.string().optional(),
+      Hours: z.string().optional(),
+      CostCenter: z.string().optional(),
+      Project: z.string().optional(),
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ id, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun)
+        return dryRunResponse(`update attendance transaction ${id}`, {
+          AttendanceTransaction: fields,
+        });
+      if (!confirm) requireConfirmation(`update attendance transaction ${id}`);
+      const data = await updateAttendanceTransaction(id, fields);
+      return detailResponse(data, attendanceTransactionDetailColumns, data, includeRaw);
     },
   );
 }

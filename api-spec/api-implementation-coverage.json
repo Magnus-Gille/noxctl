@@ -1,0 +1,839 @@
+{
+  "formatVersion": 1,
+  "records": [
+    {
+      "id": "company-order-bank-process-api-companyorderbankprocess",
+      "classification": "excluded",
+      "publicOperationCount": 8,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 8,
+      "stateHash": "af8d452b73416feccb7bad11b841c046ddcccc6754c998d4d9d92254902d9483",
+      "rationale": "Bank onboarding and company-order processes are privileged onboarding workflows outside the local core."
+    },
+    {
+      "id": "company-order-bank-process-api-startcompanyorderbankprocess",
+      "classification": "excluded",
+      "publicOperationCount": 6,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 6,
+      "stateHash": "c4a87a3cc49e82aa84ccaff06807da5d9e5619cf3007114902671998627d4e0a",
+      "rationale": "Bank onboarding and company-order processes are privileged onboarding workflows outside the local core."
+    },
+    {
+      "id": "company-order-bank-process-webhook-api-bankprocesswebhook",
+      "classification": "excluded",
+      "publicOperationCount": 6,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 6,
+      "stateHash": "a2f1bab6c81a26eb27c47c6c2618fbdcbb47f9fbdeb592e7a464a10b3aab648c",
+      "rationale": "Bank onboarding and company-order processes are privileged onboarding workflows outside the local core."
+    },
+    {
+      "id": "fileattachments-attachment",
+      "classification": "complete",
+      "publicOperationCount": 6,
+      "implementedCount": 6,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "8987e557fcd5acda545c9e9e9b6d9ad2a3472e9cc627162ce3798e819cddb1e6"
+    },
+    {
+      "id": "fortnox-absencetransactions",
+      "classification": "complete",
+      "publicOperationCount": 6,
+      "implementedCount": 6,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "f0879eb7df97413ae787c6d085a8ebf1affc1b49d7292bbc5d5ae8c9aa29c895"
+    },
+    {
+      "id": "fortnox-accountcharts",
+      "classification": "complete",
+      "publicOperationCount": 1,
+      "implementedCount": 1,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "9c861c376169db5934d391358549d687df9f309919664430fa6412f809a9eeca"
+    },
+    {
+      "id": "fortnox-accounts",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "4f9db088195f33e50ed18173076147a11746936fde7940083e36f4ead0517441"
+    },
+    {
+      "id": "fortnox-archive",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "2f4941d75d4217091046b72706d757f7328dc3ed03da7710981125fc1cd57a26"
+    },
+    {
+      "id": "fortnox-articlefileconnections",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "5fea8d3e7b93fa5bb9064216e6054d39cd46fa51ba83e971c6f2be1fd7a715d5",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-articles",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "18686839471e941a55debff61fa5d01580afe23c23740fab97ebe704ca988782"
+    },
+    {
+      "id": "fortnox-articleurlconnection",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "0b2cc2d6252cfc7c7b3d6b56b33eeebf52610d56a2e8e4d3b3f9de05aafe0c16",
+      "rationale": "Remote URL attachment connections are excluded to avoid introducing an arbitrary remote-fetch trust boundary."
+    },
+    {
+      "id": "fortnox-articleurlconnections",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "fd2634cca994b40c20078cd3d628650d36931fc3fe3577b7ee077626189ac451",
+      "rationale": "Remote URL attachment connections are excluded to avoid introducing an arbitrary remote-fetch trust boundary."
+    },
+    {
+      "id": "fortnox-assetfileconnection",
+      "classification": "excluded",
+      "publicOperationCount": 3,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "aebbd24aefd4d1824dc7e432313a921bfd0e83b43a40f6bd42c67814a738b9de",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-assets",
+      "classification": "excluded",
+      "publicOperationCount": 12,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 12,
+      "stateHash": "f2493ac0b98f1209e93e51b963973232405c964f6903ca32c63e169d8aa4265f",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-assettypes",
+      "classification": "excluded",
+      "publicOperationCount": 5,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 5,
+      "stateHash": "7700840c8c0982cdee26e61cee1a8b948a1801df43d3c088c79cf7d32125e551",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-attendancetransactions",
+      "classification": "complete",
+      "publicOperationCount": 6,
+      "implementedCount": 6,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "cac8298a3372376e4243bf08186c0f5bb2dc49eeb9c12229082cae45d60eaf4a"
+    },
+    {
+      "id": "fortnox-companyinformation",
+      "classification": "complete",
+      "publicOperationCount": 1,
+      "implementedCount": 1,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "41840331287e70252d898c9397ff1cddf87c1482db661cafe34973ebfdaf20c8"
+    },
+    {
+      "id": "fortnox-companysettings",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "781e3f15790dce465ce1907524600ed2330a6266f5ece5be3bb86a50f4507472",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-contractaccruals",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "96eb045e4c3831d10e8e7ce4aca4743e43eb7e0b603ac531b69b3f38b72f11b6"
+    },
+    {
+      "id": "fortnox-contracts",
+      "classification": "complete",
+      "publicOperationCount": 7,
+      "implementedCount": 7,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "2c8b97568110d6e13ba388dbb45c0f2857790fc5b1f4fc3b51ed795e76326df7"
+    },
+    {
+      "id": "fortnox-contracttemplates",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "15a37bc496f9a196f1ae1797fcf935d16399e4a60a372ae2d31086e5e2373013",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-costcenters",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "b9c2f9a7b634c232d547cf8ca3bdd43a381a32da3d7b7fa55b0089413ce29f3c"
+    },
+    {
+      "id": "fortnox-currencies",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "9297816e92f4b8a905cbc208b852cd652b1e3d09e514ae631c9ab713788823cf",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-customerreferences",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "8e758ab26f0a5b964597cf3ef064f8bd0eac57f5469172a287cb6c4d4a47d360",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-customers",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "de245d9109091e9e3f17ef12c81de3cc1aacf2c09fa8fc24934566be87e5638c"
+    },
+    {
+      "id": "fortnox-employees",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 4,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "264d6fa52185dc8e1c1137462922a19a70274a85c96639e81660fc2e0cf09d95"
+    },
+    {
+      "id": "fortnox-euvatlimitregulation",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "54bdfdf2872735697382a2e7e52a269f13123a803757b1bb8849d8943b9d54bf",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-expenses",
+      "classification": "excluded",
+      "publicOperationCount": 3,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "b6060514e8281f948f711d2121f8ffe23460e9c5c193e68ab3ddfd02b685cca5",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-financeinvoices",
+      "classification": "excluded",
+      "publicOperationCount": 7,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 7,
+      "stateHash": "967ac7893d9a313e75c00cf7a1af825243f5abcf75f301914b15809f79ddf97b",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-financialyears",
+      "classification": "complete",
+      "publicOperationCount": 3,
+      "implementedCount": 3,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "0c89be09356f7b65b6b05683b29a234f6906a9b13fb470f1a73107b916a04143"
+    },
+    {
+      "id": "fortnox-inbox",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 4,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "698ad21f58bb7e78559c9551fcbfd3210d2b846630e897ba919dd9de50e040a8"
+    },
+    {
+      "id": "fortnox-invoiceaccruals",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "f788b55677826c69376689c793fd1f7711af53829afcba8ffd65ec5f9173f612"
+    },
+    {
+      "id": "fortnox-invoicepayments",
+      "classification": "complete",
+      "publicOperationCount": 6,
+      "implementedCount": 6,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "9ec23cc1b800c3803d1a9cc58292eb8313e8aab912ab190f670ec2b6c4a43d24"
+    },
+    {
+      "id": "fortnox-invoices",
+      "classification": "complete",
+      "publicOperationCount": 15,
+      "implementedCount": 14,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "39a1bfe6f038d793ceef2acc6f81428053f8e3d242b5df4149c499ad5ae0bfe1",
+      "rationale": "Warehouse lifecycle transitions are outside the core accounting boundary."
+    },
+    {
+      "id": "fortnox-labels",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "1190d0da452f5eb8a4cd2ae45b7ed509df9a62a93fcd2ca040061245d3ed0909",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-lockedperiod",
+      "classification": "complete",
+      "publicOperationCount": 1,
+      "implementedCount": 1,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "09c68374269123df99ac9cc378b444115904fc935596fa6db3cfedf02fd51538"
+    },
+    {
+      "id": "fortnox-me",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "b7482b5efab17f77e6214db39f3c98177c16ecc32aeef5155a61b13a69368809",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-modesofpayments",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "789f8c2d92b738cd12ddce16bf67493ff9ca7434fe2e2c1861478f8f8555b518",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-offers",
+      "classification": "complete",
+      "publicOperationCount": 11,
+      "implementedCount": 11,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "8d190386c51b6ce7a978456349daffc7b38f6b641b484053a2da73221656e548"
+    },
+    {
+      "id": "fortnox-orders",
+      "classification": "complete",
+      "publicOperationCount": 10,
+      "implementedCount": 10,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "44704519d04cd799d72234f6fd425214c9f4384b7c19bd9654c9943d80de5986"
+    },
+    {
+      "id": "fortnox-predefinedaccounts",
+      "classification": "complete",
+      "publicOperationCount": 3,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "1eb4fbd3e279a820985d8eb4439ce69c8d0faea526ad73ede85032d74482cff7",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-predefinedvoucherseries",
+      "classification": "complete",
+      "publicOperationCount": 3,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "1732dc15be27f9167b566c0d9bd2d7a178cb222a4dd2be7c1bffe3d416e77c70",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-pricelists",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 4,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "86da5e9fbee1402a7decadccd7476a4221a2bd0b2172eba318c6658035a8eadb"
+    },
+    {
+      "id": "fortnox-prices",
+      "classification": "complete",
+      "publicOperationCount": 8,
+      "implementedCount": 8,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "d4b945b379d3894aaff6be05ccc491b746f84d9445e6cded29f9c913dd679522"
+    },
+    {
+      "id": "fortnox-printtemplates",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "4d0564d2e6d95503e4ffb5b86892568d690a7f44eda0626560f9dad5064bca01",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-projects",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "f427b145477c57d12659ddb8b4e484f468865ec2534fca7ee61752d19042b7af"
+    },
+    {
+      "id": "fortnox-salarytransactions",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "45855e32a9138be5f5c63a9bee15953a20c2e62f73419645f1b81b73a5d5d352"
+    },
+    {
+      "id": "fortnox-scheduletimes",
+      "classification": "complete",
+      "publicOperationCount": 3,
+      "implementedCount": 3,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "c98060a4d136f83db5215c1bf11cc084f492389de10f9c47e269bec281e81f60"
+    },
+    {
+      "id": "fortnox-sie",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "28037f492013b466b28ca882d3ad553ce634561c74bd7b02100753e0ed1af8c1",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-supplierinvoiceaccruals",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "925893bbc0650b9aed5e6b930a763dbb79ac30652a4c8502abc1df73e9c28ce7"
+    },
+    {
+      "id": "fortnox-supplierinvoiceexternalurlconnections",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "07cdb3c1023a7d225eef067532dfb92de5677f56a877f75f5811be6ef7e8a691",
+      "rationale": "Remote URL attachment connections are excluded to avoid introducing an arbitrary remote-fetch trust boundary."
+    },
+    {
+      "id": "fortnox-supplierinvoicefileconnections",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 4,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "458027cba3536beddc4073ee9242f4385491333637db0cd1d5b56a09df0a7c2e"
+    },
+    {
+      "id": "fortnox-supplierinvoicepayments",
+      "classification": "complete",
+      "publicOperationCount": 6,
+      "implementedCount": 6,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "9a949e4f40aef9d3659fc13942771d7bf99eae7b725d77e219cefbc0d4bd759a"
+    },
+    {
+      "id": "fortnox-supplierinvoices",
+      "classification": "complete",
+      "publicOperationCount": 9,
+      "implementedCount": 9,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "d2942627bb05ff9d05d5b0e15ebaad60255579b68f99c5f599d71b3dd44c6cfe"
+    },
+    {
+      "id": "fortnox-suppliers",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 4,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "4d6bf29eb39b1c513bc789a833a9b02859f3646cb508430ebd46b7cc9ae4ae39"
+    },
+    {
+      "id": "fortnox-taxreductions",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "7e885268bba03e93538190b8e05d332b37509a727c96c0c6a0309e8e9ba0e0c3"
+    },
+    {
+      "id": "fortnox-termsofdeliveries",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 2,
+      "stateHash": "96ab81fedd3d1db4c732d1738ef2c854e7f201d9f796c4a74eb46dcc4cf768a3",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-termsofpayments",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "916141631529183a970218db6981c2285f403c34f5d6b61feb58e82c15bfc1ed",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-trustedemailsenders",
+      "classification": "excluded",
+      "publicOperationCount": 3,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "c37ca839137a68f85b3c00ff1b69edee9cbd2f9929db7dd229e4d9df06c49830",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-units",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "f2c89b1f065ae51a73ae8135279cecc2c2b2e8d5b8a3415b1efb3758aa2278c0",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-vacationdebtbasis",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "bc880f917b61ba9006c03443c9459f13b8a973e76741ffac426b6e251fb98f7f",
+      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+    },
+    {
+      "id": "fortnox-voucherfileconnections",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 4,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "4d58d7559ae09092fc9f0cf27d5554d77e55cb179b9ebd5c2ab55bb68e430029"
+    },
+    {
+      "id": "fortnox-vouchers",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "4d8d1ec375d2877377524360ee1c981323de598b4beedec407e37c155bff94d7"
+    },
+    {
+      "id": "fortnox-voucherseries",
+      "classification": "complete",
+      "publicOperationCount": 4,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 2,
+      "stateHash": "e3080c1d71f37ee3fb9ae6a323da74b3c35600a611f7a3aed597204e736718d8",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "fortnox-wayofdeliveries",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "da2886f007fc4ec973e1fa378e638327a7ddc7981ff62b45f763b05899c74924",
+      "rationale": "Reference and setup data is read-first; shared configuration mutations are explicitly outside the v1 core boundary."
+    },
+    {
+      "id": "integration-developer-integration-ratings",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "b41d5dd52565c4b7396e5a1417dafeda726b4fa6e40e0891a7660fd4f29ab52d",
+      "rationale": "Integration marketplace administration is not an end-user accounting workflow."
+    },
+    {
+      "id": "integration-developer-integration-sales",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "1eb2fc4a063a25bbcdbd773a5e146634470e96503a960cb1fe115a03c8d99db6",
+      "rationale": "Integration marketplace administration is not an end-user accounting workflow."
+    },
+    {
+      "id": "integration-developer-users",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "54c79b52d9af48d34fe3496532c0efbe67dd9c6a10e1d0258d6f725ce968d777",
+      "rationale": "Integration marketplace administration is not an end-user accounting workflow."
+    },
+    {
+      "id": "recurring-api-invoicerequests",
+      "classification": "complete",
+      "publicOperationCount": 3,
+      "implementedCount": 3,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "652390d82dba1e6af4cddc26cbf065bca21d3fa92282fb54bfd50b6efbccedfd"
+    },
+    {
+      "id": "recurring-api-recurringdeviations",
+      "classification": "complete",
+      "publicOperationCount": 2,
+      "implementedCount": 2,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "d77065ffa0a86d1ab04433cd71600b6f24710736db451d68499e57a125f63a5a"
+    },
+    {
+      "id": "recurring-api-recurrings",
+      "classification": "complete",
+      "publicOperationCount": 5,
+      "implementedCount": 5,
+      "missingCount": 0,
+      "excludedCount": 0,
+      "stateHash": "e25fed5c17ba778638b6917fb896a3f518254ab15501ce150d3574b669fefb6c"
+    },
+    {
+      "id": "time-reporting-articles",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "a62e03349a28aa5d24226efe4e21ef90089f69c8b9c97296e9174a1d51a92fa5",
+      "rationale": "The separate time-reporting API is outside the initial payroll transaction boundary."
+    },
+    {
+      "id": "time-reporting-registrations",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "6be825e3746a6e14a0eb42ce6023894ceed8f972ae0d5c28d9e7e175b3ea8fa2",
+      "rationale": "The separate time-reporting API is outside the initial payroll transaction boundary."
+    },
+    {
+      "id": "warehouse-customdocumenttype",
+      "classification": "excluded",
+      "publicOperationCount": 3,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 3,
+      "stateHash": "0acc862ef58557e901fbca2b80464101cdd50c5eeb39ae99bae57ebc715b2ef0",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-custominbounddocument",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "d0f0b895555c71467378ae92942cc3a54838d53fe5bf5b7d3513a02641d89e1f",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-customoutbounddocument",
+      "classification": "excluded",
+      "publicOperationCount": 4,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 4,
+      "stateHash": "7a7345b159ed63fb37d9e2de6c194a6085b8b8ab3bb6be711711a278004b53cc",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-incominggoods",
+      "classification": "excluded",
+      "publicOperationCount": 8,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 8,
+      "stateHash": "f6f1b80fa0559e57b3a80ec1fc5289c7b896aa184302cea3907c5313ee02cd25",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-manualdocument",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "159b20d74a861ffceae77dfb543e97659efeb8076a8973fdd641d8d59725d805",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-manualinbounddocument",
+      "classification": "excluded",
+      "publicOperationCount": 6,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 6,
+      "stateHash": "9ddd06ea65abfc923d3a1a34eb90147a6dfb82e13943afab66e2fc21e9378799",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-manualoutbounddocument",
+      "classification": "excluded",
+      "publicOperationCount": 6,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 6,
+      "stateHash": "45a0dd1cc8ce64302c317260a09b3332cb0b0c86252ec3d2b2edac255a768b8b",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-productionorder",
+      "classification": "excluded",
+      "publicOperationCount": 8,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 8,
+      "stateHash": "8613fa3300d583cc19d6ffb831049fe4097f8aa30b97dce4f37405b4169da83d",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-purchaseorder",
+      "classification": "excluded",
+      "publicOperationCount": 15,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 15,
+      "stateHash": "dfb145eec81d86c9166fd09a9166ed4542c37038a5c69dd9eb8991864b108352",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stockpoint",
+      "classification": "excluded",
+      "publicOperationCount": 8,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 8,
+      "stateHash": "067c3c917c23467e2d860974788eb9866066962d8a2648aa98eff8ddc21f94dd",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stockstatus",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "f8eecc26d927352edadc30eb5d72d7370a39f0f02ecde1788f436d816b14935e",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stocktaking",
+      "classification": "excluded",
+      "publicOperationCount": 13,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 13,
+      "stateHash": "d1be0e76058603713e3776dc9bed022fe5f5c39b4bcdcd74c8281795a0a8fb3d",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-stocktransfer",
+      "classification": "excluded",
+      "publicOperationCount": 5,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 5,
+      "stateHash": "112ea358298b5ba228a7f72dcd0178cf4454c6234eb0c569b3e8b6939af3a9c2",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    },
+    {
+      "id": "warehouse-tenant",
+      "classification": "excluded",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "189f1d8ff127b5d247f138fdf240e293c923d3499ccf895f5cf59d499f9f89f6",
+      "rationale": "Warehouse management is a separate product domain outside the core accounting boundary."
+    }
+  ]
+}

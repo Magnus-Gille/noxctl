@@ -55,4 +55,61 @@ describe('recurring tools', () => {
 
     expect(result.isError).toBe(true);
   });
+
+  it('preserves provider-defined create payloads end to end', async () => {
+    mockFetch({ id: 'id-1', status: 'ACTIVE' });
+    const input = {
+      customer: { customer_number: '17', provider_extension: { mode: 'exact' } },
+      rows: [{ article_number: 'A1', custom_value: 0 }],
+    };
+    const result = await (
+      await client()
+    ).callTool({
+      name: 'fortnox_create_recurring',
+      arguments: { input, confirm: true },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const init = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as {
+      body?: string;
+    };
+    expect(JSON.parse(init.body ?? 'null')).toEqual(input);
+  });
+
+  it('preserves provider-defined replacement payloads end to end', async () => {
+    mockFetch({ id: '550e8400-e29b-41d4-a716-446655440000', status: 'ACTIVE' });
+    const input = { status: 'ACTIVE', provider_extension: { retain: false } };
+    const result = await (
+      await client()
+    ).callTool({
+      name: 'fortnox_replace_recurring',
+      arguments: {
+        recurringId: '550e8400-e29b-41d4-a716-446655440000',
+        etag: '"v1"',
+        input,
+        confirm: true,
+      },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const init = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as {
+      body?: string;
+    };
+    expect(JSON.parse(init.body ?? 'null')).toEqual(input);
+  });
+
+  it('rejects unknown fields in structured JSON Patch operations', async () => {
+    const result = await (
+      await client()
+    ).callTool({
+      name: 'fortnox_patch_recurring',
+      arguments: {
+        recurringId: '550e8400-e29b-41d4-a716-446655440000',
+        etag: '"v1"',
+        operations: [{ op: 'replace', path: '/status', value: 'ACTIVE', unexpected: true }],
+        dryRun: true,
+      },
+    });
+    expect(result.isError).toBe(true);
+  });
 });

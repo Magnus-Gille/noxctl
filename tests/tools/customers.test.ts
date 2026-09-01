@@ -138,7 +138,7 @@ describe('customer tools', () => {
           Name: 'Full Example AB',
           OrganisationNumber: '556677-8899',
           Email: 'info@full-example.example',
-          Phone: '08-123456',
+          Phone1: '08-123456',
           Address1: 'Exempelgatan 1',
           ZipCode: '11122',
           City: 'Uppsala',
@@ -150,6 +150,7 @@ describe('customer tools', () => {
       const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
       expect(body.Customer.OrganisationNumber).toBe('556677-8899');
       expect(body.Customer.City).toBe('Uppsala');
+      expect(body.Customer.Phone1).toBe('08-123456');
     });
   });
 
@@ -194,6 +195,164 @@ describe('customer tools', () => {
 
       expect(result.isError).toBe(true);
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+  });
+
+  describe('fortnox_delete_customer', () => {
+    it('requires confirmation and supports dry run', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const unconfirmed = await client.callTool({
+        name: 'fortnox_delete_customer',
+        arguments: { customerNumber: '42' },
+      });
+      const dryRun = await client.callTool({
+        name: 'fortnox_delete_customer',
+        arguments: { customerNumber: '42', dryRun: true },
+      });
+
+      expect(unconfirmed.isError).toBe(true);
+      expect((dryRun.content as { type: string; text: string }[])[0].text).toContain('Dry run');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('deletes only after explicit confirmation', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_delete_customer',
+        arguments: { customerNumber: '42', confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[1].method).toBe('DELETE');
+    });
+  });
+
+  // Same class of bug as #96 (Supplier field gap): the MCP SDK silently strips
+  // any argument the Zod schema does not declare, so an undeclared field
+  // reaches neither Fortnox nor an error message — it just vanishes. Type and
+  // Phone1/Phone2 were missing entirely, and Phone was declared under a name
+  // Fortnox's Customer resource doesn't have (only Phone1/Phone2 exist).
+  describe('customer write schemas cover the real Customer resource', () => {
+    const extendedFields = {
+      Type: 'PRIVATE',
+      Phone1: '08-123456',
+      Phone2: '070-1234567',
+      Fax: '08-654321',
+      WWW: 'https://example.test',
+      Address2: 'Plan 4',
+      CountryCode: 'SE',
+      DeliveryName: 'Lagret',
+      DeliveryAddress1: 'Lagergatan 1',
+      DeliveryZipCode: '11133',
+      DeliveryCity: 'Uppsala',
+      DeliveryCountryCode: 'SE',
+      VisitingAddress: 'Besöksgatan 2',
+      VisitingZipCode: '11144',
+      VisitingCity: 'Uppsala',
+      VisitingCountryCode: 'SE',
+      GLN: '1234567890123',
+      ExternalReference: 'ext-42',
+      OurReference: 'Anna Andersson',
+      YourReference: 'Erik Eriksson',
+      Comments: 'VIP customer',
+      Currency: 'SEK',
+      CostCenter: 'CC1',
+      Project: '12',
+      PriceList: 'A',
+      TermsOfDelivery: 'EXW',
+      TermsOfPayment: '30',
+      VATNumber: 'SE556677889901',
+      VATType: 'SEVAT',
+      SalesAccount: '3001',
+      InvoiceRemark: 'Handle with care',
+      ShowPriceVATIncluded: false,
+      EmailInvoice: 'invoices@example.test',
+      Active: true,
+    };
+
+    // The claim is full coverage of the Customer resource, so assert the
+    // schema's property list itself — sending a subset of values cannot
+    // detect a field quietly dropped from the schema.
+    const writableCustomerFields = Object.keys(extendedFields);
+
+    it('declares every writable Customer field on create', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_create_customer')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      for (const field of writableCustomerFields) {
+        expect(declared).toContain(field);
+      }
+    });
+
+    it('declares every writable Customer field on update', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_update_customer')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      for (const field of writableCustomerFields) {
+        expect(declared).toContain(field);
+      }
+    });
+
+    // Regression guard: Country/DeliveryCountry/VisitingCountry are genuinely
+    // read-only on this resource (Fortnox rejects them with "Fältet Country är
+    // endast läsbart") — they must stay off the writable schema, not just be
+    // silently stripped a second time at the operations layer.
+    it('does not declare the read-only *Country fields', async () => {
+      const { client } = await setupClientServer();
+      const { tools } = await client.listTools();
+      const schema = tools.find((t) => t.name === 'fortnox_update_customer')!.inputSchema;
+      const declared = Object.keys(schema.properties as Record<string, unknown>);
+      expect(declared).not.toContain('Country');
+      expect(declared).not.toContain('DeliveryCountry');
+      expect(declared).not.toContain('VisitingCountry');
+    });
+
+    it('forwards extended fields on create', async () => {
+      mockFetch({ Customer: { CustomerNumber: '3' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_create_customer',
+        arguments: { Name: 'New Customer', confirm: true, ...extendedFields },
+      });
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const sent = JSON.parse(fetchCall[1].body as string).Customer;
+      for (const [key, value] of Object.entries(extendedFields)) {
+        expect(sent[key]).toEqual(value);
+      }
+    });
+
+    it('forwards extended fields on update', async () => {
+      mockFetch({ Customer: { CustomerNumber: '3' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_update_customer',
+        arguments: { customerNumber: '3', confirm: true, ...extendedFields },
+      });
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      const sent = JSON.parse(fetchCall[1].body as string).Customer;
+      for (const [key, value] of Object.entries(extendedFields)) {
+        expect(sent[key]).toEqual(value);
+      }
+      expect(sent.customerNumber).toBeUndefined();
+    });
+
+    it('rejects an invalid Type value', async () => {
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_customer',
+        arguments: { Name: 'Bad Type', Type: 'INDIVIDUAL', confirm: true },
+      });
+
+      expect(result.isError).toBe(true);
     });
   });
 });

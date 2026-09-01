@@ -13,6 +13,10 @@ export interface ListAccountsParams {
   all?: boolean;
 }
 
+interface AccountResponse {
+  Account: Record<string, unknown>;
+}
+
 export function createAccountOperations(transport: FortnoxTransport) {
   async function listAccounts(params: ListAccountsParams = {}): Promise<AccountsResponse> {
     const queryParams: Record<string, string | number | undefined> = {
@@ -51,7 +55,37 @@ export function createAccountOperations(transport: FortnoxTransport) {
     return data;
   }
 
-  return { listAccounts };
+  async function getAccount(number: number): Promise<Record<string, unknown>> {
+    const data = await transport.request<AccountResponse>(`accounts/${number}`);
+    return data.Account;
+  }
+
+  async function createAccount(fields: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await transport.request<AccountResponse>('accounts', {
+      method: 'POST',
+      body: { Account: fields },
+    });
+    return data.Account;
+  }
+
+  async function updateAccount(
+    number: number,
+    fields: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const { Number: _, ...body } = fields;
+    const data = await transport.request<AccountResponse>(`accounts/${number}`, {
+      method: 'PUT',
+      body: { Account: body },
+    });
+    return data.Account;
+  }
+
+  async function deleteAccount(number: number): Promise<void> {
+    await transport.request(`accounts/${number}`, { method: 'DELETE' });
+  }
+
+  return { listAccounts, getAccount, createAccount, updateAccount, deleteAccount };
 }
 
-export const { listAccounts } = createAccountOperations(defaultFortnoxTransport);
+export const { listAccounts, getAccount, createAccount, updateAccount, deleteAccount } =
+  createAccountOperations(defaultFortnoxTransport);

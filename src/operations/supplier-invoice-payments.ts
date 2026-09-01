@@ -70,11 +70,34 @@ export function createSupplierInvoicePaymentOperations(transport: FortnoxTranspo
     });
   }
 
+  async function updateSupplierInvoicePayment(
+    paymentNumber: string,
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<SupplierInvoicePaymentResponse>(
+      `supplierinvoicepayments/${documentSegment(paymentNumber)}`,
+      { method: 'PUT', body: { SupplierInvoicePayment: params } },
+    );
+    return data.SupplierInvoicePayment;
+  }
+
+  async function bookkeepSupplierInvoicePayment(
+    paymentNumber: string,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<SupplierInvoicePaymentResponse>(
+      `supplierinvoicepayments/${documentSegment(paymentNumber)}/bookkeep`,
+      { method: 'PUT' },
+    );
+    return data.SupplierInvoicePayment ?? {};
+  }
+
   return {
     listSupplierInvoicePayments,
     getSupplierInvoicePayment,
     createSupplierInvoicePayment,
+    updateSupplierInvoicePayment,
     deleteSupplierInvoicePayment,
+    bookkeepSupplierInvoicePayment,
   };
 }
 
@@ -82,5 +105,7 @@ export const {
   listSupplierInvoicePayments,
   getSupplierInvoicePayment,
   createSupplierInvoicePayment,
+  updateSupplierInvoicePayment,
   deleteSupplierInvoicePayment,
+  bookkeepSupplierInvoicePayment,
 } = createSupplierInvoicePaymentOperations(defaultFortnoxTransport);

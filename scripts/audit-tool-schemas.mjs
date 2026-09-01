@@ -8,12 +8,13 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../dist/index.js';
 import {
   auditSchemaCoverage,
+  auditMutationInventory,
   compareAuditBaselines,
   formatAuditFields,
   formatAuditSummary,
   toAuditBaseline,
 } from '../dist/schema-audit.js';
-import { SCHEMA_AUDIT_MAPPINGS } from '../dist/schema-audit-mappings.js';
+import { SCHEMA_AUDIT_EXCEPTIONS, SCHEMA_AUDIT_MAPPINGS } from '../dist/schema-audit-mappings.js';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_DIR = path.dirname(SCRIPT_DIR);
@@ -120,9 +121,18 @@ async function main() {
     discoverTools(),
   ]);
   const results = auditSchemaCoverage(spec, tools, SCHEMA_AUDIT_MAPPINGS);
+  const inventory = auditMutationInventory(tools, SCHEMA_AUDIT_MAPPINGS, SCHEMA_AUDIT_EXCEPTIONS);
+  if (inventory.unmappedToolNames.length || inventory.staleExceptionIds.length) {
+    throw new Error(
+      `Mutation inventory drift: unmapped=${inventory.unmappedToolNames.length} stale-exceptions=${inventory.staleExceptionIds.length}`,
+    );
+  }
   const current = toAuditBaseline(results);
 
   if (options.showFields) {
+    process.stdout.write(
+      `Mutation inventory: discovered=${inventory.discoveredMutationCount} mapped=${inventory.mappedMutationCount} excepted=${inventory.exceptedMutationCount}\n`,
+    );
     process.stdout.write(formatAuditFields(results));
     return;
   }

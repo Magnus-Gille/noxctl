@@ -45,6 +45,16 @@ export function createFinancialYearOperations(transport: FortnoxTransport) {
     return data.FinancialYear;
   }
 
+  async function createFinancialYear(
+    params: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<FinancialYearResponse>('financialyears', {
+      method: 'POST',
+      body: { FinancialYear: params },
+    });
+    return data.FinancialYear;
+  }
+
   // The locked period (bokföring låst t.o.m.). An empty object means no period
   // is locked. Useful as context before voucher/invoice writes to avoid
   // "period is locked" API errors.
@@ -53,8 +63,8 @@ export function createFinancialYearOperations(transport: FortnoxTransport) {
     return data.LockedPeriod ?? {};
   }
 
-  return { listFinancialYears, getFinancialYear, getLockedPeriod };
+  return { listFinancialYears, getFinancialYear, createFinancialYear, getLockedPeriod };
 }
 
-export const { listFinancialYears, getFinancialYear, getLockedPeriod } =
+export const { listFinancialYears, getFinancialYear, createFinancialYear, getLockedPeriod } =
   createFinancialYearOperations(defaultFortnoxTransport);

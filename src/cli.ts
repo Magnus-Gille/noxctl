@@ -45,14 +45,17 @@ import {
   supplierInvoiceListColumns,
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
+  supplierInvoiceAttachmentColumns,
   invoicePaymentListColumns,
   invoicePaymentDetailColumns,
   supplierInvoicePaymentListColumns,
   supplierInvoicePaymentDetailColumns,
   offerListColumns,
   offerDetailColumns,
+  offerConfirmColumns,
   orderListColumns,
   orderDetailColumns,
+  orderConfirmColumns,
   projectListColumns,
   projectDetailColumns,
   costCenterListColumns,
@@ -84,6 +87,7 @@ import {
   absenceTransactionListColumns,
   absenceTransactionDetailColumns,
   scheduleTimeDetailColumns,
+  referenceDataColumns,
 } from './views.js';
 
 const program = new Command();
@@ -1467,6 +1471,65 @@ invoices
     },
   );
 
+for (const action of [
+  { command: 'cancel', label: 'Cancel', exportName: 'cancelInvoice' },
+  { command: 'eprint', label: 'Send via e-print', exportName: 'eprintInvoice' },
+  {
+    command: 'external-print',
+    label: 'Mark as externally printed',
+    exportName: 'externalPrintInvoice',
+  },
+] as const) {
+  invoices
+    .command(`${action.command} <documentNumber>`)
+    .description(`${action.label} an invoice`)
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the action without sending it')
+    .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+      const operations = await import('./operations/invoices.js');
+      if (!(await confirmMutation(`${action.label} invoice ${documentNumber}`, opts))) return;
+      const data = await operations[action.exportName](documentNumber);
+      outputConfirmation(
+        `Invoice ${documentNumber}: ${action.command} completed.`,
+        json(),
+        data,
+        invoiceConfirmColumns,
+        'Invoice',
+      );
+    });
+}
+
+invoices
+  .command('reminder-pdf <documentNumber>')
+  .description('Print an invoice reminder and save the returned PDF')
+  .option('-f, --file <path>', 'Write the PDF here')
+  .option('--overwrite', 'Allow replacing an existing regular file')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts) => {
+    const { getInvoiceReminderPdf } = await import('./operations/invoices.js');
+    if (!(await confirmMutation(`Print reminder for invoice ${documentNumber}`, opts))) return;
+    const pdf = await getInvoiceReminderPdf(documentNumber);
+    if (!pdf) {
+      outputConfirmation(
+        `Invoice reminder ${documentNumber} printed without a PDF response.`,
+        json(),
+        {},
+      );
+      return;
+    }
+    const { writeBinaryFile } = await import('./safe-file-output.js');
+    const path = writeBinaryFile(
+      opts.file ?? `invoice-reminder-${documentNumber}.pdf`,
+      pdf,
+      opts.overwrite,
+    );
+    outputConfirmation(`Invoice reminder saved to ${path}.`, json(), {
+      Path: path,
+      Bytes: pdf.length,
+    });
+  });
+
 invoices
   .command('pdf <documentNumber>')
   .description('Download an invoice as a PDF')
@@ -1806,6 +1869,71 @@ accounts
     outputList(data.Accounts ?? [], accountListColumns, json(), data, data.MetaInformation);
   });
 
+accounts
+  .command('get <number>')
+  .description('Get one account')
+  .action(async (number: string) => {
+    const { getAccount } = await import('./operations/accounts.js');
+    const data = await getAccount(Number(number));
+    outputDetail(data, accountListColumns, json(), 'Account');
+  });
+
+accounts
+  .command('create')
+  .description('Create an account')
+  .requiredOption('--number <number>', 'Account number', parseInt)
+  .requiredOption('--description <text>', 'Account description')
+  .option('--input <file>', 'Additional account data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createAccount } = await import('./operations/accounts.js');
+    const extra = opts.input
+      ? (JSON.parse(
+          opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8'),
+        ) as Record<string, unknown>)
+      : {};
+    const fields = { ...extra, Number: opts.number, Description: opts.description };
+    if (!(await confirmMutation(`Create account ${opts.number}`, opts, { Account: fields })))
+      return;
+    const data = await createAccount(fields);
+    outputDetail(data, accountListColumns, json(), 'Account');
+  });
+
+accounts
+  .command('update <number>')
+  .description('Update an account')
+  .requiredOption('--input <file>', 'Account data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (number: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateAccount } = await import('./operations/accounts.js');
+    const fields = JSON.parse(
+      opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8'),
+    ) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update account ${number}`, opts, { Account: fields }))) return;
+    const data = await updateAccount(Number(number), fields);
+    outputDetail(data, accountListColumns, json(), 'Account');
+  });
+
+accounts
+  .command('delete <number>')
+  .description('Delete an account')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (number: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteAccount } = await import('./operations/accounts.js');
+    if (!(await confirmMutation(`Delete account ${number}`, opts))) return;
+    await deleteAccount(Number(number));
+    outputConfirmation(
+      `Account ${number} deleted.`,
+      json(),
+      { Number: Number(number), deleted: true },
+      undefined,
+      'Account',
+    );
+  });
+
 // --- customers ---
 const customers = program.command('customers').description('Customer operations');
 
@@ -1885,7 +2013,7 @@ customers
     'after',
     `
 Examples:
-  echo '{"Email":"new@acme.se","Phone":"08-123456"}' | noxctl customers update 25 --input - --yes`,
+  echo '{"Email":"new@acme.se","Phone1":"08-123456"}' | noxctl customers update 25 --input - --yes`,
   )
   .action(
     async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
@@ -1901,6 +2029,24 @@ Examples:
       outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
     },
   );
+
+customers
+  .command('delete <customerNumber>')
+  .description('Delete a customer')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (customerNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteCustomer } = await import('./operations/customers.js');
+    if (!(await confirmMutation(`Delete customer ${customerNumber}`, opts))) return;
+    await deleteCustomer(customerNumber);
+    outputConfirmation(
+      `Customer ${customerNumber} deleted.`,
+      json(),
+      { CustomerNumber: customerNumber, deleted: true },
+      undefined,
+      'Customer',
+    );
+  });
 
 // --- articles ---
 const articles = program.command('articles').description('Article operations');
@@ -1993,6 +2139,24 @@ Examples:
       outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
     },
   );
+
+articles
+  .command('delete <articleNumber>')
+  .description('Delete an article')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (articleNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteArticle } = await import('./operations/articles.js');
+    if (!(await confirmMutation(`Delete article ${articleNumber}`, opts))) return;
+    await deleteArticle(articleNumber);
+    outputConfirmation(
+      `Article ${articleNumber} deleted.`,
+      json(),
+      { ArticleNumber: articleNumber, deleted: true },
+      undefined,
+      'Article',
+    );
+  });
 
 // --- suppliers ---
 const suppliers = program.command('suppliers').description('Supplier operations');
@@ -2201,6 +2365,131 @@ supplierInvoices
       data,
       supplierInvoiceConfirmColumns,
       'SupplierInvoice',
+    );
+  });
+
+supplierInvoices
+  .command('update <givenNumber>')
+  .description('Update a supplier invoice')
+  .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (givenNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (
+      !(await confirmMutation(`Update supplier invoice ${givenNumber}`, opts, {
+        SupplierInvoice: fields,
+      }))
+    )
+      return;
+    const data = await updateSupplierInvoice(givenNumber, fields);
+    outputDetail(data, supplierInvoiceDetailColumns, json(), 'SupplierInvoice');
+  });
+
+for (const action of [
+  {
+    command: 'approval-bookkeep',
+    label: 'Approval-bookkeep',
+    exportName: 'approvalBookkeepSupplierInvoice',
+  },
+  {
+    command: 'approval-payment',
+    label: 'Payment-approve',
+    exportName: 'approvalPaymentSupplierInvoice',
+  },
+  { command: 'cancel', label: 'Cancel', exportName: 'cancelSupplierInvoice' },
+  { command: 'credit', label: 'Credit', exportName: 'creditSupplierInvoice' },
+] as const) {
+  supplierInvoices
+    .command(`${action.command} <givenNumber>`)
+    .description(`${action.label} a supplier invoice`)
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the action without sending it')
+    .action(async (givenNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+      const operations = await import('./operations/supplier-invoices.js');
+      if (!(await confirmMutation(`${action.label} supplier invoice ${givenNumber}`, opts))) return;
+      const data = await operations[action.exportName](givenNumber);
+      outputConfirmation(
+        `Supplier invoice ${givenNumber}: ${action.command} completed.`,
+        json(),
+        data,
+        supplierInvoiceConfirmColumns,
+        'SupplierInvoice',
+      );
+    });
+}
+
+supplierInvoices
+  .command('attachments <givenNumber>')
+  .description(
+    'List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too',
+  )
+  .action(async (givenNumber: string) => {
+    const { listSupplierInvoiceAttachments } = await import('./operations/supplier-invoices.js');
+    const attachments = await listSupplierInvoiceAttachments(givenNumber);
+    if (json()) {
+      console.log(JSON.stringify({ Attachments: attachments }, null, 2));
+    } else {
+      outputList(
+        attachments as unknown as Record<string, unknown>[],
+        supplierInvoiceAttachmentColumns,
+        false,
+        attachments,
+      );
+    }
+  });
+
+supplierInvoices
+  .command('file <fileId>')
+  .description(
+    'Download a file attached to a supplier invoice (get the fileId from "supplier-invoices attachments")',
+  )
+  .option(
+    '-f, --file <path>',
+    'Write the file here (- for stdout; default: supplier-invoice-file-<fileId><ext>)',
+  )
+  .addHelpText(
+    'after',
+    `
+Examples:
+  noxctl supplier-invoices attachments 1
+  noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63
+  noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63 --file invoice-scan.pdf`,
+  )
+  .action(async (fileId: string, opts: { file?: string }) => {
+    const { getSupplierInvoiceFile } = await import('./operations/supplier-invoices.js');
+    const { extensionForMime } = await import('./operations/vouchers.js');
+    const toStdout = opts.file === '-';
+
+    if (toStdout && program.opts().output === 'json') {
+      throw new Error(
+        '--file - writes raw file bytes to stdout and cannot be combined with --output json.',
+      );
+    }
+
+    const file = await getSupplierInvoiceFile(fileId);
+
+    if (toStdout) {
+      await new Promise<void>((resolve, reject) => {
+        process.stdout.write(file.buffer, (err) => (err ? reject(err) : resolve()));
+      });
+      return;
+    }
+
+    const path =
+      opts.file ?? `supplier-invoice-file-${fileId}${extensionForMime(file.contentType)}`;
+    writeFileSync(path, file.buffer);
+    outputConfirmation(
+      `File saved to ${path} (${file.contentType}, ${file.buffer.length} bytes).`,
+      json(),
+      {
+        FileId: fileId,
+        Path: path,
+        ContentType: file.contentType,
+        Bytes: file.buffer.length,
+      },
     );
   });
 
@@ -2421,6 +2710,71 @@ Examples:
     );
   });
 
+vouchers
+  .command('connection <fileId>')
+  .description('Get voucher file-connection metadata')
+  .action(async (fileId: string) => {
+    const { getVoucherFileConnection } = await import('./operations/vouchers.js');
+    const result = await getVoucherFileConnection(fileId);
+    outputDetail(result, voucherAttachmentColumns, json(), 'VoucherFileConnection');
+  });
+vouchers
+  .command('detach <fileId>')
+  .description('Detach a file from its voucher')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without detaching')
+  .action(async (fileId: string, opts) => {
+    const { deleteVoucherFileConnection } = await import('./operations/vouchers.js');
+    if (!(await confirmMutation(`Delete voucher file connection ${fileId}`, opts))) return;
+    await deleteVoucherFileConnection(fileId);
+    outputConfirmation(`Voucher file connection ${fileId} deleted.`, json(), {
+      FileId: fileId,
+      detached: true,
+    });
+  });
+
+supplierInvoices
+  .command('connection <fileId>')
+  .description('Get supplier-invoice file-connection metadata')
+  .action(async (fileId: string) => {
+    const { getSupplierInvoiceFileConnection } = await import('./operations/supplier-invoices.js');
+    const result = await getSupplierInvoiceFileConnection(fileId);
+    outputDetail(result, supplierInvoiceAttachmentColumns, json(), 'SupplierInvoiceFileConnection');
+  });
+supplierInvoices
+  .command('connect-file <givenNumber> <fileId>')
+  .description('Connect an existing inbox file to a supplier invoice')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview exact payload')
+  .action(async (givenNumber: string, fileId: string, opts) => {
+    const payload = { SupplierInvoiceNumber: givenNumber, FileId: fileId };
+    if (
+      !(await confirmMutation(`Connect file ${fileId} to supplier invoice ${givenNumber}`, opts, {
+        SupplierInvoiceFileConnection: payload,
+      }))
+    )
+      return;
+    const { createSupplierInvoiceFileConnection } =
+      await import('./operations/supplier-invoices.js');
+    const result = await createSupplierInvoiceFileConnection(givenNumber, fileId);
+    outputDetail(result, supplierInvoiceAttachmentColumns, json(), 'SupplierInvoiceFileConnection');
+  });
+supplierInvoices
+  .command('detach-file <fileId>')
+  .description('Detach a file from a supplier invoice')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without detaching')
+  .action(async (fileId: string, opts) => {
+    const { deleteSupplierInvoiceFileConnection } =
+      await import('./operations/supplier-invoices.js');
+    if (!(await confirmMutation(`Delete supplier invoice file connection ${fileId}`, opts))) return;
+    await deleteSupplierInvoiceFileConnection(fileId);
+    outputConfirmation(`Supplier invoice file connection ${fileId} deleted.`, json(), {
+      FileId: fileId,
+      detached: true,
+    });
+  });
+
 // --- invoice-payments ---
 const invoicePayments = program
   .command('invoice-payments')
@@ -2551,6 +2905,28 @@ invoicePayments
     );
   });
 
+invoicePayments
+  .command('update <paymentNumber>')
+  .description('Update an invoice payment')
+  .requiredOption('--input <file>', 'Payment data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (paymentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateInvoicePayment } = await import('./operations/invoice-payments.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update invoice payment ${paymentNumber}`, opts, {
+          InvoicePayment: fields,
+        }))
+      )
+        return;
+      const data = await updateInvoicePayment(paymentNumber, fields);
+      outputDetail(data, invoicePaymentDetailColumns, json(), 'InvoicePayment');
+    },
+  );
+
 // --- supplier-invoice-payments ---
 const supplierInvoicePayments = program
   .command('supplier-invoice-payments')
@@ -2657,6 +3033,49 @@ supplierInvoicePayments
       `Supplier invoice payment ${paymentNumber} deleted.`,
       json(),
       { Number: paymentNumber, deleted: true },
+      undefined,
+      'SupplierInvoicePayment',
+    );
+  });
+
+supplierInvoicePayments
+  .command('update <paymentNumber>')
+  .description('Update a supplier invoice payment')
+  .requiredOption('--input <file>', 'Payment data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(
+    async (paymentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+      const { updateSupplierInvoicePayment } =
+        await import('./operations/supplier-invoice-payments.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update supplier invoice payment ${paymentNumber}`, opts, {
+          SupplierInvoicePayment: fields,
+        }))
+      )
+        return;
+      const data = await updateSupplierInvoicePayment(paymentNumber, fields);
+      outputDetail(data, supplierInvoicePaymentDetailColumns, json(), 'SupplierInvoicePayment');
+    },
+  );
+
+supplierInvoicePayments
+  .command('bookkeep <paymentNumber>')
+  .description('Bookkeep a supplier invoice payment')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { bookkeepSupplierInvoicePayment } =
+      await import('./operations/supplier-invoice-payments.js');
+    if (!(await confirmMutation(`Bookkeep supplier invoice payment ${paymentNumber}`, opts)))
+      return;
+    const data = await bookkeepSupplierInvoicePayment(paymentNumber);
+    outputConfirmation(
+      `Supplier invoice payment ${paymentNumber} bookkeept.`,
+      json(),
+      data,
       undefined,
       'SupplierInvoicePayment',
     );
@@ -2793,6 +3212,62 @@ offers
     );
   });
 
+for (const action of [
+  { command: 'cancel', label: 'Cancel', exportName: 'cancelOffer' },
+  { command: 'email', label: 'Email', exportName: 'emailOffer' },
+  {
+    command: 'external-print',
+    label: 'Mark as externally printed',
+    exportName: 'externalPrintOffer',
+  },
+] as const) {
+  offers
+    .command(`${action.command} <documentNumber>`)
+    .description(`${action.label} an offer`)
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the action without sending it')
+    .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+      const operations = await import('./operations/offers.js');
+      if (!(await confirmMutation(`${action.label} offer ${documentNumber}`, opts))) return;
+      const data = await operations[action.exportName](documentNumber);
+      outputConfirmation(
+        `Offer ${documentNumber}: ${action.command} completed.`,
+        json(),
+        data,
+        offerConfirmColumns,
+        'Offer',
+      );
+    });
+}
+
+offers
+  .command('pdf <documentNumber>')
+  .description('Download or print an offer as PDF')
+  .option('-f, --file <path>', 'Write the PDF here')
+  .option('--print', 'Use the state-changing Fortnox print action')
+  .option('--overwrite', 'Allow replacing an existing regular file')
+  .option('-y, --yes', 'Skip confirmation prompt (required with --print)')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts) => {
+    const mode = opts.print ? 'print' : 'preview';
+    if (opts.print || opts.dryRun) {
+      if (!(await confirmMutation(`${mode} offer ${documentNumber} as PDF`, opts))) return;
+    }
+    const { getOfferPdf } = await import('./operations/offers.js');
+    const pdf = await getOfferPdf(documentNumber, mode);
+    if (!pdf) {
+      outputConfirmation(`Offer ${documentNumber} printed without a PDF response.`, json(), {});
+      return;
+    }
+    const { writeBinaryFile } = await import('./safe-file-output.js');
+    const path = writeBinaryFile(opts.file ?? `offer-${documentNumber}.pdf`, pdf, opts.overwrite);
+    outputConfirmation(`Offer PDF saved to ${path}.`, json(), {
+      Path: path,
+      Bytes: pdf.length,
+      Mode: mode,
+    });
+  });
+
 // --- orders ---
 const orders = program.command('orders').description('Order operations (ordrar)');
 
@@ -2904,6 +3379,62 @@ orders
     );
   });
 
+for (const action of [
+  { command: 'cancel', label: 'Cancel', exportName: 'cancelOrder' },
+  { command: 'email', label: 'Email', exportName: 'emailOrder' },
+  {
+    command: 'external-print',
+    label: 'Mark as externally printed',
+    exportName: 'externalPrintOrder',
+  },
+] as const) {
+  orders
+    .command(`${action.command} <documentNumber>`)
+    .description(`${action.label} an order`)
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the action without sending it')
+    .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+      const operations = await import('./operations/orders.js');
+      if (!(await confirmMutation(`${action.label} order ${documentNumber}`, opts))) return;
+      const data = await operations[action.exportName](documentNumber);
+      outputConfirmation(
+        `Order ${documentNumber}: ${action.command} completed.`,
+        json(),
+        data,
+        orderConfirmColumns,
+        'Order',
+      );
+    });
+}
+
+orders
+  .command('pdf <documentNumber>')
+  .description('Download or print an order as PDF')
+  .option('-f, --file <path>', 'Write the PDF here')
+  .option('--print', 'Use the state-changing Fortnox print action')
+  .option('--overwrite', 'Allow replacing an existing regular file')
+  .option('-y, --yes', 'Skip confirmation prompt (required with --print)')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (documentNumber: string, opts) => {
+    const mode = opts.print ? 'print' : 'preview';
+    if (opts.print || opts.dryRun) {
+      if (!(await confirmMutation(`${mode} order ${documentNumber} as PDF`, opts))) return;
+    }
+    const { getOrderPdf } = await import('./operations/orders.js');
+    const pdf = await getOrderPdf(documentNumber, mode);
+    if (!pdf) {
+      outputConfirmation(`Order ${documentNumber} printed without a PDF response.`, json(), {});
+      return;
+    }
+    const { writeBinaryFile } = await import('./safe-file-output.js');
+    const path = writeBinaryFile(opts.file ?? `order-${documentNumber}.pdf`, pdf, opts.overwrite);
+    outputConfirmation(`Order PDF saved to ${path}.`, json(), {
+      Path: path,
+      Bytes: pdf.length,
+      Mode: mode,
+    });
+  });
+
 // --- projects ---
 const projects = program.command('projects').description('Project operations');
 
@@ -2982,6 +3513,21 @@ projects
       outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
     },
   );
+
+projects
+  .command('delete <projectNumber>')
+  .description('Delete a project')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (projectNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteProject } = await import('./operations/projects.js');
+    if (!(await confirmMutation(`Delete project ${projectNumber}`, opts))) return;
+    await deleteProject(projectNumber);
+    outputConfirmation(`Project ${projectNumber} deleted.`, json(), {
+      ProjectNumber: projectNumber,
+      deleted: true,
+    });
+  });
 
 // --- cost centers ---
 const costcenters = program.command('costcenters').description('Cost center operations');
@@ -3303,6 +3849,26 @@ salarytransactions
     );
   });
 
+salarytransactions
+  .command('update <salaryRow>')
+  .description('Update a salary transaction')
+  .requiredOption('--input <file>', 'Transaction data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (salaryRow: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateSalaryTransaction } = await import('./operations/salarytransactions.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (
+      !(await confirmMutation(`Update salary transaction ${salaryRow}`, opts, {
+        SalaryTransaction: fields,
+      }))
+    )
+      return;
+    const data = await updateSalaryTransaction(salaryRow, fields);
+    outputDetail(data, salaryTransactionDetailColumns, json(), 'SalaryTransaction');
+  });
+
 // --- attendance transactions (närvaro / Lön) ---
 const attendancetransactions = program
   .command('attendance-transactions')
@@ -3341,9 +3907,17 @@ attendancetransactions
 attendancetransactions
   .command('get <id>')
   .description('Get a single attendance transaction')
-  .action(async (id: string) => {
-    const { getAttendanceTransaction } = await import('./operations/attendancetransactions.js');
-    const data = await getAttendanceTransaction(id);
+  .option('--date <date>', 'Date for the composite Fortnox key (YYYY-MM-DD)')
+  .option('--code <code>', 'Cause code for the composite Fortnox key')
+  .action(async (id: string, opts: { date?: string; code?: string }) => {
+    const { getAttendanceTransaction, getAttendanceTransactionByDateCode } =
+      await import('./operations/attendancetransactions.js');
+    if ((opts.date && !opts.code) || (opts.code && !opts.date))
+      throw new Error('--date and --code must be supplied together');
+    const data =
+      opts.date && opts.code
+        ? await getAttendanceTransactionByDateCode(id, opts.date, opts.code)
+        : await getAttendanceTransaction(id);
     outputDetail(
       data as Record<string, unknown>,
       attendanceTransactionDetailColumns,
@@ -3412,6 +3986,26 @@ attendancetransactions
     );
   });
 
+attendancetransactions
+  .command('update <id>')
+  .description('Update an attendance transaction')
+  .requiredOption('--input <file>', 'Transaction data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (id: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (
+      !(await confirmMutation(`Update attendance transaction ${id}`, opts, {
+        AttendanceTransaction: fields,
+      }))
+    )
+      return;
+    const data = await updateAttendanceTransaction(id, fields);
+    outputDetail(data, attendanceTransactionDetailColumns, json(), 'AttendanceTransaction');
+  });
+
 // --- absence transactions (frånvaro / Lön) ---
 const absencetransactions = program
   .command('absence-transactions')
@@ -3450,9 +4044,17 @@ absencetransactions
 absencetransactions
   .command('get <id>')
   .description('Get a single absence transaction')
-  .action(async (id: string) => {
-    const { getAbsenceTransaction } = await import('./operations/absencetransactions.js');
-    const data = await getAbsenceTransaction(id);
+  .option('--date <date>', 'Date for the composite Fortnox key (YYYY-MM-DD)')
+  .option('--code <code>', 'Cause code for the composite Fortnox key')
+  .action(async (id: string, opts: { date?: string; code?: string }) => {
+    const { getAbsenceTransaction, getAbsenceTransactionByDateCode } =
+      await import('./operations/absencetransactions.js');
+    if ((opts.date && !opts.code) || (opts.code && !opts.date))
+      throw new Error('--date and --code must be supplied together');
+    const data =
+      opts.date && opts.code
+        ? await getAbsenceTransactionByDateCode(id, opts.date, opts.code)
+        : await getAbsenceTransaction(id);
     outputDetail(
       data as Record<string, unknown>,
       absenceTransactionDetailColumns,
@@ -3521,6 +4123,26 @@ absencetransactions
       undefined,
       'AbsenceTransaction',
     );
+  });
+
+absencetransactions
+  .command('update <id>')
+  .description('Update an absence transaction')
+  .requiredOption('--input <file>', 'Transaction data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (id: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (
+      !(await confirmMutation(`Update absence transaction ${id}`, opts, {
+        AbsenceTransaction: fields,
+      }))
+    )
+      return;
+    const data = await updateAbsenceTransaction(id, fields);
+    outputDetail(data, absenceTransactionDetailColumns, json(), 'AbsenceTransaction');
   });
 
 // --- schedule times (schematider / Lön) ---
@@ -3699,6 +4321,35 @@ taxreductions
     );
   });
 
+taxreductions
+  .command('update <id>')
+  .description('Update a tax reduction')
+  .requiredOption('--input <file>', 'Tax reduction data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (id: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateTaxReduction } = await import('./operations/taxreductions.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    const numericId = parseInt(id, 10);
+    if (!(await confirmMutation(`Update tax reduction ${id}`, opts, { TaxReduction: fields })))
+      return;
+    const data = await updateTaxReduction(numericId, fields);
+    outputDetail(data, taxReductionDetailColumns, json(), 'TaxReduction');
+  });
+
+taxreductions
+  .command('delete <id>')
+  .description('Delete a tax reduction')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (id: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteTaxReduction } = await import('./operations/taxreductions.js');
+    if (!(await confirmMutation(`Delete tax reduction ${id}`, opts))) return;
+    await deleteTaxReduction(parseInt(id, 10));
+    outputConfirmation(`Tax reduction ${id} deleted.`, json(), { Id: Number(id), deleted: true });
+  });
+
 // --- price lists ---
 const pricelists = program.command('pricelists').description('Price list operations');
 
@@ -3787,7 +4438,7 @@ const prices = program.command('prices').description('Price operations within pr
 prices
   .command('list')
   .description('List prices in a price list')
-  .requiredOption('--pricelist <code>', 'Price list code')
+  .option('--pricelist <code>', 'Price list code (omit to list all prices)')
   .option('--article <number>', 'Filter by article number')
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
@@ -3819,6 +4470,29 @@ prices
   });
 
 prices
+  .command('create')
+  .description('Create a price')
+  .requiredOption('--pricelist <code>', 'Price list code')
+  .requiredOption('--article <number>', 'Article number')
+  .requiredOption('--input <file>', 'Price data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createPrice } = await import('./operations/pricelists.js');
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const input = JSON.parse(raw) as Record<string, unknown>;
+    const fields = { ...input, PriceList: opts.pricelist, ArticleNumber: opts.article };
+    if (
+      !(await confirmMutation(`Create price ${opts.pricelist}/${opts.article}`, opts, {
+        Price: fields,
+      }))
+    )
+      return;
+    const data = await createPrice(fields);
+    outputDetail(data, priceDetailColumns, json(), 'Price');
+  });
+
+prices
   .command('update')
   .description('Update a price')
   .requiredOption('--pricelist <code>', 'Price list code')
@@ -3840,6 +4514,22 @@ prices
     }
     const data = await updatePrice(opts.pricelist, opts.article, fields, opts.fromQuantity);
     outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
+  });
+
+prices
+  .command('delete')
+  .description('Delete a quantity-aware price')
+  .requiredOption('--pricelist <code>', 'Price list code')
+  .requiredOption('--article <number>', 'Article number')
+  .requiredOption('--from-quantity <number>', 'From quantity', parseInt)
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the action without sending it')
+  .action(async (opts) => {
+    const { deletePrice } = await import('./operations/pricelists.js');
+    const target = `${opts.pricelist}/${opts.article}/${opts.fromQuantity}`;
+    if (!(await confirmMutation(`Delete price ${target}`, opts))) return;
+    await deletePrice(opts.pricelist, opts.article, opts.fromQuantity);
+    outputConfirmation(`Price ${target} deleted.`, json(), { deleted: true });
   });
 
 // --- contracts ---
@@ -4182,6 +4872,25 @@ financialYears
   });
 
 financialYears
+  .command('create')
+  .description('Create a financial year')
+  .requiredOption('--from <date>', 'Start date (YYYY-MM-DD)')
+  .requiredOption('--to <date>', 'End date (YYYY-MM-DD)')
+  .option('--accounting-method <method>', 'Accounting method (ACCRUAL or CASH)')
+  .option('--account-chart <type>', 'Account chart type')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createFinancialYear } = await import('./operations/financial-years.js');
+    const fields: Record<string, unknown> = { FromDate: opts.from, ToDate: opts.to };
+    if (opts.accountingMethod) fields.AccountingMethod = opts.accountingMethod;
+    if (opts.accountChart) fields.AccountChartType = opts.accountChart;
+    if (!(await confirmMutation('Create financial year', opts, { FinancialYear: fields }))) return;
+    const data = await createFinancialYear(fields);
+    outputDetail(data, financialYearDetailColumns, json(), 'FinancialYear');
+  });
+
+financialYears
   .command('locked-period')
   .description('Show the locked period (bokföring låst t.o.m.)')
   .action(async () => {
@@ -4197,6 +4906,446 @@ financialYears
     }
     outputDetail(data, lockedPeriodDetailColumns, false);
   });
+
+const archive = program.command('archive').description('Fortnox archive operations');
+archive
+  .command('list')
+  .option('--path <path>', 'Archive path')
+  .option('--file-id <id>', 'File ID')
+  .action(async (opts) => {
+    const { listArchive } = await import('./operations/files.js');
+    const raw = await listArchive({ path: opts.path, fileId: opts.fileId });
+    const folder = (raw.Folder ?? {}) as Record<string, unknown>;
+    const items = [
+      ...((folder.Folders ?? []) as Record<string, unknown>[]),
+      ...((folder.Files ?? []) as Record<string, unknown>[]),
+    ];
+    outputList(items, referenceDataColumns, json(), raw);
+  });
+archive
+  .command('get <id>')
+  .option('--path <path>', 'Archive path')
+  .option('--file-id <fileId>', 'File ID')
+  .option('-o, --output <file>', 'Output file (default: private temporary directory)')
+  .option('--overwrite', 'Overwrite an existing regular file')
+  .action(async (id: string, opts) => {
+    const { getArchiveEntry } = await import('./operations/files.js');
+    const { privateOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
+    const file = await getArchiveEntry(id, { path: opts.path, fileId: opts.fileId });
+    const target = writeBinaryFile(
+      opts.output ?? privateOutputPath('noxctl-', `archive-${id}`),
+      file.buffer,
+      opts.overwrite,
+    );
+    outputConfirmation(`Archive file ${id} saved to ${target}.`, json(), {
+      Id: id,
+      File: target,
+      Bytes: file.buffer.length,
+      ContentType: file.contentType,
+    });
+  });
+archive
+  .command('upload <file>')
+  .option('--folder-id <id>', 'Target folder ID')
+  .option('--path <path>', 'Target archive path')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without reading or uploading the file')
+  .action(async (file: string, opts) => {
+    const { uploadArchiveFile } = await import('./operations/files.js');
+    if (
+      !(await confirmMutation(`Upload ${file} to archive`, opts, {
+        folderId: opts.folderId,
+        path: opts.path,
+      }))
+    )
+      return;
+    const raw = await uploadArchiveFile(file, { folderId: opts.folderId, path: opts.path });
+    outputDetail(
+      (raw.File ?? raw) as Record<string, unknown>,
+      referenceDataColumns,
+      json(),
+      'File',
+    );
+  });
+archive
+  .command('delete-path <path>')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without deleting')
+  .action(async (path: string, opts) => {
+    const { deleteArchivePath } = await import('./operations/files.js');
+    if (!(await confirmMutation(`Delete archive path ${JSON.stringify(path)}`, opts))) return;
+    await deleteArchivePath(path);
+    outputConfirmation(`Archive path ${JSON.stringify(path)} deleted.`, json(), {
+      path,
+      deleted: true,
+    });
+  });
+archive
+  .command('delete <id>')
+  .option('--path <path>', 'Archive path')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without deleting')
+  .action(async (id: string, opts) => {
+    const { deleteArchiveEntry } = await import('./operations/files.js');
+    if (!(await confirmMutation(`Delete archive entry ${id}`, opts, { path: opts.path }))) return;
+    await deleteArchiveEntry(id, opts.path);
+    outputConfirmation(`Archive entry ${id} deleted.`, json(), { Id: id, deleted: true });
+  });
+
+const inbox = program.command('inbox').description('Fortnox inbox operations');
+inbox.command('list').action(async () => {
+  const { listInbox } = await import('./operations/files.js');
+  const raw = await listInbox();
+  const folder = (raw.Folder ?? {}) as Record<string, unknown>;
+  const items = [
+    ...((folder.Folders ?? []) as Record<string, unknown>[]),
+    ...((folder.Files ?? []) as Record<string, unknown>[]),
+  ];
+  outputList(items, referenceDataColumns, json(), raw);
+});
+inbox
+  .command('upload <file>')
+  .option('--folder-id <id>', 'Target folder ID')
+  .option('--path <path>', 'Target inbox path')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without reading or uploading the file')
+  .action(async (file: string, opts) => {
+    const { uploadInboxEntry } = await import('./operations/files.js');
+    if (
+      !(await confirmMutation(`Upload ${file} to inbox`, opts, {
+        folderId: opts.folderId,
+        path: opts.path,
+      }))
+    )
+      return;
+    const raw = await uploadInboxEntry(file, { folderId: opts.folderId, path: opts.path });
+    outputDetail(
+      (raw.File ?? raw) as Record<string, unknown>,
+      referenceDataColumns,
+      json(),
+      'File',
+    );
+  });
+inbox
+  .command('file <id>')
+  .option('-f, --file <path>', 'Write the file here')
+  .option('--overwrite', 'Allow replacing an existing regular file')
+  .action(async (id: string, opts) => {
+    const { getInboxFile } = await import('./operations/files.js');
+    const { privateOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
+    const file = await getInboxFile(id);
+    const path = writeBinaryFile(
+      opts.file ?? privateOutputPath('noxctl-', `inbox-${id}`),
+      file.buffer,
+      opts.overwrite,
+    );
+    outputConfirmation(`Inbox file ${id} saved to ${path}.`, json(), {
+      Path: path,
+      Bytes: file.buffer.length,
+    });
+  });
+inbox
+  .command('delete <id>')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without deleting')
+  .action(async (id: string, opts) => {
+    const { deleteInboxEntry } = await import('./operations/files.js');
+    if (!(await confirmMutation(`Delete inbox entry ${id}`, opts))) return;
+    await deleteInboxEntry(id);
+    outputConfirmation(`Inbox entry ${id} deleted.`, json(), { Id: id, deleted: true });
+  });
+
+const attachments = program
+  .command('attachments')
+  .description('Cross-document attachment operations');
+attachments
+  .command('attach <entityType> <documentNumber> <fileId>')
+  .option('--exclude-on-send', 'Do not include the attachment when the document is sent')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without attaching')
+  .action(async (entityType: string, documentNumber: string, fileId: string, opts) => {
+    if (!['F', 'OF', 'O', 'C'].includes(entityType))
+      throw new Error('entityType must be F, OF, O, or C');
+    const body = {
+      documentNumber,
+      entityType,
+      fileId,
+      includeOnSend: !opts.excludeOnSend,
+    };
+    if (
+      !(await confirmMutation(
+        `Attach archive file ${fileId} to ${entityType} ${documentNumber}`,
+        opts,
+        body,
+      ))
+    )
+      return;
+    const { createDocumentAttachment } = await import('./operations/invoices.js');
+    const result = await createDocumentAttachment(
+      documentNumber,
+      entityType as 'F' | 'OF' | 'O' | 'C',
+      fileId,
+      !opts.excludeOnSend,
+    );
+    outputDetail(result, invoiceAttachmentListColumns, json(), 'Attachment');
+  });
+attachments
+  .command('list <entityType> <documentNumber>')
+  .description('List attachments for OF (offer), O (order), or C (contract)')
+  .action(async (entityType: string, documentNumber: string) => {
+    if (!['OF', 'O', 'C'].includes(entityType)) throw new Error('entityType must be OF, O, or C');
+    const { listDocumentAttachments } = await import('./operations/invoices.js');
+    const rows = await listDocumentAttachments(documentNumber, entityType as 'OF' | 'O' | 'C');
+    outputList(rows, invoiceAttachmentListColumns, json(), rows);
+  });
+attachments
+  .command('counts <entityType> <entityIds...>')
+  .action(async (entityType: string, entityIds: string[]) => {
+    if (!['F', 'OF', 'O', 'C'].includes(entityType))
+      throw new Error('entityType must be F, OF, O, or C');
+    const { getAttachmentCounts } = await import('./operations/invoices.js');
+    const result = await getAttachmentCounts(
+      entityIds.map(Number),
+      entityType as 'F' | 'OF' | 'O' | 'C',
+    );
+    outputDetail(result, invoiceAttachmentListColumns, json(), 'AttachmentCounts');
+  });
+attachments
+  .command('validate')
+  .requiredOption('--input <file>', 'Attachment array as JSON (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview exact payload')
+  .action(async (opts) => {
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const rows = JSON.parse(raw) as Record<string, unknown>[];
+    if (!Array.isArray(rows)) throw new Error('Attachment input must be an array');
+    if (!(await confirmMutation('Validate attachments included on send', opts, rows))) return;
+    const { validateAttachmentsOnSend } = await import('./operations/invoices.js');
+    await validateAttachmentsOnSend(rows);
+    outputConfirmation('Attachment validation accepted.', json(), {});
+  });
+attachments
+  .command('update <attachmentId>')
+  .requiredOption('--input <file>', 'Attachment fields as JSON (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview exact payload')
+  .action(async (attachmentId: string, opts) => {
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const fields = JSON.parse(raw) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update attachment ${attachmentId}`, opts, fields))) return;
+    const { updateDocumentAttachment } = await import('./operations/invoices.js');
+    const result = await updateDocumentAttachment(attachmentId, fields);
+    outputDetail(result, invoiceAttachmentListColumns, json(), 'Attachment');
+  });
+attachments
+  .command('detach <attachmentId>')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without detaching')
+  .action(async (attachmentId: string, opts) => {
+    if (!(await confirmMutation(`Detach attachment ${attachmentId}`, opts))) return;
+    const { detachDocumentAttachment } = await import('./operations/invoices.js');
+    await detachDocumentAttachment(attachmentId);
+    outputConfirmation(`Attachment ${attachmentId} detached.`, json(), {
+      AttachmentId: attachmentId,
+      detached: true,
+    });
+  });
+
+const accrualResources = [
+  {
+    command: 'invoice-accruals',
+    envelope: 'InvoiceAccrual',
+    list: 'listInvoiceAccruals',
+    get: 'getInvoiceAccrual',
+    create: 'createInvoiceAccrual',
+    update: 'updateInvoiceAccrual',
+    delete: 'deleteInvoiceAccrual',
+  },
+  {
+    command: 'supplier-invoice-accruals',
+    envelope: 'SupplierInvoiceAccrual',
+    list: 'listSupplierInvoiceAccruals',
+    get: 'getSupplierInvoiceAccrual',
+    create: 'createSupplierInvoiceAccrual',
+    update: 'updateSupplierInvoiceAccrual',
+    delete: 'deleteSupplierInvoiceAccrual',
+  },
+  {
+    command: 'contract-accruals',
+    envelope: 'ContractAccrual',
+    list: 'listContractAccruals',
+    get: 'getContractAccrual',
+    create: 'createContractAccrual',
+    update: 'updateContractAccrual',
+    delete: 'deleteContractAccrual',
+  },
+] as const;
+
+for (const definition of accrualResources) {
+  const resource = program
+    .command(definition.command)
+    .description('Fortnox-native accrual operations');
+  resource.command('list').action(async () => {
+    const operations = await import('./operations/accruals.js');
+    const result = await operations[definition.list]();
+    outputList(
+      result.items,
+      referenceDataColumns,
+      json(),
+      result.raw,
+      result.raw.MetaInformation as Record<string, unknown> | undefined,
+    );
+  });
+  resource.command('get <documentNumber>').action(async (documentNumber: string) => {
+    const operations = await import('./operations/accruals.js');
+    const result = await operations[definition.get](documentNumber);
+    outputDetail(result, referenceDataColumns, json(), definition.envelope);
+  });
+  resource
+    .command('create')
+    .requiredOption('--input <file>', 'Complete accrual JSON data (or - for stdin)')
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the exact payload without sending it')
+    .action(async (opts) => {
+      const operations = await import('./operations/accruals.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Create ${definition.command}`, opts, {
+          [definition.envelope]: fields,
+        }))
+      )
+        return;
+      const result = await operations[definition.create](fields);
+      outputDetail(result, referenceDataColumns, json(), definition.envelope);
+    });
+  resource
+    .command('update <documentNumber>')
+    .requiredOption('--input <file>', 'Complete accrual JSON data (or - for stdin)')
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the exact payload without sending it')
+    .action(async (documentNumber: string, opts) => {
+      const operations = await import('./operations/accruals.js');
+      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (
+        !(await confirmMutation(`Update ${definition.command} ${documentNumber}`, opts, {
+          [definition.envelope]: fields,
+        }))
+      )
+        return;
+      const result = await operations[definition.update](documentNumber, fields);
+      outputDetail(result, referenceDataColumns, json(), definition.envelope);
+    });
+  resource
+    .command('delete <documentNumber>')
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the action without sending it')
+    .action(async (documentNumber: string, opts) => {
+      const operations = await import('./operations/accruals.js');
+      if (!(await confirmMutation(`Delete ${definition.command} ${documentNumber}`, opts))) return;
+      await operations[definition.delete](documentNumber);
+      outputConfirmation(`${definition.envelope} ${documentNumber} deleted.`, json(), {
+        DocumentNumber: documentNumber,
+        deleted: true,
+      });
+    });
+}
+
+const referenceResources = [
+  {
+    command: 'currencies',
+    description: 'Currency reference data',
+    list: 'listCurrencies',
+    get: 'getCurrency',
+  },
+  { command: 'units', description: 'Unit reference data', list: 'listUnits', get: 'getUnit' },
+  {
+    command: 'modes-of-payments',
+    description: 'Payment mode reference data',
+    list: 'listModesOfPayments',
+    get: 'getModeOfPayment',
+  },
+  {
+    command: 'terms-of-deliveries',
+    description: 'Delivery term reference data',
+    list: 'listTermsOfDeliveries',
+    get: 'getTermOfDelivery',
+  },
+  {
+    command: 'terms-of-payments',
+    description: 'Payment term reference data',
+    list: 'listTermsOfPayments',
+    get: 'getTermOfPayment',
+  },
+  {
+    command: 'ways-of-delivery',
+    description: 'Delivery way reference data',
+    list: 'listWaysOfDelivery',
+    get: 'getWayOfDelivery',
+  },
+  {
+    command: 'voucher-series',
+    description: 'Voucher series setup data',
+    list: 'listVoucherSeries',
+    get: 'getVoucherSeries',
+  },
+  {
+    command: 'predefined-voucher-series',
+    description: 'Predefined voucher series',
+    list: 'listPredefinedVoucherSeries',
+    get: 'getPredefinedVoucherSeries',
+  },
+  {
+    command: 'account-charts',
+    description: 'Available account chart types',
+    list: 'listAccountCharts',
+  },
+  {
+    command: 'predefined-accounts',
+    description: 'Predefined account setup',
+    list: 'listPredefinedAccounts',
+    get: 'getPredefinedAccount',
+  },
+  {
+    command: 'customer-references',
+    description: 'Customer reference data',
+    list: 'listCustomerReferences',
+    get: 'getCustomerReference',
+  },
+] as const;
+
+for (const definition of referenceResources) {
+  const resource = program.command(definition.command).description(definition.description);
+  resource
+    .command('list')
+    .option('--page <number>', 'Page number', parseInt)
+    .option('--limit <number>', 'Results per page', parseInt)
+    .option('-a, --all', 'Fetch all pages')
+    .action(async (opts) => {
+      const operations = await import('./operations/reference-data.js');
+      const list = operations[definition.list];
+      const result = await list({ page: opts.page, limit: opts.limit, all: opts.all });
+      outputList(
+        result.items,
+        referenceDataColumns,
+        json(),
+        result.raw,
+        result.raw.MetaInformation as Record<string, unknown> | undefined,
+      );
+    });
+  if ('get' in definition) {
+    resource
+      .command('get <identifier>')
+      .description(`Get one ${definition.command} entry`)
+      .action(async (identifier: string) => {
+        const operations = await import('./operations/reference-data.js');
+        const get = operations[definition.get];
+        const result = await get(identifier);
+        outputDetail(result.item, referenceDataColumns, json(), definition.command);
+      });
+  }
+}
 
 // --- analytics ---
 const analytics = program

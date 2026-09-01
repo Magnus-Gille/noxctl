@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { taxReductionListColumns, taxReductionDetailColumns } from '../views.js';
 import {
+  confirmationResponse,
   detailResponse,
   dryRunResponse,
   listResponse,
@@ -13,7 +14,13 @@ export function registerTaxReductionTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listTaxReductions, getTaxReduction, createTaxReduction } = operations;
+  const {
+    listTaxReductions,
+    getTaxReduction,
+    createTaxReduction,
+    updateTaxReduction,
+    deleteTaxReduction,
+  } = operations;
   server.tool(
     'fortnox_list_taxreductions',
     'Lista skattereduktioner (ROT/RUT) i Fortnox. Returnerar: Id, CustomerName, TypeOfReduction, ReferenceNumber, AskedAmount, ApprovedAmount.',
@@ -85,6 +92,45 @@ export function registerTaxReductionTools(
 
       const data = await createTaxReduction(params);
       return detailResponse(data, taxReductionDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_taxreduction',
+    'Uppdatera en skattereduktion (ROT/RUT) i Fortnox',
+    {
+      id: z.number().int().positive().describe('Skattereduktions-ID'),
+      ReferenceNumber: z.string().optional().describe('Referensnummer'),
+      ReferenceDocumentType: z.enum(['INVOICE', 'OFFER', 'ORDER']).optional(),
+      TypeOfReduction: z.enum(['rot', 'rut']).optional(),
+      CustomerName: z.string().optional(),
+      AskedAmount: z.number().optional(),
+      PropertyDesignation: z.string().optional(),
+      confirm: z.boolean().optional().describe('Bekräfta uppdateringen'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ id, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse(`update tax reduction ${id}`, { TaxReduction: fields });
+      if (!confirm) requireConfirmation(`update tax reduction ${id}`);
+      const reduction = await updateTaxReduction(id, fields);
+      return detailResponse(reduction, taxReductionDetailColumns, reduction, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_taxreduction',
+    'Ta bort en skattereduktion (ROT/RUT) i Fortnox',
+    {
+      id: z.number().int().positive().describe('Skattereduktions-ID'),
+      confirm: z.boolean().optional().describe('Bekräfta borttagningen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att ta bort'),
+    },
+    async ({ id, confirm, dryRun }) => {
+      if (dryRun) return dryRunResponse(`delete tax reduction ${id}`);
+      if (!confirm) requireConfirmation(`delete tax reduction ${id}`);
+      await deleteTaxReduction(id);
+      return confirmationResponse(`Skattereduktion ${id} borttagen.`, {});
     },
   );
 }
