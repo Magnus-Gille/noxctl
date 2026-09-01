@@ -113,4 +113,17 @@ describe('article operations', () => {
       expect(body.Article.ArticleNumber).toBeUndefined();
     });
   });
+
+  describe('deleteArticle', () => {
+    it('uses DELETE and encodes the article number', async () => {
+      mockFetch({});
+      const { deleteArticle } = await import('../../src/operations/articles.js');
+
+      await deleteArticle('A/B');
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[0]).toContain('articles/A%2FB');
+      expect(fetchCall[1].method).toBe('DELETE');
+    });
+  });
 });

@@ -416,6 +416,81 @@ describe('bookkeeping tools', () => {
       expect(parsed.Accounts).toHaveLength(2);
     });
 
+    it('gets a single account', async () => {
+      mockFetch({ Account: { Number: 1930, Description: 'Företagskonto' } });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_get_account',
+        arguments: { number: 1930 },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect((result.content as { type: string; text: string }[])[0].text).toContain(
+        'Företagskonto',
+      );
+    });
+
+    it('creates, updates, and deletes only with confirmation', async () => {
+      mockFetch({ Account: { Number: 2999, Description: 'Avräkning' } });
+      const { client } = await setupClientServer();
+
+      for (const request of [
+        { name: 'fortnox_create_account', arguments: { Number: 2999, Description: 'Avräkning' } },
+        { name: 'fortnox_update_account', arguments: { number: 2999, Description: 'Avräkning' } },
+        { name: 'fortnox_delete_account', arguments: { number: 2999 } },
+      ]) {
+        const result = await client.callTool(request);
+        expect(result.isError).toBe(true);
+      }
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('supports dry-run previews for every account mutation', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      for (const request of [
+        {
+          name: 'fortnox_create_account',
+          arguments: { Number: 2999, Description: 'Avräkning', dryRun: true },
+        },
+        {
+          name: 'fortnox_update_account',
+          arguments: { number: 2999, Description: 'Avräkning', dryRun: true },
+        },
+        { name: 'fortnox_delete_account', arguments: { number: 2999, dryRun: true } },
+      ]) {
+        const result = await client.callTool(request);
+        expect((result.content as { type: string; text: string }[])[0].text).toContain('Dry run');
+      }
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('forwards the complete structured account payload', async () => {
+      mockFetch({ Account: { Number: 2999, Description: 'Avräkning' } });
+      const { client } = await setupClientServer();
+      const payload = {
+        Number: 2999,
+        Description: 'Avräkning',
+        Active: true,
+        CostCenterSettings: 'ALLOWED',
+        ProjectSettings: 'MANDATORY',
+        TransactionInformationSettings: 'NOTALLOWED',
+        VATCode: 'MP1',
+        OpeningQuantities: [{ Project: 'P1', Balance: 5 }],
+        confirm: true,
+      };
+
+      await client.callTool({ name: 'fortnox_create_account', arguments: payload });
+
+      const sent = JSON.parse(
+        (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+      ).Account;
+      expect(sent.OpeningQuantities).toEqual([{ Project: 'P1', Balance: 5 }]);
+      expect(sent.ProjectSettings).toBe('MANDATORY');
+    });
+
     it('requires confirmation before creating a voucher', async () => {
       mockFetch({ Voucher: { VoucherNumber: 1, VoucherSeries: 'A' } });
 

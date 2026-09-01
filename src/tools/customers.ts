@@ -7,6 +7,7 @@ import {
   dryRunResponse,
   listResponse,
   requireConfirmation,
+  textResponse,
 } from '../tool-output.js';
 
 const CustomerNumberSchema = z
@@ -93,7 +94,7 @@ export function registerCustomerTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listCustomers, getCustomer, createCustomer, updateCustomer } = operations;
+  const { listCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer } = operations;
   server.tool(
     'fortnox_list_customers',
     'Lista/sök kunder i Fortnox. Returnerar: CustomerNumber, Name, OrganisationNumber, City, Email.',
@@ -171,6 +172,23 @@ export function registerCustomerTools(
 
       const data = await updateCustomer(customerNumber, fields);
       return detailResponse(data, customerDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_customer',
+    'Ta bort en kund i Fortnox',
+    {
+      customerNumber: CustomerNumberSchema.describe('Kundnummer att ta bort'),
+      confirm: z.boolean().optional().describe('Bekräfta att kunden ska tas bort'),
+      dryRun: z.boolean().optional().describe('Visa vad som skulle göras utan att ta bort kunden'),
+    },
+    async ({ customerNumber, confirm, dryRun }) => {
+      if (dryRun) return dryRunResponse(`delete customer ${customerNumber}`);
+      if (!confirm) requireConfirmation(`delete customer ${customerNumber}`);
+
+      await deleteCustomer(customerNumber);
+      return textResponse(`Customer ${customerNumber} deleted.`);
     },
   );
 }

@@ -206,4 +206,38 @@ describe('article tools', () => {
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
+
+  describe('fortnox_delete_article', () => {
+    it('requires confirmation and supports dry run', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const unconfirmed = await client.callTool({
+        name: 'fortnox_delete_article',
+        arguments: { articleNumber: 'A-1' },
+      });
+      const dryRun = await client.callTool({
+        name: 'fortnox_delete_article',
+        arguments: { articleNumber: 'A-1', dryRun: true },
+      });
+
+      expect(unconfirmed.isError).toBe(true);
+      expect((dryRun.content as { type: string; text: string }[])[0].text).toContain('Dry run');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('deletes only after explicit confirmation', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_delete_article',
+        arguments: { articleNumber: 'A-1', confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[1].method).toBe('DELETE');
+    });
+  });
 });

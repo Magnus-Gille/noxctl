@@ -80,4 +80,47 @@ describe('accounts operations', () => {
       expect(calledUrl).toContain('financialyear=2');
     });
   });
+
+  it('gets one account by number', async () => {
+    mockFetch({ Account: { Number: 1930, Description: 'Företagskonto' } });
+    const { getAccount } = await import('../../src/operations/accounts.js');
+
+    const account = await getAccount(1930);
+
+    expect(account.Number).toBe(1930);
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain('accounts/1930');
+  });
+
+  it('creates an account with the Fortnox envelope', async () => {
+    mockFetch({ Account: { Number: 2999, Description: 'Avräkning' } });
+    const { createAccount } = await import('../../src/operations/accounts.js');
+
+    await createAccount({ Number: 2999, Description: 'Avräkning' });
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[1].method).toBe('POST');
+    expect(JSON.parse(call[1].body).Account).toEqual({ Number: 2999, Description: 'Avräkning' });
+  });
+
+  it('updates an account without duplicating its path identifier in the body', async () => {
+    mockFetch({ Account: { Number: 2999, Description: 'Ny beskrivning' } });
+    const { updateAccount } = await import('../../src/operations/accounts.js');
+
+    await updateAccount(2999, { Number: 2999, Description: 'Ny beskrivning' });
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[1].method).toBe('PUT');
+    expect(JSON.parse(call[1].body).Account.Number).toBeUndefined();
+  });
+
+  it('deletes an account', async () => {
+    mockFetch({});
+    const { deleteAccount } = await import('../../src/operations/accounts.js');
+
+    await deleteAccount(2999);
+
+    const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(call[0]).toContain('accounts/2999');
+    expect(call[1].method).toBe('DELETE');
+  });
 });

@@ -198,6 +198,40 @@ describe('customer tools', () => {
     });
   });
 
+  describe('fortnox_delete_customer', () => {
+    it('requires confirmation and supports dry run', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const unconfirmed = await client.callTool({
+        name: 'fortnox_delete_customer',
+        arguments: { customerNumber: '42' },
+      });
+      const dryRun = await client.callTool({
+        name: 'fortnox_delete_customer',
+        arguments: { customerNumber: '42', dryRun: true },
+      });
+
+      expect(unconfirmed.isError).toBe(true);
+      expect((dryRun.content as { type: string; text: string }[])[0].text).toContain('Dry run');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('deletes only after explicit confirmation', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_delete_customer',
+        arguments: { customerNumber: '42', confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[1].method).toBe('DELETE');
+    });
+  });
+
   // Same class of bug as #96 (Supplier field gap): the MCP SDK silently strips
   // any argument the Zod schema does not declare, so an undeclared field
   // reaches neither Fortnox nor an error message — it just vanishes. Type and

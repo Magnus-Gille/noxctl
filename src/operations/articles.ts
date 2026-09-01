@@ -69,8 +69,14 @@ export function createArticleOperations(transport: FortnoxTransport) {
     return data.Article;
   }
 
-  return { listArticles, getArticle, createArticle, updateArticle };
+  async function deleteArticle(articleNumber: string): Promise<void> {
+    await transport.request(`articles/${encodeURIComponent(articleNumber)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  return { listArticles, getArticle, createArticle, updateArticle, deleteArticle };
 }
 
-export const { listArticles, getArticle, createArticle, updateArticle } =
+export const { listArticles, getArticle, createArticle, updateArticle, deleteArticle } =
   createArticleOperations(defaultFortnoxTransport);

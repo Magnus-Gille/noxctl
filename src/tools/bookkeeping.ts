@@ -113,12 +113,43 @@ const VoucherSeriesSchema = z
   .regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,9}$/, 'Voucher series must be alphanumeric')
   .optional();
 
+const AccountNumberSchema = z.number().int().min(1000).max(9999);
+const AccountSettingsSchema = z.enum(['ALLOWED', 'MANDATORY', 'NOTALLOWED']);
+const AccountWritableFields = {
+  Active: z.boolean().optional().describe('Om kontot är aktivt'),
+  BalanceBroughtForward: z.number().optional().describe('Ingående balans'),
+  CostCenter: z.string().optional().describe('Standardkostnadsställe'),
+  CostCenterSettings: AccountSettingsSchema.optional().describe('Kostnadsställesregel'),
+  Description: z.string().optional().describe('Kontobeskrivning'),
+  OpeningQuantities: z
+    .array(
+      z.strictObject({
+        Project: z.string().optional().describe('Projektnummer'),
+        Balance: z.number().int().optional().describe('Ingående antal'),
+      }),
+    )
+    .optional()
+    .describe('Ingående antal per projekt'),
+  Project: z.string().optional().describe('Standardprojekt'),
+  ProjectSettings: AccountSettingsSchema.optional().describe('Projektregel'),
+  SRU: z.number().int().optional().describe('SRU-kod'),
+  TransactionInformation: z.string().optional().describe('Standardtransaktionsinformation'),
+  TransactionInformationSettings: AccountSettingsSchema.optional().describe(
+    'Regel för transaktionsinformation',
+  ),
+  VATCode: z.string().optional().describe('Momskod'),
+};
+
 export function registerBookkeepingTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
   const {
     listAccounts,
+    getAccount,
+    createAccount,
+    updateAccount,
+    deleteAccount,
     listVouchers,
     getVoucher,
     createVoucher,
@@ -224,6 +255,72 @@ export function registerBookkeepingTools(
         data.MetaInformation,
         includeRaw,
       );
+    },
+  );
+
+  server.tool(
+    'fortnox_get_account',
+    'Hämta ett konto från kontoplanen i Fortnox',
+    {
+      number: AccountNumberSchema.describe('Kontonummer'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ number, includeRaw }) => {
+      const data = await getAccount(number);
+      return detailResponse(data, accountListColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_create_account',
+    'Skapa ett konto i Fortnox',
+    {
+      ...AccountWritableFields,
+      Number: AccountNumberSchema.describe('Kontonummer'),
+      Description: z.string().describe('Kontobeskrivning'),
+      confirm: z.boolean().optional().describe('Bekräfta att kontot ska skapas'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att skapa kontot'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse(`create account ${fields.Number}`, { Account: fields });
+      if (!confirm) requireConfirmation(`create account ${fields.Number}`);
+      const data = await createAccount(fields);
+      return detailResponse(data, accountListColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_update_account',
+    'Uppdatera ett konto i Fortnox',
+    {
+      number: AccountNumberSchema.describe('Kontonummer att uppdatera'),
+      ...AccountWritableFields,
+      confirm: z.boolean().optional().describe('Bekräfta att kontot ska uppdateras'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att uppdatera kontot'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ number, confirm, dryRun, includeRaw, ...fields }) => {
+      if (dryRun) return dryRunResponse(`update account ${number}`, { Account: fields });
+      if (!confirm) requireConfirmation(`update account ${number}`);
+      const data = await updateAccount(number, fields);
+      return detailResponse(data, accountListColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_account',
+    'Ta bort ett konto i Fortnox',
+    {
+      number: AccountNumberSchema.describe('Kontonummer att ta bort'),
+      confirm: z.boolean().optional().describe('Bekräfta att kontot ska tas bort'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att ta bort kontot'),
+    },
+    async ({ number, confirm, dryRun }) => {
+      if (dryRun) return dryRunResponse(`delete account ${number}`);
+      if (!confirm) requireConfirmation(`delete account ${number}`);
+      await deleteAccount(number);
+      return textResponse(`Account ${number} deleted.`);
     },
   );
 

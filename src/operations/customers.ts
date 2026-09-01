@@ -81,8 +81,14 @@ export function createCustomerOperations(transport: FortnoxTransport) {
     return data.Customer;
   }
 
-  return { listCustomers, getCustomer, createCustomer, updateCustomer };
+  async function deleteCustomer(customerNumber: string): Promise<void> {
+    await transport.request(`customers/${customerSegment(customerNumber)}`, {
+      method: 'DELETE',
+    });
+  }
+
+  return { listCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer };
 }
 
-export const { listCustomers, getCustomer, createCustomer, updateCustomer } =
+export const { listCustomers, getCustomer, createCustomer, updateCustomer, deleteCustomer } =
   createCustomerOperations(defaultFortnoxTransport);

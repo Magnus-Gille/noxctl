@@ -149,4 +149,27 @@ describe('customer operations', () => {
       expect(body.Customer.CountryCode).toBe('SE');
     });
   });
+
+  describe('deleteCustomer', () => {
+    it('uses DELETE on the validated customer path', async () => {
+      mockFetch({});
+      const { deleteCustomer } = await import('../../src/operations/customers.js');
+
+      await deleteCustomer('A-42');
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[0]).toContain('customers/A-42');
+      expect(fetchCall[1].method).toBe('DELETE');
+    });
+
+    it('rejects path traversal before sending a request', async () => {
+      mockFetch({});
+      const { deleteCustomer } = await import('../../src/operations/customers.js');
+
+      await expect(deleteCustomer('../companyinformation')).rejects.toThrow(
+        'Invalid customer number',
+      );
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+  });
 });

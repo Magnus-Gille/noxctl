@@ -1807,6 +1807,71 @@ accounts
     outputList(data.Accounts ?? [], accountListColumns, json(), data, data.MetaInformation);
   });
 
+accounts
+  .command('get <number>')
+  .description('Get one account')
+  .action(async (number: string) => {
+    const { getAccount } = await import('./operations/accounts.js');
+    const data = await getAccount(Number(number));
+    outputDetail(data, accountListColumns, json(), 'Account');
+  });
+
+accounts
+  .command('create')
+  .description('Create an account')
+  .requiredOption('--number <number>', 'Account number', parseInt)
+  .requiredOption('--description <text>', 'Account description')
+  .option('--input <file>', 'Additional account data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (opts) => {
+    const { createAccount } = await import('./operations/accounts.js');
+    const extra = opts.input
+      ? (JSON.parse(
+          opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8'),
+        ) as Record<string, unknown>)
+      : {};
+    const fields = { ...extra, Number: opts.number, Description: opts.description };
+    if (!(await confirmMutation(`Create account ${opts.number}`, opts, { Account: fields })))
+      return;
+    const data = await createAccount(fields);
+    outputDetail(data, accountListColumns, json(), 'Account');
+  });
+
+accounts
+  .command('update <number>')
+  .description('Update an account')
+  .requiredOption('--input <file>', 'Account data as JSON file (or - for stdin)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (number: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    const { updateAccount } = await import('./operations/accounts.js');
+    const fields = JSON.parse(
+      opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8'),
+    ) as Record<string, unknown>;
+    if (!(await confirmMutation(`Update account ${number}`, opts, { Account: fields }))) return;
+    const data = await updateAccount(Number(number), fields);
+    outputDetail(data, accountListColumns, json(), 'Account');
+  });
+
+accounts
+  .command('delete <number>')
+  .description('Delete an account')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (number: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteAccount } = await import('./operations/accounts.js');
+    if (!(await confirmMutation(`Delete account ${number}`, opts))) return;
+    await deleteAccount(Number(number));
+    outputConfirmation(
+      `Account ${number} deleted.`,
+      json(),
+      { Number: Number(number), deleted: true },
+      undefined,
+      'Account',
+    );
+  });
+
 // --- customers ---
 const customers = program.command('customers').description('Customer operations');
 
@@ -1903,6 +1968,24 @@ Examples:
     },
   );
 
+customers
+  .command('delete <customerNumber>')
+  .description('Delete a customer')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (customerNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteCustomer } = await import('./operations/customers.js');
+    if (!(await confirmMutation(`Delete customer ${customerNumber}`, opts))) return;
+    await deleteCustomer(customerNumber);
+    outputConfirmation(
+      `Customer ${customerNumber} deleted.`,
+      json(),
+      { CustomerNumber: customerNumber, deleted: true },
+      undefined,
+      'Customer',
+    );
+  });
+
 // --- articles ---
 const articles = program.command('articles').description('Article operations');
 
@@ -1994,6 +2077,24 @@ Examples:
       outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
     },
   );
+
+articles
+  .command('delete <articleNumber>')
+  .description('Delete an article')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (articleNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+    const { deleteArticle } = await import('./operations/articles.js');
+    if (!(await confirmMutation(`Delete article ${articleNumber}`, opts))) return;
+    await deleteArticle(articleNumber);
+    outputConfirmation(
+      `Article ${articleNumber} deleted.`,
+      json(),
+      { ArticleNumber: articleNumber, deleted: true },
+      undefined,
+      'Article',
+    );
+  });
 
 // --- suppliers ---
 const suppliers = program.command('suppliers').description('Supplier operations');
