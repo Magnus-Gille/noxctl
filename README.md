@@ -377,6 +377,8 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl supplier-invoices get <givenNumber>` | `fortnox_get_supplier_invoice` | Get a single supplier invoice |
 | `noxctl supplier-invoices create --supplier <n> --input <file>` | `fortnox_create_supplier_invoice` | Create a supplier invoice (mutation) |
 | `noxctl supplier-invoices bookkeep <givenNumber>` | `fortnox_bookkeep_supplier_invoice` | Bookkeep a supplier invoice (mutation) |
+| `noxctl supplier-invoices attachments <givenNumber>` | `fortnox_list_supplier_invoice_attachments` | List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too, read-only, default scopes only |
+| `noxctl supplier-invoices file <fileId> [-f <path>]` | `fortnox_get_supplier_invoice_file` | Download a file attached to a supplier invoice (get `fileId` from `supplier-invoices attachments`) — read-only, default scopes only |
 
 ### Supplier invoice payments (utbetalningar)
 
