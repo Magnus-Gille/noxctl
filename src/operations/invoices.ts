@@ -376,11 +376,15 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     fileId: string,
     includeOnSend: boolean,
   ): Promise<Record<string, unknown>> {
+    const entityId = Number(documentNumber);
+    if (!/^\d+$/.test(documentNumber) || !Number.isSafeInteger(entityId)) {
+      throw new Error(`Invalid document number: ${documentNumber}`);
+    }
     const data = await transport.request<Record<string, unknown>[]>(
       '/api/fileattachments/attachments-v1',
       {
         method: 'POST',
-        body: [{ entityId: Number(documentNumber), entityType, fileId, includeOnSend }],
+        body: [{ entityId, entityType, fileId, includeOnSend }],
       },
     );
     const attachment = data[0];

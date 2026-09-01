@@ -72,4 +72,17 @@ describe('attachment connection operation parity', () => {
       ['/api/fileattachments/attachments-v1/a%2Fb', { method: 'DELETE' }],
     ]);
   });
+
+  it('rejects invalid attachment document numbers before sending a request', async () => {
+    const request = vi.fn();
+    const operations = createInvoiceOperations({ request } as unknown as FortnoxTransport);
+
+    await expect(
+      operations.createDocumentAttachment('not-a-number', 'F', 'f1', true),
+    ).rejects.toThrow('Invalid document number');
+    await expect(
+      operations.createDocumentAttachment('9007199254740993', 'F', 'f1', true),
+    ).rejects.toThrow('Invalid document number');
+    expect(request).not.toHaveBeenCalled();
+  });
 });
