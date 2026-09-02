@@ -65,6 +65,18 @@ families and operations.
     the drift workflow reports a genuinely transactional bank path. See issue #13.
 15. ~~File attachments (underlag) — upload receipts, attach to vouchers~~ ✅ Done (#37) — `noxctl vouchers attach`; live use needs the **archive** scope
 16. Live mutation test coverage — only read paths tested live
+17. Rewire `fortnox_income_statement`/`fortnox_balance_sheet`/`fortnox_tax_report`
+    onto the SIE export (`src/sie.ts`, added for `fortnox_general_ledger`).
+    They still walk every voucher individually to sum debit/credit, which
+    times out on any company with a non-trivial voucher count — the general
+    ledger had the identical problem, fixed by reading Fortnox's SIE4 export
+    instead. Doing the same here would also fix a separate, real bug: these
+    three group accounts by hardcoded number ranges instead of the official
+    Skatteverket SRU codes Fortnox already returns per account (available on
+    `/3/accounts` today, and in the SIE file). `fortnox_income_statement`
+    also has a sign-consistency bug independent of either of the above — its
+    rendered table and its `includeRaw` JSON disagree on the sign of
+    `netResult` for the same figure.
 
 ## Adding a New Resource
 

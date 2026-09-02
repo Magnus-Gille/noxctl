@@ -1,0 +1,107 @@
+import { describe, it, expect, vi } from 'vitest';
+import type { FortnoxTransport } from '../../src/fortnox-client.js';
+import { createGeneralLedgerOperations } from '../../src/operations/general-ledger.js';
+
+const SAMPLE_SIE = [
+  '#FORMAT PC8',
+  '#SIETYP 4',
+  '#KONTO 3000 "Sales, Sweden"',
+  '#KONTO 1930 "Bank"',
+  '#VER B 2 20260805 "Sale" 20260806',
+  '{',
+  '#TRANS 3000 {} -1000 "" "Sale to customer" 0',
+  '#TRANS 1930 {} 1000 "" "" 0',
+  '}',
+  '#VER A 1 20260803 "Earlier sale"',
+  '{',
+  '#TRANS 3000 {1 "2010"} -250 "" "" 0',
+  '#TRANS 1930 {} 250 "" "" 0',
+  '}',
+].join('\r\n');
+
+function stubTransport(): FortnoxTransport {
+  return {
+    request: vi.fn(),
+    requestWithMetadata: vi.fn(),
+    requestPdf: vi.fn(),
+    requestPdfFromMutation: vi.fn(),
+    requestFile: vi.fn().mockResolvedValue({
+      buffer: Buffer.from(SAMPLE_SIE, 'latin1'),
+      contentType: 'application/octet-stream',
+    }),
+    fetchAllPages: vi.fn(),
+  } as FortnoxTransport;
+}
+
+describe('getGeneralLedger', () => {
+  it('requests sie/4 for the given date range', async () => {
+    const transport = stubTransport();
+    const { getGeneralLedger } = createGeneralLedgerOperations(transport);
+
+    await getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31', financialYear: 12 });
+
+    expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+      params: { fromdate: '2026-08-01', todate: '2026-08-31', financialyear: 12 },
+    });
+  });
+
+  it('produces one row per #TRANS line, with formatted dates', async () => {
+    const { getGeneralLedger } = createGeneralLedgerOperations(stubTransport());
+
+    const rows = await getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31' });
+
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toMatchObject({
+      series: 'A',
+      voucherNumber: '1',
+      transactionDate: '2026-08-03',
+      account: '3000',
+      accountDescription: 'Sales, Sweden',
+      costCenter: '2010',
+      debit: 0,
+      credit: 250,
+    });
+  });
+
+  it('splits the signed SIE amount into separate debit/credit columns', async () => {
+    const { getGeneralLedger } = createGeneralLedgerOperations(stubTransport());
+
+    const rows = await getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31' });
+    const bankRow = rows.find((r) => r.account === '1930' && r.voucherNumber === '2');
+
+    expect(bankRow).toMatchObject({ debit: 1000, credit: 0 });
+  });
+
+  it('falls back to the voucher description when a row has no text of its own', async () => {
+    const { getGeneralLedger } = createGeneralLedgerOperations(stubTransport());
+
+    const rows = await getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31' });
+    const bankRow = rows.find((r) => r.account === '1930' && r.voucherNumber === '2');
+
+    expect(bankRow?.text).toBe('Sale');
+  });
+
+  it('sorts by transaction date, then series, then voucher number', async () => {
+    const { getGeneralLedger } = createGeneralLedgerOperations(stubTransport());
+
+    const rows = await getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31' });
+
+    const order = rows.map((r) => `${r.transactionDate} ${r.series}${r.voucherNumber}`);
+    expect(order).toEqual(['2026-08-03 A1', '2026-08-03 A1', '2026-08-05 B2', '2026-08-05 B2']);
+  });
+
+  it('resolves distinct concurrent calls against their own bound transport', async () => {
+    const transportA = stubTransport();
+    const transportB = stubTransport();
+    const { getGeneralLedger: getA } = createGeneralLedgerOperations(transportA);
+    const { getGeneralLedger: getB } = createGeneralLedgerOperations(transportB);
+
+    await Promise.all([
+      getA({ fromDate: '2026-08-01', toDate: '2026-08-31' }),
+      getB({ fromDate: '2026-08-01', toDate: '2026-08-31' }),
+    ]);
+
+    expect(transportA.requestFile).toHaveBeenCalledTimes(1);
+    expect(transportB.requestFile).toHaveBeenCalledTimes(1);
+  });
+});
