@@ -109,6 +109,21 @@ function parseDimensions(raw: string): { costCenter?: string; project?: string }
   return result;
 }
 
+// Fortnox has never been observed to emit a malformed amount, but if a future
+// export ever does, `Number(x)` on "" or a corrupted token is NaN — and
+// unlike a genuinely missing token (`undefined`, already filtered out before
+// this runs), NaN and Infinity both fail every downstream `> 0`/`< 0`
+// comparison, so debit and credit both end up 0. That is a plausible-looking
+// row with the actual figure silently discarded, not an error. A financial
+// amount does not get that benefit of the doubt: reject it instead.
+function parseFiniteAmount(raw: string, context: string): number {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`SIE export contains a malformed amount "${raw}" (${context}).`);
+  }
+  return value;
+}
+
 export function parseSie(text: string): ParsedSie {
   const accounts = new Map<string, SieAccount>();
   const transactions: SieTransaction[] = [];
@@ -120,9 +135,22 @@ export function parseSie(text: string): ParsedSie {
   let currentVoucher:
     | { series: string; number: string; date: string; regDate?: string; description: string }
     | undefined;
+  // Whether we're between a voucher's `{` and `}` lines. #TRANS only means
+  // anything inside that block; a stray or truncated one after `}` (before
+  // the next #VER) must not be attributed to the voucher that already closed.
+  let insideVoucherBlock = false;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
+    if (line === '{') {
+      insideVoucherBlock = true;
+      continue;
+    }
+    if (line === '}') {
+      insideVoucherBlock = false;
+      currentVoucher = undefined;
+      continue;
+    }
     if (!line.startsWith('#')) continue;
     const tag = line.slice(1, line.indexOf(' ') === -1 ? undefined : line.indexOf(' '));
 
@@ -146,7 +174,7 @@ export function parseSie(text: string): ParsedSie {
         const entry: SieBalance = {
           account,
           yearIndex: Number(yearIndex),
-          balance: Number(balance),
+          balance: parseFiniteAmount(balance, `#${tag} ${account}`),
         };
         (tag === 'IB' ? openingBalances : closingBalances).push(entry);
       }
@@ -164,7 +192,7 @@ export function parseSie(text: string): ParsedSie {
     } else if (tag === 'TRANS') {
       const tokens = tokenize(line);
       const [, account, dims, amount, , text] = tokens;
-      if (account && amount !== undefined && currentVoucher) {
+      if (account && amount !== undefined && currentVoucher && insideVoucherBlock) {
         const { costCenter, project } = dims ? parseDimensions(dims) : {};
         transactions.push({
           series: currentVoucher.series,
@@ -173,7 +201,10 @@ export function parseSie(text: string): ParsedSie {
           registrationDate: currentVoucher.regDate,
           voucherDescription: currentVoucher.description,
           account,
-          amount: Number(amount),
+          amount: parseFiniteAmount(
+            amount,
+            `#TRANS ${account} in voucher ${currentVoucher.series}${currentVoucher.number}`,
+          ),
           costCenter,
           project,
           text: text || undefined,

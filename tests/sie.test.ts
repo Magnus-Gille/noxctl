@@ -125,6 +125,99 @@ describe('parseSie', () => {
     expect(result.openingBalances).toEqual([]);
     expect(result.closingBalances).toEqual([]);
   });
+
+  // Correctness bugs found in review (#161): a malformed amount must not
+  // silently become a plausible-looking zero-value posting, and a #TRANS
+  // outside its voucher's `{`/`}` block must not be attributed to whichever
+  // voucher happened to be seen last.
+  describe('defensive parsing', () => {
+    it('throws on a malformed #TRANS amount instead of silently zeroing it', () => {
+      const sie = [
+        '#VER A 1 20260805 "Sale"',
+        '{',
+        '#TRANS 3000 {} not-a-number "" "Bad row" 0',
+        '}',
+      ].join('\r\n');
+
+      expect(() => parseSie(sie)).toThrow(/malformed amount/i);
+    });
+
+    it('throws on a non-finite #TRANS amount', () => {
+      const sie = [
+        '#VER A 1 20260805 "Sale"',
+        '{',
+        '#TRANS 3000 {} Infinity "" "Bad row" 0',
+        '}',
+      ].join('\r\n');
+
+      expect(() => parseSie(sie)).toThrow(/malformed amount/i);
+    });
+
+    it('throws on a malformed #IB balance', () => {
+      const sie = '#IB 0 1930 not-a-number 0';
+
+      expect(() => parseSie(sie)).toThrow(/malformed amount/i);
+    });
+
+    it('throws on a malformed #UB balance', () => {
+      const sie = '#UB 0 1930 not-a-number 0';
+
+      expect(() => parseSie(sie)).toThrow(/malformed amount/i);
+    });
+
+    it('does not attribute a #TRANS after the closing brace to the voucher that just closed', () => {
+      const sie = [
+        '#VER A 1 20260805 "Sale"',
+        '{',
+        '#TRANS 3000 {} -1000 "" "In block" 0',
+        '}',
+        // Stray/truncated line: no #VER re-opened, no `{` — must be ignored,
+        // not silently folded into voucher A/1 above.
+        '#TRANS 1930 {} 1000 "" "Orphan" 0',
+      ].join('\r\n');
+
+      const result = parseSie(sie);
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]?.text).toBe('In block');
+    });
+
+    it('does not attribute a #TRANS between #VER and the opening brace', () => {
+      const sie = [
+        '#VER A 1 20260805 "Sale"',
+        // No `{` yet — a #TRANS here is outside the block even though
+        // currentVoucher is already set.
+        '#TRANS 3000 {} -1000 "" "Too early" 0',
+        '{',
+        '#TRANS 1930 {} 1000 "" "In block" 0',
+        '}',
+      ].join('\r\n');
+
+      const result = parseSie(sie);
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]?.text).toBe('In block');
+    });
+
+    it('correctly separates transactions across two consecutive vouchers', () => {
+      const sie = [
+        '#VER A 1 20260805 "First"',
+        '{',
+        '#TRANS 3000 {} -1000 "" "" 0',
+        '}',
+        '#VER A 2 20260806 "Second"',
+        '{',
+        '#TRANS 3000 {} -500 "" "" 0',
+        '}',
+      ].join('\r\n');
+
+      const result = parseSie(sie);
+
+      expect(result.transactions).toHaveLength(2);
+      expect(result.transactions[0]?.voucherNumber).toBe('1');
+      expect(result.transactions[1]?.voucherNumber).toBe('2');
+    });
+  });
 });
 
 describe('fetchSie', () => {

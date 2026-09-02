@@ -24,18 +24,28 @@ const SAMPLE_SIE = [
   '}',
 ].join('\r\n');
 
-function mockSieFetch() {
+function mockSieFetch(text: string = SAMPLE_SIE) {
   global.fetch = vi.fn().mockResolvedValue({
     ok: true,
     status: 200,
     headers: new Headers({ 'content-type': 'application/octet-stream' }),
     arrayBuffer: () => {
-      const bytes = Buffer.from(SAMPLE_SIE, 'latin1');
+      const bytes = Buffer.from(text, 'latin1');
       return Promise.resolve(
         bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
       );
     },
   });
+}
+
+// One voucher (one #TRANS line) per posting, so `count` postings unambiguously
+// means `count` general-ledger rows.
+function generateLargeSie(count: number): string {
+  const lines = ['#FORMAT PC8', '#SIETYP 4', '#KONTO 3000 "Sales, Sweden"'];
+  for (let i = 1; i <= count; i++) {
+    lines.push(`#VER A ${i} 20260805 "Row ${i}"`, '{', `#TRANS 3000 {} -${i} "" "" 0`, '}');
+  }
+  return lines.join('\r\n');
 }
 
 async function setupClientServer() {
@@ -76,18 +86,15 @@ describe('fortnox_general_ledger', () => {
 
     const result = await client.callTool({
       name: 'fortnox_general_ledger',
-      arguments: {
-        fromDate: '2026-08-01',
-        toDate: '2026-08-31',
-        account: '1930',
-        includeRaw: true,
-      },
+      arguments: { fromDate: '2026-08-01', toDate: '2026-08-31', account: '1930' },
     });
 
     const text = (result.content as { type: string; text: string }[])[0].text;
-    const parsed = JSON.parse(text.split('Raw JSON:\n')[1]);
-    expect(parsed).toHaveLength(2);
-    expect(parsed.every((r: { account: string }) => r.account === '1930')).toBe(true);
+    // Both #TRANS lines against account 1930 (one per voucher) should survive
+    // the filter; the account-3000 lines should not appear.
+    expect(text).toContain('1930');
+    expect(text).not.toContain('3000');
+    expect(text).toContain('(2 total)');
   });
 
   it('filters by voucher series when given', async () => {
@@ -96,13 +103,29 @@ describe('fortnox_general_ledger', () => {
 
     const result = await client.callTool({
       name: 'fortnox_general_ledger',
-      arguments: { fromDate: '2026-08-01', toDate: '2026-08-31', series: 'B', includeRaw: true },
+      arguments: { fromDate: '2026-08-01', toDate: '2026-08-31', series: 'B' },
     });
 
     const text = (result.content as { type: string; text: string }[])[0].text;
-    const parsed = JSON.parse(text.split('Raw JSON:\n')[1]);
-    expect(parsed).toHaveLength(2);
-    expect(parsed.every((r: { series: string }) => r.series === 'B')).toBe(true);
+    expect(text).toContain('B5');
+    expect(text).not.toContain('A1');
+    expect(text).toContain('(2 total)');
+  });
+
+  // Review #161: includeRaw claimed to return raw Fortnox JSON, but this tool
+  // has no such thing — the data is parsed from a SIE text export, not a
+  // Fortnox JSON response. The option no longer exists; a caller passing it
+  // gets the strict-schema rejection every other unknown argument gets.
+  it('no longer accepts includeRaw', async () => {
+    mockSieFetch();
+    const { client } = await setupClientServer();
+
+    const result = await client.callTool({
+      name: 'fortnox_general_ledger',
+      arguments: { fromDate: '2026-08-01', toDate: '2026-08-31', includeRaw: true },
+    });
+
+    expect(result.isError).toBe(true);
   });
 
   it('is read-only — no confirmation required', async () => {
@@ -115,5 +138,89 @@ describe('fortnox_general_ledger', () => {
     });
 
     expect(result.isError).toBeFalsy();
+  });
+
+  // Review #161: an unbounded response for a real full-year, high-volume
+  // company (~20k postings, ~1.78 MB formatted) can exceed MCP/client/model
+  // limits. The tool must impose a deterministic bound and report enough for
+  // a caller to page through the rest.
+  describe('pagination bounds a large result', () => {
+    it('caps the response at the default page size and reports the true total', async () => {
+      mockSieFetch(generateLargeSie(1200));
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_general_ledger',
+        arguments: { fromDate: '2026-01-01', toDate: '2026-12-31' },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      // 500 is the documented default page size. The text column isn't the
+      // last one (debit/credit follow it, padded), so match on the trailing
+      // padding space rather than a line end — and to disambiguate "Row 1"
+      // from "Row 10"/"Row 100", which would otherwise also satisfy a bare
+      // substring check.
+      expect(text).toContain('Row 1 ');
+      expect(text).toContain('Row 500');
+      expect(text).not.toContain('Row 501');
+      expect(text).toContain('Page 1/3 (1200 total)');
+    });
+
+    it('returns the next page of rows when asked', async () => {
+      mockSieFetch(generateLargeSie(1200));
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_general_ledger',
+        arguments: { fromDate: '2026-01-01', toDate: '2026-12-31', page: 2 },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Row 501');
+      expect(text).toContain('Row 1000');
+      expect(text).not.toContain('Row 500 ');
+      expect(text).toContain('Page 2/3 (1200 total)');
+    });
+
+    it('honors a smaller explicit limit', async () => {
+      mockSieFetch(generateLargeSie(30));
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_general_ledger',
+        arguments: { fromDate: '2026-01-01', toDate: '2026-12-31', limit: 10 },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Row 1 ');
+      expect(text).toContain('Row 10');
+      expect(text).not.toContain('Row 11');
+      expect(text).toContain('Page 1/3 (30 total)');
+    });
+
+    it('rejects a limit above the documented maximum', async () => {
+      mockSieFetch(generateLargeSie(5));
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_general_ledger',
+        arguments: { fromDate: '2026-01-01', toDate: '2026-12-31', limit: 100000 },
+      });
+
+      expect(result.isError).toBe(true);
+    });
+
+    it('reports a single full page when everything fits', async () => {
+      mockSieFetch();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_general_ledger',
+        arguments: { fromDate: '2026-08-01', toDate: '2026-08-31' },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Page 1/1 (4 total)');
+    });
   });
 });
