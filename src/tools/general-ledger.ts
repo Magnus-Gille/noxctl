@@ -30,7 +30,7 @@ export function registerGeneralLedgerTools(
         .number()
         .optional()
         .describe(
-          'Räkenskapsår-ID (från fortnox_list_financialyears), härleds annars av Fortnox från datumintervallet',
+          'Räkenskapsår-ID (från fortnox_list_financialyears) — löses annars upp automatiskt från fromDate',
         ),
       account: z.string().optional().describe('Filtrera på ett specifikt kontonummer'),
       series: z

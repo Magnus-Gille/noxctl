@@ -19,9 +19,14 @@ const SAMPLE_SIE = [
   '}',
 ].join('\r\n');
 
+// Every test below fetches a 2026-08 range, so a single financial year
+// covering all of 2026 satisfies the auto-resolution unless a test
+// overrides `request` itself to check that resolution specifically.
 function stubTransport(): FortnoxTransport {
   return {
-    request: vi.fn(),
+    request: vi.fn().mockResolvedValue({
+      FinancialYears: [{ Id: 4, FromDate: '2026-01-01', ToDate: '2026-12-31' }],
+    }),
     requestWithMetadata: vi.fn(),
     requestPdf: vi.fn(),
     requestPdfFromMutation: vi.fn(),
@@ -42,6 +47,45 @@ describe('getGeneralLedger', () => {
 
     expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
       params: { fromdate: '2026-08-01', todate: '2026-08-31', financialyear: 12 },
+    });
+    // An explicit financialYear must skip the lookup entirely.
+    expect(transport.request).not.toHaveBeenCalled();
+  });
+
+  // Financial year ids are per-company (id 14 for one tenant might be id 1
+  // for another that started in 2025) and Fortnox's SIE export does not
+  // reliably infer the year from dates alone — confirmed live: a real
+  // 2025-01-01..2025-12-31 range was rejected ("Perioden måste ligga inom
+  // bokföringsåret") until financialyear was also passed. Resolve it
+  // automatically instead of requiring the caller to already know the id.
+  describe('financial year auto-resolution', () => {
+    it('resolves the financial year from fromDate when not given', async () => {
+      const transport = stubTransport();
+      const { getGeneralLedger } = createGeneralLedgerOperations(transport);
+
+      await getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31' });
+
+      expect(transport.request).toHaveBeenCalledWith('financialyears');
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-08-01', todate: '2026-08-31', financialyear: 4 },
+      });
+    });
+
+    it('throws (telling the caller to pass financialYear) when none covers the date', async () => {
+      const transport: FortnoxTransport = {
+        request: vi.fn().mockResolvedValue({ FinancialYears: [] }),
+        requestWithMetadata: vi.fn(),
+        requestPdf: vi.fn(),
+        requestPdfFromMutation: vi.fn(),
+        requestFile: vi.fn(),
+        fetchAllPages: vi.fn(),
+      };
+      const { getGeneralLedger } = createGeneralLedgerOperations(transport);
+
+      await expect(
+        getGeneralLedger({ fromDate: '1999-01-01', toDate: '1999-12-31' }),
+      ).rejects.toThrow(/pass financialYear/i);
+      expect(transport.requestFile).not.toHaveBeenCalled();
     });
   });
 

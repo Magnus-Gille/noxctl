@@ -24,17 +24,35 @@ const SAMPLE_SIE = [
   '}',
 ].join('\r\n');
 
+// getGeneralLedger now resolves the financial year itself when the caller
+// doesn't pass one (see operations/general-ledger.ts), which means every call
+// here makes a preceding GET financialyears before the sie/4 fetch. Branch on
+// the URL so both are served correctly regardless of call order.
 function mockSieFetch(text: string = SAMPLE_SIE) {
-  global.fetch = vi.fn().mockResolvedValue({
-    ok: true,
-    status: 200,
-    headers: new Headers({ 'content-type': 'application/octet-stream' }),
-    arrayBuffer: () => {
-      const bytes = Buffer.from(text, 'latin1');
-      return Promise.resolve(
-        bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
-      );
-    },
+  global.fetch = vi.fn().mockImplementation((url: unknown) => {
+    if (String(url).includes('financialyears')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              FinancialYears: [{ Id: 4, FromDate: '2026-01-01', ToDate: '2026-12-31' }],
+            }),
+          ),
+      });
+    }
+    return Promise.resolve({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/octet-stream' }),
+      arrayBuffer: () => {
+        const bytes = Buffer.from(text, 'latin1');
+        return Promise.resolve(
+          bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+        );
+      },
+    });
   });
 }
 
@@ -74,10 +92,14 @@ describe('fortnox_general_ledger', () => {
     expect(text).toContain('2026-08-05');
     expect(text).toContain('2026-08-06');
     expect(text).toContain('Sale to customer');
-    const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-    expect(calledUrl).toContain('sie/4');
-    expect(calledUrl).toContain('fromdate=2026-08-01');
-    expect(calledUrl).toContain('todate=2026-08-31');
+    const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls as [string][];
+    const sieCall = calls.map(([url]) => url).find((url) => url.includes('sie/4'));
+    expect(sieCall).toContain('fromdate=2026-08-01');
+    expect(sieCall).toContain('todate=2026-08-31');
+    // financialYear was not given, so it must have been resolved rather than
+    // omitted (letting Fortnox infer it, which is not reliable — see the
+    // operations-layer fix).
+    expect(sieCall).toContain('financialyear=4');
   });
 
   it('filters by account when given', async () => {

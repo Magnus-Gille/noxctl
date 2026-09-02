@@ -2794,7 +2794,7 @@ generalLedger
   .requiredOption('--to <date>', 'To date (YYYY-MM-DD)')
   .option(
     '--year <number>',
-    'Financial year (optional; Fortnox infers it from the date range otherwise)',
+    'Financial year (optional; resolved automatically from --from otherwise)',
     parseInt,
   )
   .option('--account <number>', 'Filter to one account number')
