@@ -438,6 +438,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl vouchers attach <series> <number> <file...> [--year]` | `fortnox_attach_voucher_files` | Upload receipt/underlag files and link them to a voucher (mutation; needs the Fortnox archive scope) |
 | `noxctl vouchers attachments <series> <number> [--year]` | `fortnox_list_voucher_attachments` | List files (receipts/underlag) already attached to a voucher — read-only, default scopes only |
 | `noxctl vouchers file <fileId> [-f <path>]` | `fortnox_get_voucher_file` | Download a file attached to a voucher (get `fileId` from `vouchers attachments`) — read-only, default scopes only |
+| `noxctl general-ledger list --from <date> --to <date> [--year] [--account] [--series]` / alias `ledger list` | `fortnox_general_ledger` | Bookkeeping transactions with amounts for a date range, one row per posting — reads Fortnox's SIE export instead of walking vouchers one by one, so it stays fast for a full year. Read-only, default scopes only |
 | `noxctl accounts list [--search <term>]` | `fortnox_list_accounts` | View chart of accounts, search by name or number |
 
 ### Financial reports

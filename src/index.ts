@@ -15,6 +15,7 @@ import { registerArticleTools } from './tools/articles.js';
 import { registerSupplierTools } from './tools/suppliers.js';
 import { registerSupplierInvoiceTools } from './tools/supplier-invoices.js';
 import { registerFinancialReportTools } from './tools/financial-reports.js';
+import { registerGeneralLedgerTools } from './tools/general-ledger.js';
 import { registerStatusTools } from './tools/status.js';
 import { registerInvoicePaymentTools } from './tools/invoice-payments.js';
 import { registerSupplierInvoicePaymentTools } from './tools/supplier-invoice-payments.js';
@@ -61,6 +62,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerSupplierTools(server, operations);
   registerSupplierInvoiceTools(server, operations);
   registerFinancialReportTools(server, operations);
+  registerGeneralLedgerTools(server, operations);
   // The status tool inspects this process's local profile/keychain. It remains
   // useful for local stdio sessions but must not expose host state in an
   // embedded tenant-bound server.

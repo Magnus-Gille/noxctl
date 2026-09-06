@@ -647,6 +647,22 @@ export const absenceTransactionDetailColumns: Column[] = [
   { key: 'Project', header: 'Project', width: 12 },
 ];
 
+// --- General ledger (target ≤80 cols) ---
+
+export const generalLedgerColumns: Column[] = [
+  { key: 'transactionDate', header: 'Date', width: 10 },
+  {
+    key: 'series',
+    header: 'Ver',
+    width: 8,
+    format: (_v, row) => `${row.series as string}${row.voucherNumber as string}`,
+  },
+  { key: 'account', header: 'Account', width: 8, align: 'right' },
+  { key: 'text', header: 'Text', width: 28 },
+  { key: 'debit', header: 'Debit', width: 12, align: 'right', format: currency },
+  { key: 'credit', header: 'Credit', width: 12, align: 'right', format: currency },
+];
+
 // Schedule times
 export const scheduleTimeDetailColumns: Column[] = [
   { key: 'EmployeeId', header: 'Employee #', width: 15 },
