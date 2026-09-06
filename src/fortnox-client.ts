@@ -115,6 +115,7 @@ function endpointToScope(endpoint: string): string | undefined {
     vouchers: 'bookkeeping',
     accounts: 'bookkeeping',
     financialyears: 'bookkeeping',
+    sie: 'bookkeeping',
     companyinformation: 'companyinformation',
     settings: 'settings',
     projects: 'project',

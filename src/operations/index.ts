@@ -13,6 +13,7 @@ import { createEmployeeOperations } from './employees.js';
 import { createFinancialReportOperations } from './financial-reports.js';
 import { createFinancialYearOperations } from './financial-years.js';
 import { createFileOperations } from './files.js';
+import { createGeneralLedgerOperations } from './general-ledger.js';
 import { createInvoicePaymentOperations } from './invoice-payments.js';
 import { createInvoiceOperations } from './invoices.js';
 import { createOfferOperations } from './offers.js';
@@ -47,6 +48,7 @@ export function createFortnoxOperations(transport: FortnoxTransport) {
     ...createFinancialReportOperations(transport),
     ...createFinancialYearOperations(transport),
     ...createFileOperations(transport),
+    ...createGeneralLedgerOperations(transport),
     ...createInvoicePaymentOperations(transport),
     ...createInvoiceOperations(transport),
     ...createOfferOperations(transport),
