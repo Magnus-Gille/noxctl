@@ -36,6 +36,24 @@ const SAMPLE_SIE = [
 ].join('\r\n');
 
 describe('parseSie', () => {
+  it('preserves an SRU code declared before the account description', () => {
+    const result = parseSie('#SRU 3000 7410\n#KONTO 3000 "Sales"');
+    expect(result.accounts.get('3000')).toEqual({
+      number: '3000',
+      description: 'Sales',
+      sru: '7410',
+    });
+  });
+
+  it('preserves the SRU code when an account description is replaced', () => {
+    const result = parseSie('#KONTO 3000 "Initial"\n#SRU 3000 7410\n#KONTO 3000 "Updated"');
+    expect(result.accounts.get('3000')).toEqual({
+      number: '3000',
+      description: 'Updated',
+      sru: '7410',
+    });
+  });
+
   it('extracts company metadata', () => {
     const result = parseSie(SAMPLE_SIE);
     expect(result.companyName).toBe('Test AB');

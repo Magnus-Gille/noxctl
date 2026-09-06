@@ -39,6 +39,52 @@ function stubTransport(): FortnoxTransport {
 }
 
 describe('getGeneralLedger', () => {
+  it.each([NaN, Infinity, 0, -1, 4.5, 9007199254740992, null, '4'])(
+    'rejects invalid explicit financialYear %s without transport',
+    async (financialYear) => {
+      const transport = stubTransport();
+      const { getGeneralLedger } = createGeneralLedgerOperations(transport);
+      await expect(
+        getGeneralLedger({
+          fromDate: '2026-08-01',
+          toDate: '2026-08-31',
+          financialYear: financialYear as number,
+        }),
+      ).rejects.toThrow(/financialYear.*positive safe integer/i);
+      expect(transport.request).not.toHaveBeenCalled();
+      expect(transport.requestFile).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, null, '', 'abc', '4.5', '0x10', true, 0, -1, 4.5, 9007199254740992])(
+    'rejects invalid resolved year ID %s before SIE export',
+    async (Id) => {
+      const transport = stubTransport();
+      vi.mocked(transport.request).mockResolvedValue({
+        FinancialYears: [{ Id, FromDate: '2026-01-01', ToDate: '2026-12-31' }],
+      });
+      const { getGeneralLedger } = createGeneralLedgerOperations(transport);
+      await expect(
+        getGeneralLedger({ fromDate: '2026-08-01', toDate: '2026-08-31' }),
+      ).rejects.toThrow(/financial year.*ID/i);
+      expect(transport.requestFile).not.toHaveBeenCalled();
+    },
+  );
+
+  it('accepts a decimal string ID from financial-year lookup', async () => {
+    const transport = stubTransport();
+    vi.mocked(transport.request).mockResolvedValue({
+      FinancialYears: [{ Id: '12', FromDate: '2026-01-01', ToDate: '2026-12-31' }],
+    });
+    await createGeneralLedgerOperations(transport).getGeneralLedger({
+      fromDate: '2026-08-01',
+      toDate: '2026-08-31',
+    });
+    expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+      params: { fromdate: '2026-08-01', todate: '2026-08-31', financialyear: 12 },
+    });
+  });
+
   it('requests sie/4 for the given date range', async () => {
     const transport = stubTransport();
     const { getGeneralLedger } = createGeneralLedgerOperations(transport);

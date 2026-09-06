@@ -28,6 +28,8 @@ export function registerGeneralLedgerTools(
       toDate: z.string().describe('Till datum (YYYY-MM-DD)'),
       financialYear: z
         .number()
+        .int()
+        .positive()
         .optional()
         .describe(
           'Räkenskapsår-ID (från fortnox_list_financialyears) — löses annars upp automatiskt från fromDate',

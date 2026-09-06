@@ -647,7 +647,9 @@ export const absenceTransactionDetailColumns: Column[] = [
   { key: 'Project', header: 'Project', width: 12 },
 ];
 
-// --- General ledger (target ≤80 cols) ---
+// --- General ledger ---
+// Our SIE parser accepts at most MAX_SAFE_INTEGER cents: 14 whole digits + dot + 2 decimals.
+// Reserve 17 characters so every accepted debit/credit remains complete.
 
 export const generalLedgerColumns: Column[] = [
   { key: 'transactionDate', header: 'Date', width: 10 },
@@ -659,8 +661,8 @@ export const generalLedgerColumns: Column[] = [
   },
   { key: 'account', header: 'Account', width: 8, align: 'right' },
   { key: 'text', header: 'Text', width: 28 },
-  { key: 'debit', header: 'Debit', width: 12, align: 'right', format: currency },
-  { key: 'credit', header: 'Credit', width: 12, align: 'right', format: currency },
+  { key: 'debit', header: 'Debit', width: 17, align: 'right', format: currency },
+  { key: 'credit', header: 'Credit', width: 17, align: 'right', format: currency },
 ];
 
 // Schedule times

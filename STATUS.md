@@ -1,5 +1,29 @@
 # Project Status
 
+## Issue #165 — 2026-09-06
+
+- Worktree `/private/tmp/noxctl-165`, branch `fix/165-general-ledger-followups`,
+  based on merged PR #161 (`c1527727569aecf4306c7d2f71718942397c1500`).
+- Implemented complete ledger debit/credit display, positive safe integer
+  financial-year validation at CLI/MCP/operations boundaries (including lookup
+  results), and SRU preservation when account records arrive out of order.
+- Regression tests reproduced the defects before fixes. `npm run verify` passes:
+  version consistency, lint, formatting, build, and 1,170 tests in 96 files.
+  The built CLI also rejects `--year 4.5` locally with exit code 1.
+- M5 `qwen3-coder-next-80b` provided a partially adopted SRU proposal; it reached
+  its time cap before testing. The conductor reduced duplicate tests and
+  verified the fix locally.
+- Independent review: Claude Opus 5 found no correctness/regression defects.
+  Accepted the fixed-width padding cost to keep the change local to the ledger;
+  broader formatter changes and malformed-record behavior are out of scope.
+  Zod 4 enforces safe integers, and built-CLI validation preserves JSON errors.
+- Still open: confirm terminal-backslash encoding with a synthetic/non-sensitive
+  **actual Fortnox export**. No such fixture was found in the repository; the
+  owner has been asked for its path. Existing escaped-quote and literal-backslash
+  regressions pass. Escape semantics remain unchanged. Do not close #165 yet.
+
+## Earlier handoff (historical)
+
 **Last session:** 2026-08-29
 **Branch:** `fix/117-keychain-recovery`
 **Published:** `v0.7.4` on GitHub and `noxctl@0.7.4` on npm (both verified 2026-08-28)

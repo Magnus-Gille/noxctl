@@ -79,6 +79,46 @@ describe('fortnox_general_ledger', () => {
     vi.restoreAllMocks();
   });
 
+  it.each(['1234567890.12', '90071992547409.00'])(
+    'keeps large debit and credit %s complete in the MCP table',
+    async (amount) => {
+      mockSieFetch(SAMPLE_SIE.replaceAll('1000', amount));
+      const { client, server } = await setupClientServer();
+      try {
+        const result = await client.callTool({
+          name: 'fortnox_general_ledger',
+          arguments: { fromDate: '2026-08-01', toDate: '2026-08-31' },
+        });
+        const text = (result.content as { text: string }[])[0].text;
+        expect(result.isError).not.toBe(true);
+        expect(text.split(amount)).toHaveLength(3);
+        expect(text).not.toContain('…');
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    },
+  );
+
+  it.each([0, -1, 4.5, 9007199254740992])(
+    'rejects invalid financialYear %s before fetching',
+    async (financialYear) => {
+      mockSieFetch();
+      const { client, server } = await setupClientServer();
+      try {
+        const result = await client.callTool({
+          name: 'fortnox_general_ledger',
+          arguments: { fromDate: '2026-08-01', toDate: '2026-08-31', financialYear },
+        });
+        expect(result.isError).toBe(true);
+        expect(global.fetch).not.toHaveBeenCalled();
+      } finally {
+        await client.close();
+        await server.close();
+      }
+    },
+  );
+
   it('lists all transaction rows for the date range', async () => {
     mockSieFetch();
     const { client } = await setupClientServer();
