@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import type { FortnoxTransport } from '../src/fortnox-client.js';
 import { parseSie, fetchSie } from '../src/sie.js';
 
@@ -374,6 +375,68 @@ describe('SIE4 amount and field grammar', () => {
     ]);
   });
 
+  it('reads terminal backslashes from an actual Fortnox demo export', () => {
+    const result = parseSie(
+      readFileSync(new URL('./fixtures/fortnox-terminal-backslash.se', import.meta.url), 'utf8'),
+    );
+    expect(result.transactions).toHaveLength(2);
+    expect(result.transactions.map((row) => row.amount)).toEqual([1, -1]);
+    for (const row of result.transactions) {
+      expect(row).toMatchObject({
+        voucherDescription: 'Test\\',
+        text: 'Test\\',
+        registrationDate: '20260906',
+        transactionDate: '20260906',
+      });
+    }
+  });
+
+  it('decodes Fortnox exported backslashes and quotes to the stored voucher row text', () => {
+    const result = parseSie(
+      readFileSync(new URL('./fixtures/fortnox-escape-matrix.se', import.meta.url), 'utf8'),
+    );
+    const texts = [
+      'One\\',
+      'Two\\\\',
+      'Middle\\path',
+      'Middle\\\\path',
+      'Quote "end"',
+      'Slash\\"quote',
+    ];
+    expect(result.transactions.map((row) => row.text)).toEqual(
+      texts.flatMap((text) => [text, text]),
+    );
+    expect(result.transactions.map((row) => row.amount)).toEqual(texts.flatMap(() => [1, -1]));
+  });
+
+  it('decodes escaped backslashes in object dimensions without shifting following fields', () => {
+    const result = parseSie(String.raw`#VER A 1 20260906 "Test" 20260906
+{
+#TRANS 1930 {1 "Cost\\" 6 "Project\\\"A"} 12.50 "" "Row\\\\\\" 0
+}`);
+    expect(result.transactions[0]).toMatchObject({
+      costCenter: 'Cost\\',
+      project: 'Project\\"A',
+      text: 'Row\\\\\\',
+      amount: 12.5,
+      registrationDate: '20260906',
+    });
+  });
+
+  it.each([
+    [String.raw`"\\"`, '\\'],
+    [String.raw`"\""`, '"'],
+    [String.raw`"Slash\\\""`, 'Slash\\"'],
+  ])('preserves closing-quote boundaries for %s', (encoded, expected) => {
+    const result = parseSie(`#VER A 1 20260906 ${encoded} 20260906\n{\n#TRANS 1930 {} 1\n}`);
+    expect(result.transactions[0]).toMatchObject({
+      voucherDescription: expected,
+      registrationDate: '20260906',
+      amount: 1,
+    });
+  });
+
+  // Keep the permissive literal-backslash fallback; Fortnox itself doubles these.
   it('decodes escaped quotes without shifting subsequent fields or removing other backslashes', () => {
     const result = parseSie(String.raw`#VER A 1 20260805 "Sale \"special\" C:\docs" 20260806
 {
