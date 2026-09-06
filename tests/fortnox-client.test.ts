@@ -231,6 +231,23 @@ describe('fortnox-client', () => {
       }
     });
 
+    it('includes scope hint for 403 on the SIE export endpoint', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 403,
+        json: () => Promise.resolve({ ErrorInformation: { message: 'Forbidden', code: 0 } }),
+      });
+
+      try {
+        await fortnoxRequest('sie/4');
+        expect.unreachable();
+      } catch (err) {
+        expect(err).toBeInstanceOf(FortnoxApiError);
+        const e = err as FortnoxApiError;
+        expect(e.hint).toContain('bookkeeping');
+      }
+    });
+
     it('includes auth hint for 401', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: false,

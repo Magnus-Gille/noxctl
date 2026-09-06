@@ -88,6 +88,7 @@ import {
   absenceTransactionDetailColumns,
   scheduleTimeDetailColumns,
   referenceDataColumns,
+  generalLedgerColumns,
 } from './views.js';
 
 const program = new Command();
@@ -2777,6 +2778,46 @@ supplierInvoices
       detached: true,
     });
   });
+
+// --- general-ledger ---
+const generalLedger = program
+  .command('general-ledger')
+  .alias('ledger')
+  .description(
+    'Bookkeeping transaction list with amounts, via Fortnox’s SIE export — fast even for a full year, unlike walking vouchers one by one',
+  );
+
+generalLedger
+  .command('list')
+  .description('List bookkeeping transactions for a date range, one row per posting')
+  .requiredOption('--from <date>', 'From date (YYYY-MM-DD)')
+  .requiredOption('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--year <number>',
+    'Financial year (optional; resolved automatically from --from otherwise)',
+    parseInt,
+  )
+  .option('--account <number>', 'Filter to one account number')
+  .option('--series <code>', 'Filter to one voucher series (e.g. "A")')
+  .action(
+    async (opts: {
+      from: string;
+      to: string;
+      year?: number;
+      account?: string;
+      series?: string;
+    }) => {
+      const { getGeneralLedger } = await import('./operations/general-ledger.js');
+      let rows = await getGeneralLedger({
+        fromDate: opts.from,
+        toDate: opts.to,
+        financialYear: opts.year,
+      });
+      if (opts.account) rows = rows.filter((r) => r.account === opts.account);
+      if (opts.series) rows = rows.filter((r) => r.series === opts.series);
+      outputList(rows as unknown as Record<string, unknown>[], generalLedgerColumns, json(), rows);
+    },
+  );
 
 // --- invoice-payments ---
 const invoicePayments = program
