@@ -63,8 +63,11 @@ export interface ParsedSie {
 function readQuoted(line: string, start: number): { value: string; end: number } {
   let value = '';
   for (let i = start + 1; i < line.length; i++) {
-    if (line[i] === '\\' && line[i + 1] === '"') {
-      value += '"';
+    // Fortnox escapes both backslashes and quotes (verified with exported
+    // demo vouchers). Consume pairs so a terminal escaped backslash does
+    // not consume the field's closing quote. Keep other backslashes literal.
+    if (line[i] === '\\' && (line[i + 1] === '"' || line[i + 1] === '\\')) {
+      value += line[i + 1];
       i++;
     } else if (line[i] === '"') {
       return { value, end: i + 1 };
@@ -145,6 +148,7 @@ function parseFiniteAmount(raw: string, context: string): number {
   return value;
 }
 
+/** Parse Fortnox SIE exports, including Fortnox's backslash/quote escaping. */
 export function parseSie(text: string): ParsedSie {
   const accounts = new Map<string, SieAccount>();
   const transactions: SieTransaction[] = [];

@@ -1,0 +1,15 @@
+#VER A 3 20260906 "SIE escape regression test" 20260906
+{
+#TRANS 1930 {} 1 "" "One\\" 0
+#TRANS 1930 {} -1 "" "One\\" 0
+#TRANS 1930 {} 1 "" "Two\\\\" 0
+#TRANS 1930 {} -1 "" "Two\\\\" 0
+#TRANS 1930 {} 1 "" "Middle\\path" 0
+#TRANS 1930 {} -1 "" "Middle\\path" 0
+#TRANS 1930 {} 1 "" "Middle\\\\path" 0
+#TRANS 1930 {} -1 "" "Middle\\\\path" 0
+#TRANS 1930 {} 1 "" "Quote \"end\"" 0
+#TRANS 1930 {} -1 "" "Quote \"end\"" 0
+#TRANS 1930 {} 1 "" "Slash\\\"quote" 0
+#TRANS 1930 {} -1 "" "Slash\\\"quote" 0
+}

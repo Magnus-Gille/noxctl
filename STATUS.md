@@ -1,5 +1,26 @@
 # Project Status
 
+## Issue #165 terminal backslash — 2026-09-06
+
+- Branch `fix/165-sie-backslash`, based on main
+  `82e1cde631f5bb9e40999155e5fd4c769f33be2d` (PR #166).
+- The owner authorized synthetic test vouchers in the demo company only.
+  A2 verifies terminal backslashes; A3 covers internal/terminal single/double
+  backslashes, quotes, and a backslash immediately before a quote. Both have
+  zero net effect on account 1930. No production accounting changes.
+- Actual SIE exports confirm that Fortnox escapes backslashes as well as quotes.
+  The parser now consumes either escape pair while retaining other literal
+  backslashes. Synthetic-only exported voucher blocks are committed as fixtures.
+- Three regression tests failed before the fix. `npm run verify` passes all
+  1,176 tests in 96 files, build, lint, format, and version consistency.
+  A fresh read of the demo export also passes with the corrected row text.
+- M5 `qwen3-coder-next-80b` test-generation attempt timed out without output;
+  no output adopted. `m5 --profile codex doctor` reports healthy endpoints but
+  cannot inspect the host connector session. Tests were implemented locally.
+- Independent reviewer Claude Opus 5 found the fix correct. Confirmed the only
+  production caller is the Fortnox export path; documented the helper's scope.
+  Added suggested closing-quote boundary tests and fixture encoding notes.
+
 ## Issue #165 — 2026-09-06
 
 - Worktree `/private/tmp/noxctl-165`, branch `fix/165-general-ledger-followups`,
