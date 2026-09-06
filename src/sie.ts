@@ -181,7 +181,9 @@ export function parseSie(text: string): ParsedSie {
       organisationNumber = tokenize(line)[1];
     } else if (tag === 'KONTO') {
       const [, number, description] = tokenize(line);
-      if (number) accounts.set(number, { number, description: description ?? '' });
+      if (number) {
+        accounts.set(number, { ...accounts.get(number), number, description: description ?? '' });
+      }
     } else if (tag === 'SRU') {
       const [, number, sru] = tokenize(line);
       if (number) {

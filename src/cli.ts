@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
+import { parsePositiveInteger } from './cli-validators.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import {
@@ -2795,7 +2796,7 @@ generalLedger
   .option(
     '--year <number>',
     'Financial year (optional; resolved automatically from --from otherwise)',
-    parseInt,
+    parsePositiveInteger,
   )
   .option('--account <number>', 'Filter to one account number')
   .option('--series <code>', 'Filter to one voucher series (e.g. "A")')

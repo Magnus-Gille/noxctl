@@ -48,7 +48,14 @@ export function createGeneralLedgerOperations(transport: FortnoxTransport) {
         `No financial year found covering ${fromDate}. Pass financialYear explicitly.`,
       );
     }
-    return Number(list[0]!.Id);
+    const rawId = list[0]!.Id;
+    const id = typeof rawId === 'string' && /^\d+$/.test(rawId) ? Number(rawId) : rawId;
+    if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
+      throw new Error(
+        'Invalid financial year ID returned by Fortnox. Pass financialYear explicitly.',
+      );
+    }
+    return id;
   }
 
   // The flat, dated, per-account transaction list every other report in this
@@ -56,6 +63,12 @@ export function createGeneralLedgerOperations(transport: FortnoxTransport) {
   // range: fetchSie proxies straight to Fortnox's SIE export, which needs
   // one to scope the file it generates.
   async function getGeneralLedger(params: GeneralLedgerParams): Promise<GeneralLedgerEntry[]> {
+    if (
+      params.financialYear !== undefined &&
+      (!Number.isSafeInteger(params.financialYear) || params.financialYear <= 0)
+    ) {
+      throw new Error('financialYear must be a positive safe integer.');
+    }
     const financialYear = params.financialYear ?? (await resolveFinancialYear(params.fromDate));
     const parsed = await fetchSie(transport, { ...params, financialYear });
     return parsed.transactions
