@@ -10,6 +10,17 @@ const CLI_TIMEOUT_MS = 30_000;
 const execOpts: ExecFileSyncOptions = { encoding: 'utf-8', timeout: CLI_TIMEOUT_MS };
 
 describe('CLI smoke tests', () => {
+  it('noxctl without arguments exits 0 and shows help without resolving a profile', () => {
+    const output = execFileSync('node', [CLI_PATH], {
+      ...execOpts,
+      env: { ...process.env, NOXCTL_PROFILE: 'invalid/profile' },
+    }) as string;
+    const help = execFileSync('node', [CLI_PATH, '--help'], execOpts) as string;
+    expect(output).toBe(help);
+    expect(output).toContain('Usage: noxctl');
+    expect(output).toContain('serve');
+  });
+
   it('noxctl --help exits 0 and shows subcommands', () => {
     const output = execFileSync('node', [CLI_PATH, '--help'], execOpts) as string;
     expect(output).toContain('setup');

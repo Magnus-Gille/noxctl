@@ -179,6 +179,8 @@ Token management is automatic after setup — no environment variables needed go
 
 ### 3. Register as MCP server (optional — for Claude Desktop/Web)
 
+Running `noxctl` without arguments prints help and exits. Use `noxctl serve` to start the MCP server.
+
 If you use Claude Desktop or claude.ai, register the MCP server so those environments can access Fortnox. Claude Code can use the CLI directly, so this step is optional there.
 
 ```bash
