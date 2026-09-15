@@ -1315,9 +1315,9 @@ keychain
     console.log('Credentials now live only in the YubiKey-locked keychain.');
   });
 
-// --- serve (default command) ---
+// --- serve ---
 program
-  .command('serve', { isDefault: true })
+  .command('serve')
   .description('Start the MCP server (stdio transport)')
   .action(async () => {
     const { startMcpServer } = await import('./index.js');
@@ -5557,7 +5557,8 @@ Examples:
 // Error handling (configureOutput + exitOverride set above, before the command
 // tree, so subcommands inherit them).
 try {
-  await program.parseAsync(process.argv);
+  const args = process.argv.length === 2 ? [...process.argv, '--help'] : process.argv;
+  await program.parseAsync(args);
 } catch (err) {
   const code = err instanceof Error && 'code' in err ? (err as { code: string }).code : undefined;
   // Commander throws these for --help and --version after writing output; exit 0.
