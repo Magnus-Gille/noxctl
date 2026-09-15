@@ -915,41 +915,41 @@
     },
     {
       "id": "supplier-invoice-accrual-create",
-      "declaredPropertyCount": 14,
+      "declaredPropertyCount": 13,
       "specificationPropertyCount": 11,
-      "missingPropertyCount": 0,
-      "checkedNodeCount": 19,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 18,
       "issuesByDimension": {
-        "field": 0,
+        "field": 1,
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
         "enum": 0,
         "nullability": 0,
-        "constraint": 17,
+        "constraint": 14,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "5c4e05063d2c21dbdcaea6139c72ebe3f210b9d640b27879f7c400fda9623e82"
+      "stateHash": "eafee5984c3df87fcf290f6d29a5e0ef1098a794bf5cee7267ae70ee7e591891"
     },
     {
       "id": "supplier-invoice-accrual-update",
-      "declaredPropertyCount": 15,
+      "declaredPropertyCount": 14,
       "specificationPropertyCount": 11,
-      "missingPropertyCount": 0,
-      "checkedNodeCount": 19,
+      "missingPropertyCount": 1,
+      "checkedNodeCount": 18,
       "issuesByDimension": {
-        "field": 0,
+        "field": 1,
         "nesting": 0,
         "requiredness": 0,
         "type": 0,
         "enum": 0,
         "nullability": 0,
-        "constraint": 17,
+        "constraint": 14,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "691426040493a256cecf7ea42286fae899e80a3ab93c63b44c75befb0cd6da16"
+      "stateHash": "51641d71ff3e43b1c455c957214b4decff484585d6c884def4fc8982dbe012e9"
     },
     {
       "id": "supplier-invoice-create",
