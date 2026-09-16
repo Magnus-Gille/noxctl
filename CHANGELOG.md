@@ -13,8 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Expanded the open-source Fortnox core API surface.** Supported families now
   include read-only reference/setup resources, accrual CRUD, archive and inbox
   workflows, and cross-document attachment operations with matching CLI and MCP
-  surfaces. Binary downloads use private temporary files with restrictive
-  permissions and explicit overwrite protection.
+  surfaces. Archive, inbox, and cross-document attachment downloads use private
+  temporary files with restrictive permissions and explicit overwrite protection.
 - **Supplier-invoice attachments can now be listed and downloaded.**
   `noxctl supplier-invoices attachments <givenNumber>` and
   `fortnox_list_supplier_invoice_attachments` list files (e.g. the scanned or
