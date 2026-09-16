@@ -6,8 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-16
+
 ### Added
 
+- **Expanded the open-source Fortnox core API surface.** Supported families now
+  include read-only reference/setup resources, accrual CRUD, archive and inbox
+  workflows, and cross-document attachment operations with matching CLI and MCP
+  surfaces. Binary downloads use private temporary files with restrictive
+  permissions and explicit overwrite protection.
 - **Supplier-invoice attachments can now be listed and downloaded.**
   `noxctl supplier-invoices attachments <givenNumber>` and
   `fortnox_list_supplier_invoice_attachments` list files (e.g. the scanned or
@@ -27,6 +34,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   decoded, tab separators are accepted, and malformed amounts or amounts that
   lose cent precision are rejected. Thanks to @hedborg for the implementation
   (#161).
+
+### Fixed
+
+- Customer create/update schemas now expose the writable Fortnox fields and use
+  the correct `Phone1` and `CountryCode` names.
+- General-ledger validation now rejects invalid years and unsafe amounts while
+  preserving row dates and SRU metadata; SIE parsing handles escaped backslashes.
+- Supplier-invoice filters accept `authorizepending`, and supplier-invoice accrual
+  writes no longer advertise the read-only `Times` field.
+- Running `noxctl` without arguments now shows help.
+
+### Internal
+
+- Added privacy-safe API implementation and mutation-schema coverage manifests,
+  with the weekly checks wired into CI.
 
 ## [0.9.0] - 2026-08-31
 
@@ -309,6 +331,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.10.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.4...v0.8.0
 [0.7.4]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.3...v0.7.4
