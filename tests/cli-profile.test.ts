@@ -50,6 +50,39 @@ function run(
   }
 }
 
+async function mockCredentialEnv(
+  state: 'missing' | 'available' = 'missing',
+): Promise<NodeJS.ProcessEnv> {
+  const env: NodeJS.ProcessEnv = { NOXCTL_KEYCHAIN_PATH: '' };
+  if (process.platform === 'win32') return env;
+
+  const binDir = path.join(tmpHome, 'mock-bin');
+  await fs.mkdir(binDir, { recursive: true });
+  const backend = process.platform === 'darwin' ? 'security' : 'secret-tool';
+  const missingExit = process.platform === 'darwin' ? '44' : '1';
+  const script =
+    `#!/bin/sh\n` +
+    `if [ "$NOXCTL_TEST_CREDENTIAL_STATE" = "available" ]; then\n` +
+    `  printf '%s' "$NOXCTL_TEST_CREDENTIAL_BLOB"\n` +
+    `  exit 0\n` +
+    `fi\n` +
+    `exit ${missingExit}\n`;
+  await fs.writeFile(path.join(binDir, backend), script, { mode: 0o700 });
+
+  return {
+    PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    NOXCTL_TEST_CREDENTIAL_STATE: state,
+    NOXCTL_TEST_CREDENTIAL_BLOB: JSON.stringify({
+      client_id: 'test-client',
+      client_secret: 'synthetic-test-secret',
+      access_token: 'synthetic-test-token',
+      refresh_token: 'synthetic-refresh-token',
+      expires_at: 0,
+    }),
+    NOXCTL_KEYCHAIN_PATH: '',
+  };
+}
+
 beforeEach(async () => {
   tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), 'noxctl-cli-profile-'));
   cfgDir = path.join(tmpHome, '.fortnox-mcp');
@@ -127,6 +160,38 @@ describe('profile current', () => {
     const res = run(['--profile', 'bad name!', 'profile', 'current']);
     expect(res.status).not.toBe(0);
     expect(res.stderr.toLowerCase()).toContain('invalid profile name');
+  });
+});
+
+describe('profile help', () => {
+  it('explains invocation overrides and saved profile precedence in detailed help', () => {
+    const root = run(['--help']);
+    expect(root.status).toBe(0);
+    const rootHelp = root.stdout.replace(/\s+/g, ' ');
+    expect(rootHelp).toContain('one invocation only');
+
+    const detail = run(['profile', '--help']);
+    expect(detail.status).toBe(0);
+    const profileHelp = detail.stdout.replace(/\s+/g, ' ');
+    expect(profileHelp).toContain('--profile');
+    expect(profileHelp).toContain('NOXCTL_PROFILE');
+    expect(profileHelp).toContain('profile use');
+    expect(profileHelp).toContain('default');
+  });
+
+  it('describes profile use as saving the default without exposing the pointer path', () => {
+    const res = run(['profile', 'use', '--help']);
+    expect(res.status).toBe(0);
+    expect(res.stdout.replace(/\s+/g, ' ')).toContain('Save the default profile');
+    expect(res.stdout).not.toContain('~/.fortnox-mcp/active-profile');
+  });
+
+  it('explains that keychain unlock applies to the keychain, not an individual profile', () => {
+    const res = run(['keychain', 'unlock', '--help']);
+    expect(res.status).toBe(0);
+    const unlockHelp = res.stdout.replace(/\s+/g, ' ');
+    expect(unlockHelp).toContain('dedicated keychain');
+    expect(unlockHelp).toContain('not a per-profile lock');
   });
 });
 
@@ -209,6 +274,57 @@ describe('profile use', () => {
     expect(res.status).not.toBe(0);
     expect(res.stderr.toLowerCase()).toContain('invalid profile name');
   });
+
+  it('suggests a close known profile and lists profiles before the creation hint', async () => {
+    await fs.mkdir(cfgDir, { recursive: true });
+    await fs.writeFile(
+      profilesIndexFile,
+      JSON.stringify({
+        schema_version: 1,
+        profiles: [{ name: 'default', created_at: '2026-01-01T00:00:00.000Z', schema_version: 2 }],
+      }),
+    );
+
+    const res = run(['--output', 'table', 'profile', 'use', 'defaukt'], await mockCredentialEnv());
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain('Did you mean "default"?');
+    expect(res.stderr).toContain('noxctl profile list');
+    expect(res.stderr).toContain('noxctl init --profile defaukt');
+    expect(res.stderr.indexOf('noxctl profile list')).toBeLessThan(
+      res.stderr.indexOf('noxctl init --profile defaukt'),
+    );
+    await expect(fs.access(activePointerFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    const indexAfter = JSON.parse(await fs.readFile(profilesIndexFile, 'utf-8')) as {
+      profiles: Array<{ name: string }>;
+    };
+    expect(indexAfter.profiles.map((entry) => entry.name)).toEqual(['default']);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'writes the selected profile and reports the saved default clearly',
+    async () => {
+      const res = run(
+        ['--output', 'table', 'profile', 'use', 'work'],
+        await mockCredentialEnv('available'),
+      );
+      expect(res.status).toBe(0);
+      expect(res.stdout.trim()).toBe('Saved default profile set to "work".');
+      expect(res.stderr).not.toContain('[profile: work]');
+      expect(await fs.readFile(activePointerFile, 'utf-8')).toBe('work\n');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps the successful JSON response contract',
+    async () => {
+      const res = run(
+        ['--output', 'json', 'profile', 'use', 'work'],
+        await mockCredentialEnv('available'),
+      );
+      expect(res.status).toBe(0);
+      expect(JSON.parse(res.stdout.trim())).toEqual({ name: 'work', source: 'pointer' });
+    },
+  );
 });
 
 describe('credential recovery safety', () => {
