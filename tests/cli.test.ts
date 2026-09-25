@@ -18,11 +18,11 @@ describe('CLI smoke tests', () => {
     const help = execFileSync('node', [CLI_PATH, '--help'], execOpts) as string;
     expect(output).toBe(help);
     expect(output).toContain('Usage: noxctl');
-    expect(output).toContain('serve');
+    expect(output).toContain('--help-all');
   });
 
-  it('noxctl --help exits 0 and shows subcommands', () => {
-    const output = execFileSync('node', [CLI_PATH, '--help'], execOpts) as string;
+  it('noxctl --help-all exits 0 and shows subcommands', () => {
+    const output = execFileSync('node', [CLI_PATH, '--help-all'], execOpts) as string;
     expect(output).toContain('setup');
     expect(output).toContain('serve');
     expect(output).toContain('invoices');

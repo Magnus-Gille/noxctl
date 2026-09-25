@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command, Option } from 'commander';
+import { configureCliHelp } from './cli-help.js';
 import { parsePositiveInteger } from './cli-validators.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
@@ -25,6 +26,7 @@ import {
 import { setResolvedProfile } from './auth.js';
 import { applyPeriod } from './date-periods.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
+import { formatMissingProfileGuidance, shouldShowProfileBanner } from './profile-suggestions.js';
 import { VERSION } from './version.js';
 import {
   invoiceListColumns,
@@ -107,7 +109,7 @@ process.stdout.on('error', (err: NodeJS.ErrnoException) => {
 
 program
   .name('noxctl')
-  .description('CLI and MCP server for Fortnox accounting')
+  .description('Fortnox accounting from your terminal')
   .version(VERSION)
   .addOption(
     new Option('-o, --output <format>', 'Output format (default: table on TTY, json when piped)')
@@ -116,8 +118,9 @@ program
   )
   .option(
     '--profile <name>',
-    'Profile to operate on (overrides NOXCTL_PROFILE and active pointer)',
-  );
+    'Use this profile for one invocation only; does not change the saved default',
+  )
+  .option('--help-all', 'Show all commands grouped by function');
 
 function json(): boolean {
   return isJsonMode(program.opts());
@@ -172,6 +175,8 @@ export function getResolvedProfileInfo(): ResolvedProfile {
 const PROFILE_RESOLUTION_SKIP = new Set(['help', 'completion']);
 
 program.hook('preAction', async (thisCommand, actionCommand) => {
+  if (actionCommand === program) return;
+  if (program.opts().helpAll) fail('Use `noxctl --help-all` without a subcommand.', 2);
   const name = actionCommand.name();
   if (PROFILE_RESOLUTION_SKIP.has(name)) return;
 
@@ -216,10 +221,12 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
   // so host logs (Claude Desktop) always see it. Suppress here to avoid a
   // duplicate on TTY invocations like `noxctl --profile X serve`.
   if (
-    resolvedProfileInfo.name.toLowerCase() !== DEFAULT_PROFILE &&
-    process.stderr.isTTY &&
-    name !== 'current' &&
-    name !== 'serve'
+    shouldShowProfileBanner(
+      resolvedProfileInfo.name,
+      process.stderr.isTTY,
+      name,
+      actionCommand.parent?.name(),
+    )
   ) {
     process.stderr.write(`[profile: ${resolvedProfileInfo.name}]\n`);
   }
@@ -738,10 +745,23 @@ program
 
 // --- profile ---
 const profile = program.command('profile').description('Manage noxctl profiles');
+profile.addHelpText(
+  'after',
+  `
+Profile selection precedence:
+  1. --profile <name> applies to this invocation only.
+  2. NOXCTL_PROFILE applies when --profile is not set.
+  3. The saved profile from noxctl profile use <name> applies when
+     neither override is set.
+  4. The built-in default profile is used when no saved profile exists.
+
+Run noxctl profile current to see the effective profile and its source
+(flag, env, pointer, or default).`,
+);
 
 profile
   .command('use <name>')
-  .description('Set the active profile (writes ~/.fortnox-mcp/active-profile)')
+  .description('Save the default profile for future invocations')
   .action(async (name: string) => {
     const { validateProfileName } = await import('./profile-name.js');
     let validated: string;
@@ -758,8 +778,12 @@ profile
       fail(inspection.detail);
     }
     if (inspection.state === 'missing') {
+      const idx = await readProfileIndex();
       console.error(
-        `No credentials found for profile "${validated}". Run \`noxctl init --profile ${validated}\` first.`,
+        `No credentials found for profile "${validated}".\n${formatMissingProfileGuidance(
+          validated,
+          idx.profiles,
+        )}`,
       );
       process.exit(1);
     }
@@ -768,7 +792,7 @@ profile
     if (json()) {
       console.log(JSON.stringify({ name: validated, source: 'pointer' }));
     } else {
-      console.log(`Active profile set to "${validated}".`);
+      console.log(`Saved default profile set to "${validated}".`);
     }
   });
 
@@ -1062,7 +1086,9 @@ keychain
 
 keychain
   .command('unlock')
-  .description('Unlock the dedicated keychain for this session (tap your YubiKey)')
+  .description(
+    'Unlock the dedicated keychain for this session (tap your YubiKey; this is not a per-profile lock)',
+  )
   .action(async () => {
     requireDarwin();
     const kt = await import('./keychain-target.js');
@@ -1329,7 +1355,7 @@ const invoices = program.command('invoices').description('Invoice operations');
 
 invoices
   .command('list')
-  .description('List/filter invoices')
+  .description('List invoice records, optionally filtered by status, customer, or date')
   .option('--filter <filter>', 'Filter: cancelled, fullypaid, unpaid, unpaidoverdue, unbooked')
   .option('--customer <number>', 'Filter by customer number')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
@@ -1341,6 +1367,18 @@ invoices
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
+  .addHelpText(
+    'after',
+    `
+Use this command when you need invoice rows. For totals only, see
+\`noxctl analytics unpaid\` or \`noxctl analytics overdue\`; for the combined
+overview, see \`noxctl dashboard\`.
+
+Examples:
+  noxctl invoices list --filter unpaid
+  noxctl invoices list --filter unpaidoverdue --customer 25
+  noxctl invoices list --period 2026-Q1`,
+  )
   .action(async (opts) => {
     const { listInvoices } = await import('./operations/invoices.js');
     const data = await listInvoices({
@@ -1760,7 +1798,17 @@ Examples:
 
 invoices
   .command('attachments <documentNumber>')
-  .description('List files attached to a customer invoice')
+  .description('List files attached to a customer invoice (F)')
+  .addHelpText(
+    'after',
+    `
+This lists files already attached to a customer invoice. To upload local files
+and attach them, use \`noxctl invoices attach\`. To link an existing archive
+file by ID, use \`noxctl attachments attach F <documentNumber> <fileId>\`.
+
+Example:
+  noxctl invoices attachments 91110646`,
+  )
   .action(async (documentNumber: string) => {
     const { listInvoiceAttachments } = await import('./operations/invoices.js');
     const results = await listInvoiceAttachments(documentNumber);
@@ -1773,11 +1821,11 @@ invoices
   });
 
 // --- tax ---
-const tax = program.command('tax').description('Tax operations');
+const tax = program.command('tax').description('Informational tax and VAT reports');
 
 tax
   .command('report')
-  .description('Generate VAT tax report for a period')
+  .description('Show the VAT account report for a period (informational)')
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
   .option(
@@ -1785,6 +1833,16 @@ tax
     'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
   )
   .option('--year <number>', 'Financial year', parseInt)
+  .addHelpText(
+    'after',
+    `
+Shows VAT-account activity and balances for the period. For the same report
+with a convenient \`netVat\` total added, use \`noxctl analytics vat\`.
+
+Examples:
+  noxctl tax report --period 2026-Q1
+  noxctl tax report --from 2026-01-01 --to 2026-03-31 --year 4`,
+  )
   .action(async (opts) => {
     const { generateTaxReport } = await import('./operations/tax.js');
     const range = fromToParams(opts);
@@ -2262,6 +2320,16 @@ const supplierInvoices = program
   .alias('si')
   .description('Supplier invoice operations (leverantörsfakturor)');
 
+supplierInvoices.addHelpText(
+  'after',
+  `
+For files, \`attachments\` lists files already connected to a supplier invoice
+and \`file\` downloads one by its file ID. To connect an existing inbox file,
+use \`connect-file\`; to upload a file into the inbox first, use
+\`noxctl inbox upload\`. Vouchers have their own \`vouchers attach\`,
+\`vouchers attachments\`, and \`vouchers file\` commands.`,
+);
+
 supplierInvoices
   .command('list')
   .description('List/filter supplier invoices')
@@ -2427,6 +2495,16 @@ supplierInvoices
   .command('attachments <givenNumber>')
   .description(
     'List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too',
+  )
+  .addHelpText(
+    'after',
+    `
+This lists file connections already on the supplier invoice; it does not
+upload files. Use \`noxctl inbox upload <file>\` to store a file, then
+\`noxctl supplier-invoices connect-file <givenNumber> <fileId>\` to connect it.
+
+Example:
+  noxctl supplier-invoices attachments 1`,
   )
   .action(async (givenNumber: string) => {
     const { listSupplierInvoiceAttachments } = await import('./operations/supplier-invoices.js');
@@ -2784,8 +2862,10 @@ supplierInvoices
 const generalLedger = program
   .command('general-ledger')
   .alias('ledger')
-  .description(
-    'Bookkeeping transaction list with amounts, via Fortnox’s SIE export — fast even for a full year, unlike walking vouchers one by one',
+  .description('Bookkeeping transactions with debit and credit amounts')
+  .addHelpText(
+    'after',
+    '\nReads Fortnox’s SIE export to retrieve a full year without fetching each voucher.\nExample: noxctl general-ledger list --from 2026-01-01 --to 2026-12-31',
   );
 
 generalLedger
@@ -4580,7 +4660,21 @@ prices
 // --- contracts ---
 const contracts = program
   .command('contracts')
-  .description('Contract operations (avtal — recurring invoicing)');
+  .description('Legacy contract operations for scheduled invoicing');
+
+contracts.addHelpText(
+  'after',
+  `
+Use \`contracts\` for Fortnox's legacy contract-based recurring invoicing
+operations. For the newer Recurring Billing API, use \`noxctl recurrings\`;
+its updates require the ETag from \`recurrings get\`, and \`recurrings patch\`
+accepts JSON Patch operations.
+
+Examples:
+  noxctl contracts list --filter active
+  noxctl recurrings get <recurringId>
+  noxctl recurrings patch <recurringId> --etag <etag> --input changes.json`,
+);
 
 contracts
   .command('list')
@@ -4718,7 +4812,20 @@ contracts
 // --- recurrings (new Recurring Billing API) ---
 const recurrings = program
   .command('recurrings')
-  .description('Recurring Billing operations (nya API:t för återkommande fakturering)');
+  .description('Operations for the newer Recurring Billing API');
+
+recurrings.addHelpText(
+  'after',
+  `
+This is Fortnox's newer Recurring Billing API. Use \`contracts\` for legacy
+contract-based scheduled invoicing. Updates are conditional: get the recurring
+item first, then pass its ETag to \`replace\` or \`patch\`; \`patch\` takes a
+JSON Patch array.
+
+Examples:
+  noxctl recurrings get <recurringId>
+  noxctl recurrings patch <recurringId> --etag <etag> --input changes.json`,
+);
 
 const csvOption = (value: string): string[] =>
   value
@@ -4787,7 +4894,7 @@ recurrings
 
 recurrings
   .command('replace <recurringId>')
-  .description('Replace a recurring billing contract (requires ETag)')
+  .description('Replace all recurring fields using the ETag from get')
   .requiredOption('--etag <etag>', 'ETag returned by recurrings get')
   .requiredOption('--input <file>', 'Complete recurring JSON data (or - for stdin)')
   .option('--if-unmodified-since <value>', 'Optional Last-Modified value from recurrings get')
@@ -4806,7 +4913,7 @@ recurrings
 
 recurrings
   .command('patch <recurringId>')
-  .description('Update selected recurring fields with JSON Patch (requires ETag)')
+  .description('Update selected fields with a JSON Patch array and ETag')
   .requiredOption('--etag <etag>', 'ETag returned by recurrings get')
   .requiredOption('--input <file>', 'JSON Patch operations (or - for stdin)')
   .option('--if-unmodified-since <value>', 'Optional Last-Modified value from recurrings get')
@@ -4952,9 +5059,26 @@ financialYears
     outputDetail(data, lockedPeriodDetailColumns, false);
   });
 
-const archive = program.command('archive').description('Fortnox archive operations');
+const archive = program
+  .command('archive')
+  .description('Manage files stored in the Fortnox archive');
+archive.addHelpText(
+  'after',
+  `
+Use \`archive upload\` to store a local file and \`archive list\` /
+\`archive get\` to browse or download stored files. Uploading stores the file;
+it does not attach it to a document. To link an existing archive file ID, use
+\`noxctl attachments attach\`. For customer invoices,
+\`noxctl invoices attach\` uploads and attaches local files in one command.
+
+Examples:
+  noxctl archive upload receipt.pdf
+  noxctl archive list --path /
+  noxctl attachments attach O <orderNumber> <fileId>`,
+);
 archive
   .command('list')
+  .description('List archive folders and files')
   .option('--path <path>', 'Archive path')
   .option('--file-id <id>', 'File ID')
   .action(async (opts) => {
@@ -4969,6 +5093,7 @@ archive
   });
 archive
   .command('get <id>')
+  .description('Download an archive file to a local path')
   .option('--path <path>', 'Archive path')
   .option('--file-id <fileId>', 'File ID')
   .option('-o, --output <file>', 'Output file (default: private temporary directory)')
@@ -4991,6 +5116,7 @@ archive
   });
 archive
   .command('upload <file>')
+  .description('Upload a local file into the Fortnox archive')
   .option('--folder-id <id>', 'Target folder ID')
   .option('--path <path>', 'Target archive path')
   .option('-y, --yes', 'Skip confirmation prompt')
@@ -5014,6 +5140,7 @@ archive
   });
 archive
   .command('delete-path <path>')
+  .description('Delete an archive path and its contents')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without deleting')
   .action(async (path: string, opts) => {
@@ -5027,6 +5154,7 @@ archive
   });
 archive
   .command('delete <id>')
+  .description('Delete an archive file or entry')
   .option('--path <path>', 'Archive path')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without deleting')
@@ -5037,8 +5165,24 @@ archive
     outputConfirmation(`Archive entry ${id} deleted.`, json(), { Id: id, deleted: true });
   });
 
-const inbox = program.command('inbox').description('Fortnox inbox operations');
-inbox.command('list').action(async () => {
+const inbox = program.command('inbox').description('Manage files in the Fortnox inbox');
+inbox.addHelpText(
+  'after',
+  `
+Use the inbox to store incoming files. Uploading a file here does not connect
+it to a supplier invoice; use
+\`noxctl supplier-invoices connect-file <givenNumber> <fileId>\` to link an
+existing inbox file. For files already attached to an invoice, use
+\`noxctl supplier-invoices attachments\`. Voucher file uploads and listing use
+\`noxctl vouchers attach\` and \`noxctl vouchers attachments\`.
+
+Examples:
+  noxctl inbox upload supplier-invoice.pdf
+  noxctl inbox list`,
+);
+const inboxList = inbox.command('list');
+inboxList.description('List inbox folders and files');
+inboxList.action(async () => {
   const { listInbox } = await import('./operations/files.js');
   const raw = await listInbox();
   const folder = (raw.Folder ?? {}) as Record<string, unknown>;
@@ -5050,6 +5194,7 @@ inbox.command('list').action(async () => {
 });
 inbox
   .command('upload <file>')
+  .description('Upload a local file into the Fortnox inbox')
   .option('--folder-id <id>', 'Target folder ID')
   .option('--path <path>', 'Target inbox path')
   .option('-y, --yes', 'Skip confirmation prompt')
@@ -5073,6 +5218,7 @@ inbox
   });
 inbox
   .command('file <id>')
+  .description('Download an inbox file by its ID')
   .option('-f, --file <path>', 'Write the file here')
   .option('--overwrite', 'Allow replacing an existing regular file')
   .action(async (id: string, opts) => {
@@ -5091,6 +5237,7 @@ inbox
   });
 inbox
   .command('delete <id>')
+  .description('Delete an inbox entry')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without deleting')
   .action(async (id: string, opts) => {
@@ -5102,9 +5249,27 @@ inbox
 
 const attachments = program
   .command('attachments')
-  .description('Cross-document attachment operations');
+  .description('Link, list, and manage files attached to documents');
+attachments.addHelpText(
+  'after',
+  `
+\`attach\` links an existing archive file ID; it does not upload a local file.
+Entity types are F (customer invoice), OF (offer), O (order), and C (contract).
+\`list\` supports OF, O, and C; for customer invoices (F), use
+\`noxctl invoices attachments <documentNumber>\`.
+
+To store a new file, use \`noxctl archive upload\` or \`noxctl inbox upload\`.
+Customer invoice files can also be uploaded and attached together with
+\`noxctl invoices attach\`.
+
+Examples:
+  noxctl attachments attach F 91110646 <fileId>
+  noxctl attachments list C 105
+  noxctl invoices attachments 91110646`,
+);
 attachments
   .command('attach <entityType> <documentNumber> <fileId>')
+  .description('Link an archive file ID to F (invoice), OF (offer), O (order), or C (contract)')
   .option('--exclude-on-send', 'Do not include the attachment when the document is sent')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without attaching')
@@ -5145,6 +5310,7 @@ attachments
   });
 attachments
   .command('counts <entityType> <entityIds...>')
+  .description('Count attachments for invoice, offer, order, or contract IDs')
   .action(async (entityType: string, entityIds: string[]) => {
     if (!['F', 'OF', 'O', 'C'].includes(entityType))
       throw new Error('entityType must be F, OF, O, or C');
@@ -5157,6 +5323,7 @@ attachments
   });
 attachments
   .command('validate')
+  .description('Validate a JSON attachment list for inclusion when sending')
   .requiredOption('--input <file>', 'Attachment array as JSON (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview exact payload')
@@ -5171,6 +5338,7 @@ attachments
   });
 attachments
   .command('update <attachmentId>')
+  .description('Update fields on an existing document attachment')
   .requiredOption('--input <file>', 'Attachment fields as JSON (or - for stdin)')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview exact payload')
@@ -5184,6 +5352,7 @@ attachments
   });
 attachments
   .command('detach <attachmentId>')
+  .description('Detach an existing file connection from its document')
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without detaching')
   .action(async (attachmentId: string, opts) => {
@@ -5401,11 +5570,28 @@ for (const definition of referenceResources) {
 // --- analytics ---
 const analytics = program
   .command('analytics')
-  .description('Precomputed analytics views (overdue, unpaid, top customers, VAT)');
+  .description('Summaries of invoices and VAT for common business questions');
+
+analytics.addHelpText(
+  'after',
+  `
+Use \`overdue\` and \`unpaid\` for focused totals; use
+\`noxctl invoices list --filter <status>\` when you need matching invoice
+records. \`noxctl dashboard\` combines receivable totals with recent invoices
+and monthly invoiced amounts. \`vat\` returns the tax report plus a
+\`netVat\` total; \`noxctl tax report\` returns the report without that
+extra field.
+
+Examples:
+  noxctl analytics overdue
+  noxctl analytics unpaid
+  noxctl analytics vat --period 2026-Q1
+  noxctl invoices list --filter unpaidoverdue`,
+);
 
 analytics
   .command('overdue')
-  .description('Overdue invoices summary')
+  .description('Summarize overdue counts and balances, with overdue invoice rows')
   .action(async () => {
     const { getOverdueSummary } = await import('./operations/analytics.js');
     const summary = await getOverdueSummary();
@@ -5425,7 +5611,7 @@ analytics
 
 analytics
   .command('unpaid')
-  .description('Unpaid totals (outstanding receivables)')
+  .description('Summarize outstanding and overdue receivable totals')
   .action(async () => {
     const { getUnpaidTotals } = await import('./operations/analytics.js');
     const s = await getUnpaidTotals();
@@ -5477,6 +5663,16 @@ analytics
     'Natural period (calendar-year): Q1, 2025-Q3, march/mars, last-quarter, ytd, ... Mutually exclusive with --from/--to.',
   )
   .option('--year <number>', 'Financial year', parseInt)
+  .addHelpText(
+    'after',
+    `
+This wraps the same VAT account report as \`noxctl tax report\` and adds
+\`netVat\`, the sum of VAT-account debits minus credits (negative means owed
+to Skatteverket).
+
+Example:
+  noxctl analytics vat --period 2026-Q1`,
+  )
   .action(async (opts) => {
     const { getVatSummary } = await import('./operations/analytics.js');
     const range = fromToParams(opts);
@@ -5501,8 +5697,24 @@ analytics
 // --- dashboard ---
 program
   .command('dashboard')
-  .description('At-a-glance summary: recent invoices, outstanding, overdue, monthly revenue')
+  .description(
+    'Combined overview of receivables, overdue invoices, recent invoices, and monthly revenue',
+  )
   .option('--months <number>', 'Months of revenue history (default 6)', parseInt)
+  .addHelpText(
+    'after',
+    `
+The dashboard combines unpaid and overdue totals, overdue invoice rows, recent
+invoice rows, and monthly invoiced amounts. Use \`noxctl analytics unpaid\`
+or \`noxctl analytics overdue\` for a focused summary, or
+\`noxctl invoices list --filter unpaid\` /
+\`--filter unpaidoverdue\` for filtered invoice records.
+
+Examples:
+  noxctl dashboard
+  noxctl dashboard --months 12
+  noxctl invoices list --filter unpaidoverdue`,
+  )
   .action(async (opts: { months?: number }) => {
     const { getDashboard } = await import('./operations/analytics.js');
     const dash = await getDashboard({ months: opts.months });
@@ -5556,6 +5768,11 @@ Examples:
 
 // Error handling (configureOutput + exitOverride set above, before the command
 // tree, so subcommands inherit them).
+program.addHelpCommand();
+configureCliHelp(program);
+program.action(() => {
+  program.outputHelp();
+});
 try {
   const args = process.argv.length === 2 ? [...process.argv, '--help'] : process.argv;
   await program.parseAsync(args);

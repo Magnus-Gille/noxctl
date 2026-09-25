@@ -66,6 +66,31 @@ noxctl -o json invoices list | jq .  # JSON output for scripting/AI
 
 Prefer not to install globally? Skip the install command and run CLI commands as `npx noxctl <command>` instead.
 
+## Find the right command
+
+Use `noxctl --help` for the short top-level index, `noxctl --help-all` for the grouped
+command catalogue, and `noxctl <group> --help` or `noxctl <group> <command> --help` for
+options, examples, and command-specific guidance.
+
+- **VAT and receivables:** `noxctl tax report --period 2026-Q1` shows the informational VAT
+  account report. `noxctl analytics vat --period 2026-Q1` returns that report with an extra
+  `netVat` total. `analytics overdue` and `analytics unpaid` answer summary questions;
+  `invoices list --filter unpaid` or `--filter unpaidoverdue` returns matching invoice rows.
+  `noxctl dashboard` combines receivable totals, overdue rows, recent invoices, and monthly
+  invoiced amounts.
+- **Recurring invoicing:** `noxctl contracts` covers Fortnox's legacy contract-based
+  invoicing. `noxctl recurrings` uses the newer Recurring Billing API; fetch an ETag with
+  `recurrings get` before `replace` or `patch`, and provide JSON Patch operations to `patch`.
+- **Files and attachments:** `archive upload` and `inbox upload` store files; storing a file
+  does not link it to a document. `invoices attach` and `vouchers attach` upload local files
+  and attach them to that document. To link an existing archive file ID, use
+  `noxctl attachments attach <F|OF|O|C> <documentNumber> <fileId>`: F is a customer invoice,
+  OF an offer, O an order, and C a contract. The generic `attachments list` command supports
+  OF/O/C; use `invoices attachments` for customer invoices. For supplier invoices, upload
+  to the inbox, connect an existing ID with `supplier-invoices connect-file`, and inspect
+  existing links with `supplier-invoices attachments`. Voucher links are listed with
+  `vouchers attachments` and downloaded with `vouchers file`.
+
 **Documentation:** [full setup](#setup) · [profiles](#profiles-multi-tenant) ·
 [commands and MCP tools](#tools) · [mutation safety](#mutation-safety) ·
 [embedded runtimes](docs/embedded.md) · [troubleshooting](#troubleshooting) ·

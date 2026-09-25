@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Compact CLI help with examples and a complete `--help-all` catalogue grouped
+  by accounting task, with commands alphabetized within each group.
+
+### Changed
+
+- CLI help now explains aliases, overlapping reporting and attachment workflows,
+  and the difference between saved profile selection and a one-command override.
+- Profile selection suggests known names for likely typos and avoids displaying
+  the old profile banner immediately before a switch.
+
 ## [0.10.0] - 2026-09-16
 
 ### Added
