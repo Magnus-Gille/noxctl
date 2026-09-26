@@ -38,6 +38,7 @@ import { registerReferenceDataTools } from './tools/reference-data.js';
 import { registerAccrualTools } from './tools/accruals.js';
 import { registerFileTools } from './tools/files.js';
 import { createStrictMcpServer } from './strict-mcp-server.js';
+import { registerCapabilityResource } from './capability-resource.js';
 
 export interface CreateServerOptions {
   /** Host-authorized transport for exactly one tenant context. */
@@ -87,6 +88,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerReferenceDataTools(server, operations);
   registerAccrualTools(server, operations);
   registerFileTools(server, operations);
+  registerCapabilityResource(server);
 
   return server;
 }

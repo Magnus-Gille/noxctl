@@ -391,6 +391,7 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 |-----|----------|-------------|
 | `noxctl invoices list [--filter <status>] [--customer <number>]` | `fortnox_list_invoices` | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked` |
 | `noxctl invoices get <docNumber>` | `fortnox_get_invoice` | Get a single invoice |
+| `noxctl invoices preflight <docNumber>` | `fortnox_preflight_invoice` | Read-only e-invoice draft checks with explicit unknown/unsupported readiness ([details](docs/einvoice-readiness.md)) |
 | `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice (mutation) |
 | `noxctl invoices update <docNumber> --input <file>` | `fortnox_update_invoice` | Update an invoice that has not been bookkeept (mutation) |
 | `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice` | Send via email (default), print, or e-invoice (mutation) |
@@ -813,6 +814,14 @@ When you register a Fortnox developer app to use noxctl, **you** (not the noxctl
 - **Running it for someone else's Fortnox** (e.g. as a bookkeeper/accountant for a client) makes you a data processor — you must have a data-processing agreement (*personuppgiftsbiträdesavtal*) with that client (cl. 12.3). Using it for your own company does not trigger this.
 - **Sending data to AI/LLMs:** Fortnox does not prohibit it, but you are responsible for the lawfulness of distributing personal data (cl. 13.5 + GDPR) — especially payroll (Lön) and ROT/RUT data, which contain personal identity numbers (personnummer). Ensure a lawful basis and, where required, a data-processing agreement with your AI provider and a valid transfer mechanism for non-EU/EES providers.
 - noxctl is a **client for Fortnox's own API** — a complement, not a replacement — using only documented endpoints and your own credentials.
+
+### MCP capability resource
+
+Read `noxctl://capabilities` through MCP resource discovery for the server version,
+registered tools, and confirmation/dry-run conventions. The inventory follows the
+server instance: embedded servers omit the local profile-status tool. Reading the
+resource requires no Fortnox request or credentials. This is installed capability
+metadata, not proof of account permissions, licences, or e-invoice readiness.
 
 ## License
 

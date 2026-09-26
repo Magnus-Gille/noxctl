@@ -54,7 +54,7 @@ families and operations.
 
 11. ~~CLI `dashboard` command~~ ✅ Done
 12. Bilingual MCP descriptions (Swedish primary + English keywords)
-13. MCP capability resource
+13. ~~MCP capability resource~~ ✅ Implemented locally (2026-09-26; pending review/publication)
 14. Bank transactions — **still blocked upstream, but the premise has changed.** As of
     the 2026-08-17 spec, Fortnox *does* publish bank endpoints — but they are
     `/api/bank-process-orders/v1`, `/api/bank-process-start-orders/v1` and

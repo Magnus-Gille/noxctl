@@ -1,5 +1,60 @@
 # Project Status
 
+## Backlog sprint — 2026-09-26 (hard stop 18:03 CEST)
+
+Worktree: `/tmp/noxctl-sprint-20260926`; branch `feat/backlog-sprint-20260926`.
+Base: `eadece5ae882d040daf6ea9694f49c9851d5e84d` (released 0.11.0).
+The original checkout remains on `chore/appliance-handoff-20260905` and was not edited.
+
+### Implemented
+
+- Issue #175 partial: `invoices preflight <documentNumber>` and
+  `fortnox_preflight_invoice` read only the invoice and its customer, report draft
+  flags, nested EDI/GLN/reference fields, observed delivery defaults, and explicit
+  unsupported/unknown recipient, Peppol, sender and effective-route checks.
+  `ready` is always false; successful inspection is not permission to send.
+  See `docs/einvoice-readiness.md`. #175 remains open pending supported upstream
+  recipient/address/route interfaces and controlled acceptance evidence.
+- Roadmap MCP capability resource: `noxctl://capabilities` advertises registered
+  tools, version and mutation controls. Inventory reflects embedded vs local
+  registration; reading the resource uses no credentials or network.
+- Issue #176 partial: `docs/provider-evaluation-20260926.md` records official-source
+  findings, provider brief/questions, product-value hypothesis and pilot checks.
+  No provider account, contact, sandbox test or adapter was created. Both adapter
+  decisions are deferred until terms/access and customer-demand gates pass.
+
+### Verification and review
+
+- Red/green: 9 preflight tests initially failed, then passed; a tenth test exposed
+  the actual nested EDI mapping and passed after correction.
+- 82 focused invoice/MCP/tenant tests passed. Capability-resource worker build and
+  2 in-memory tests passed, including full inventory parity and zero auth/network.
+- Exact lockfile dependencies installed with npm ci. Full preflight suite passed:
+  1,226 tests in 102 files. Lint, formatting, build and offline API-coverage audit pass. Final resource/strict-input/preflight integration rerun: 10 tests passed. Production audit: zero vulnerabilities. Packed embedded runtime/type consumer passed.
+- Independent native reviewer requested `gpt-6-sol`, high effort; runtime model
+  and effort not exposed. Found one low-severity description error concerning
+  local `fortnox_status`; wording corrected. No preflight/tenant defect found.
+- Delegation: requested `gpt-5.6-luna`, high effort; runtime observations unknown.
+  Capability leaf: pass (tests/build, inventory correction adopted). Provider
+  brief: partial (L1 aligned local-CLI scope and product-demand test). Explorer:
+  redo/no output due runtime failures. Failed retries are not useful adoption.
+- Host intermittently rejected processes with EMFILE / Too many open files and
+  model/approval requests with application network permission revoked. Owner
+  explicitly requested retries and debugged in another session. App restart
+  interrupted verification; results are reported only when observed complete.
+
+### Resume
+
+Finish remaining release/CI checks and review publication state below before merge.
+No npm publish, deploy, Fortnox mutation or credential change was performed.
+#13 remains parked upstream; dependency PRs #171/#179/#180 were not changed.
+Worker worktrees `/tmp/noxctl-discovery-20260926` and
+`/tmp/noxctl-provider-20260926` retain their source changes for traceability;
+older missing/prunable registered worktrees were not removed.
+
+---
+
+
 ## Issue #165 terminal backslash — 2026-09-06
 
 - Branch `fix/165-sie-backslash`, based on main

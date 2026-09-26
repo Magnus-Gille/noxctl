@@ -2,6 +2,8 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
+import { createCustomerOperations } from './customers.js';
+import { assessEinvoiceDraft } from '../einvoice-preflight.js';
 
 interface InvoiceResponse {
   Invoice: Record<string, unknown>;
@@ -110,6 +112,16 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
       body: { Invoice: params },
     });
     return data.Invoice;
+  }
+
+  async function preflightInvoice(documentNumber: string) {
+    const invoice = await getInvoice(documentNumber);
+    const customerNumber = invoice.CustomerNumber;
+    const customer =
+      typeof customerNumber === 'string' && customerNumber.trim()
+        ? await createCustomerOperations(transport).getCustomer(customerNumber)
+        : null;
+    return assessEinvoiceDraft(documentNumber, invoice, customer);
   }
 
   async function updateInvoice(
@@ -435,6 +447,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
   return {
     listInvoices,
     getInvoice,
+    preflightInvoice,
     createInvoice,
     updateInvoice,
     sendInvoice,
@@ -460,6 +473,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
 export const {
   listInvoices,
   getInvoice,
+  preflightInvoice,
   createInvoice,
   updateInvoice,
   sendInvoice,

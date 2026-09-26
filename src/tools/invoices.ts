@@ -84,6 +84,7 @@ export function registerInvoiceTools(
   const {
     listInvoices,
     getInvoice,
+    preflightInvoice,
     createInvoice,
     updateInvoice,
     sendInvoice,
@@ -142,6 +143,16 @@ export function registerInvoiceTools(
     async ({ documentNumber, includeRaw }) => {
       const invoice = await getInvoice(documentNumber);
       return detailResponse(invoice, invoiceDetailColumns, invoice, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_preflight_invoice',
+    'Kontrollera e-fakturautkast med enbart läsning (e-invoice readiness, preflight). Returnerar observerade fält och uttryckliga unknown/unsupported-skäl. Bekräftar aldrig mottagarkoppling eller sändningsberedskap utan verifierbart API-stöd. Skickar, aktiverar och bokför ingenting.',
+    { documentNumber: DocumentNumberSchema.describe('Fakturanummer') },
+    async ({ documentNumber }) => {
+      const result = await preflightInvoice(documentNumber);
+      return { ...textResponse(JSON.stringify(result, null, 2)), structuredContent: result };
     },
   );
 
