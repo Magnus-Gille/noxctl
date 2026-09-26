@@ -8,6 +8,14 @@ import { z } from 'zod';
 
 type ToolShape = Record<string, z.ZodType>;
 
+export interface StrictToolInventoryEntry {
+  name: string;
+  description: string;
+  inputFields: readonly string[];
+}
+
+const toolInventories = new WeakMap<McpServer, StrictToolInventoryEntry[]>();
+
 function isToolShape(value: unknown): value is ToolShape {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   return Object.values(value).every(
@@ -34,6 +42,8 @@ function isToolShape(value: unknown): value is ToolShape {
  */
 export function createStrictMcpServer(serverInfo: Implementation): McpServer {
   const server = new McpServer(serverInfo);
+  const inventory: StrictToolInventoryEntry[] = [];
+  toolInventories.set(server, inventory);
 
   server.tool = ((name: string, description: string, shape: ToolShape, callback: unknown) => {
     if (typeof description !== 'string' || !isToolShape(shape) || typeof callback !== 'function') {
@@ -43,12 +53,19 @@ export function createStrictMcpServer(serverInfo: Implementation): McpServer {
     }
 
     const inputSchema = z.strictObject(shape);
-    return server.registerTool(
+    const registeredTool = server.registerTool(
       name,
       { description, inputSchema },
       callback as ToolCallback<typeof inputSchema>,
     ) as RegisteredTool;
+    inventory.push({ name, description, inputFields: Object.keys(shape) });
+    return registeredTool;
   }) as McpServer['tool'];
 
   return server;
+}
+
+/** Return the tool inventory captured at the repository's strict registration boundary. */
+export function getStrictToolInventory(server: McpServer): readonly StrictToolInventoryEntry[] {
+  return toolInventories.get(server) ?? [];
 }

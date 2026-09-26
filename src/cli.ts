@@ -1406,6 +1406,33 @@ invoices
   });
 
 invoices
+  .command('preflight <documentNumber>')
+  .description('Read-only e-invoice draft checks; reports unknown/unsupported recipient readiness')
+  .action(async (documentNumber: string) => {
+    const { preflightInvoice } = await import('./operations/invoices.js');
+    const result = await preflightInvoice(documentNumber);
+    outputDetail(
+      result,
+      [
+        { key: 'documentNumber', header: 'Invoice', width: 20 },
+        { key: 'status', header: 'Readiness', width: 20 },
+        { key: 'ready', header: 'Ready to send', width: 20 },
+        {
+          key: 'issues',
+          header: 'Checks',
+          width: 100,
+          format: (value) =>
+            (value as typeof result.issues)
+              .map((issue) => `${issue.code}: ${issue.message}`)
+              .join('; '),
+        },
+      ],
+      json(),
+      'InvoicePreflight',
+    );
+  });
+
+invoices
   .command('create')
   .description('Create an invoice')
   .requiredOption('--customer <number>', 'Customer number')
