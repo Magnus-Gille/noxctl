@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import {
+  accountDetailColumns,
   accountListColumns,
   voucherAttachmentColumns,
   voucherDetailColumns,
@@ -181,7 +182,7 @@ export function registerBookkeepingTools(
 
   server.tool(
     'fortnox_list_accounts',
-    'Visa kontoplan i Fortnox. Returnerar: Number, Description, SRU.',
+    'Visa kontoplan i Fortnox. Returnerar: Number, Description, SRU. Aktiv, momskod och år visas av fortnox_get_account.',
     {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
       search: z.string().optional().describe('Sök på kontonamn'),
@@ -202,14 +203,14 @@ export function registerBookkeepingTools(
 
   server.tool(
     'fortnox_get_account',
-    'Hämta ett konto från kontoplanen i Fortnox',
+    'Hämta ett konto från kontoplanen i Fortnox. Returnerar: Number, Description, Active, VATCode, SRU, Year, CostCenterSettings, ProjectSettings.',
     {
       number: AccountNumberSchema.describe('Kontonummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({ number, includeRaw }) => {
       const data = await getAccount(number);
-      return detailResponse(data, accountListColumns, data, includeRaw);
+      return detailResponse(data, accountDetailColumns, data, includeRaw);
     },
   );
 
@@ -228,7 +229,7 @@ export function registerBookkeepingTools(
       if (dryRun) return dryRunResponse(`create account ${fields.Number}`, { Account: fields });
       if (!confirm) requireConfirmation(`create account ${fields.Number}`);
       const data = await createAccount(fields);
-      return detailResponse(data, accountListColumns, data, includeRaw);
+      return detailResponse(data, accountDetailColumns, data, includeRaw);
     },
   );
 
@@ -246,7 +247,7 @@ export function registerBookkeepingTools(
       if (dryRun) return dryRunResponse(`update account ${number}`, { Account: fields });
       if (!confirm) requireConfirmation(`update account ${number}`);
       const data = await updateAccount(number, fields);
-      return detailResponse(data, accountListColumns, data, includeRaw);
+      return detailResponse(data, accountDetailColumns, data, includeRaw);
     },
   );
 

@@ -39,6 +39,7 @@ import {
   voucherListColumns,
   voucherDetailColumns,
   voucherRowColumns,
+  accountDetailColumns,
   accountListColumns,
   companyDetailColumns,
   articleListColumns,
@@ -1962,7 +1963,7 @@ accounts
   .action(async (number: string) => {
     const { getAccount } = await import('./operations/accounts.js');
     const data = await getAccount(Number(number));
-    outputDetail(data, accountListColumns, json(), 'Account');
+    outputDetail(data, accountDetailColumns, json(), 'Account');
   });
 
 accounts
@@ -1984,7 +1985,7 @@ accounts
     if (!(await confirmMutation(`Create account ${opts.number}`, opts, { Account: fields })))
       return;
     const data = await createAccount(fields);
-    outputDetail(data, accountListColumns, json(), 'Account');
+    outputDetail(data, accountDetailColumns, json(), 'Account');
   });
 
 accounts
@@ -2000,7 +2001,7 @@ accounts
     ) as Record<string, unknown>;
     if (!(await confirmMutation(`Update account ${number}`, opts, { Account: fields }))) return;
     const data = await updateAccount(Number(number), fields);
-    outputDetail(data, accountListColumns, json(), 'Account');
+    outputDetail(data, accountDetailColumns, json(), 'Account');
   });
 
 accounts

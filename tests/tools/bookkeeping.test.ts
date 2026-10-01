@@ -431,6 +431,33 @@ describe('bookkeeping tools', () => {
       );
     });
 
+    it('shows whether a single account is active, its VAT code and financial year', async () => {
+      mockFetch({
+        Account: {
+          Number: 3988,
+          Description: 'Erhållna bidrag',
+          Active: false,
+          VATCode: 'MF',
+          Year: 12,
+          SRU: 7413,
+          CostCenterSettings: 'ALLOWED',
+          ProjectSettings: 'MANDATORY',
+        },
+      });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_get_account',
+        arguments: { number: 3988 },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toMatch(/Active\s+no/);
+      expect(text).toMatch(/VAT code\s+MF/);
+      expect(text).toMatch(/Year\s+12/);
+      expect(text).toMatch(/Project\s+MANDATORY/);
+    });
+
     it('creates, updates, and deletes only with confirmation', async () => {
       mockFetch({ Account: { Number: 2999, Description: 'Avräkning' } });
       const { client } = await setupClientServer();

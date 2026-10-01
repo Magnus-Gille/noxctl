@@ -406,6 +406,21 @@ export const accountListColumns: Column[] = [
   { key: 'SRU', header: 'SRU', width: 6, align: 'right' },
 ];
 
+const yesNo = (v: unknown) => (v === true ? 'yes' : v === false ? 'no' : '');
+
+// Single account (get/create/update): the settings a list row has no room for —
+// above all whether the account is active in the chosen financial year.
+export const accountDetailColumns: Column[] = [
+  { key: 'Number', header: 'Account', width: 8 },
+  { key: 'Description', header: 'Description', width: 50 },
+  { key: 'Active', header: 'Active', width: 6, format: yesNo },
+  { key: 'VATCode', header: 'VAT code', width: 8 },
+  { key: 'SRU', header: 'SRU', width: 6 },
+  { key: 'Year', header: 'Year', width: 6 },
+  { key: 'CostCenterSettings', header: 'Cost center', width: 12 },
+  { key: 'ProjectSettings', header: 'Project', width: 12 },
+];
+
 // --- Company views ---
 
 export const companyDetailColumns: Column[] = [
