@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-01
+
+### Added
+
+- **Read-only e-invoice preflight.** `noxctl invoices preflight <docNumber>` and
+  `fortnox_preflight_invoice` read an invoice and its customer and report the
+  draft state, buyer references and EDI data they observe. Recipient connection
+  and Peppol address are reported as `unsupported` and the effective delivery
+  route as `unknown`, so the result is always `ready: false`: exit code zero
+  means the inspection succeeded, not that the invoice can be sent as an
+  e-invoice. Nothing is sent, printed or bookkept. See
+  [docs/einvoice-readiness.md](docs/einvoice-readiness.md) (#184).
+- **MCP capability discovery.** The `noxctl://capabilities` resource is readable
+  without credentials or network access. It lists the server version, the tools
+  registered on that server and whether each one reads or may mutate, and the
+  confirmation and dry-run rules for writes. The inventory reflects the actual
+  server, so the embedded server does not list host-only tools (#184).
+
 ### Fixed
 
 - `noxctl completion zsh` now completes each command's own options with their
@@ -13,7 +31,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and file names for file options and arguments. Completion also keeps working
   when a global option precedes the command, for command aliases, and at any
   nesting depth. The script can be installed into `fpath` or loaded with
-  `source <(noxctl completion zsh)`.
+  `source <(noxctl completion zsh)`. Regenerate an installed script after
+  upgrading (#186).
+
+### Internal
+
+- Remediated new audit findings in the transitive `fast-uri`, `ip-address` and
+  `brace-expansion` dependencies through the override pins and the lockfile
+  (#187), and took routine dependency updates including vitest 5 (#171, #180,
+  #185).
+- Refreshed the Fortnox API fingerprint and the MCP write-schema baseline after
+  upstream spec changes. No noxctl behaviour changes; one new optional row
+  property is tracked as a gap because the live API does not return it yet
+  (#194).
+- The weekly API drift job no longer pushes to the protected `main` branch,
+  which had made it fail before reporting. It now only reads the repository and
+  reports drift through a deduplicated issue (#195).
 
 ## [0.11.0] - 2026-09-25
 
@@ -354,6 +387,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.12.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.11.0...v0.12.0
+[0.11.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.7.4...v0.8.0
