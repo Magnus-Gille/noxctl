@@ -17,6 +17,8 @@ import {
   textResponse,
 } from '../tool-output.js';
 
+const InvoiceLanguageSchema = z.enum(['SV', 'EN']);
+
 const InvoiceRowSchema = z.strictObject({
   AccountNumber: z.number().int().min(1000).max(9999).optional().describe('Kontonummer'),
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
@@ -168,6 +170,9 @@ export function registerInvoiceTools(
       YourReference: z.string().optional().describe('Er referens'),
       Remarks: z.string().optional().describe('Anmärkning/kommentar'),
       Currency: z.string().optional().describe('Valutakod (default: SEK)'),
+      Language: InvoiceLanguageSchema.optional().describe(
+        'Fakturans språk: SV eller EN (utelämnat = kundkortets språk)',
+      ),
       confirm: z.boolean().optional().describe('Bekräfta att fakturan ska skapas'),
       dryRun: z
         .boolean()
@@ -204,6 +209,9 @@ export function registerInvoiceTools(
       YourReference: z.string().optional().describe('Er referens'),
       Remarks: z.string().optional().describe('Anmärkning/kommentar'),
       Currency: z.string().optional().describe('Valutakod'),
+      Language: InvoiceLanguageSchema.optional().describe(
+        'Fakturans språk: SV eller EN (utelämnat = kundkortets språk)',
+      ),
       confirm: z.boolean().optional().describe('Bekräfta att fakturan ska uppdateras'),
       dryRun: z
         .boolean()

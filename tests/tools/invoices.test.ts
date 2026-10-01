@@ -165,6 +165,37 @@ describe('invoice tools', () => {
     });
   });
 
+  describe('invoice language', () => {
+    it('create and update forward Language (SV/EN) and refuse other values', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1003', CustomerNumber: '42', Language: 'EN' } });
+      const { client } = await setupClientServer();
+
+      await client.callTool({
+        name: 'fortnox_create_invoice',
+        arguments: {
+          CustomerNumber: '42',
+          InvoiceRows: [{ Description: 'Consulting', DeliveredQuantity: 1, Price: 1000 }],
+          Language: 'EN',
+          confirm: true,
+        },
+      });
+      await client.callTool({
+        name: 'fortnox_update_invoice',
+        arguments: { documentNumber: '1003', Language: 'SV', confirm: true },
+      });
+      const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls;
+      expect(JSON.parse(calls[0][1].body).Invoice.Language).toBe('EN');
+      expect(JSON.parse(calls[1][1].body).Invoice.Language).toBe('SV');
+
+      const bad = await client.callTool({
+        name: 'fortnox_update_invoice',
+        arguments: { documentNumber: '1003', Language: 'DE', confirm: true },
+      });
+      expect(bad.isError).toBe(true);
+      expect(calls).toHaveLength(2);
+    });
+  });
+
   describe('fortnox_create_invoice', () => {
     it('creates an invoice with rows', async () => {
       mockFetch({
