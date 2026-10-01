@@ -129,6 +129,56 @@ describe('analytics tools', () => {
     });
   });
 
+  describe('outstanding totals across currencies', () => {
+    const mixed = [
+      {
+        DocumentNumber: 301,
+        DueDate: '2025-01-01',
+        Total: 800,
+        Balance: 800,
+        Currency: 'USD',
+        Cancelled: false,
+      },
+      {
+        DocumentNumber: 302,
+        DueDate: '2025-01-01',
+        Total: 200,
+        Balance: 200,
+        Currency: 'USD',
+        Cancelled: false,
+      },
+      {
+        DocumentNumber: 303,
+        DueDate: '2099-12-31',
+        Total: 5000,
+        Balance: 5000,
+        Currency: 'MXN',
+        Cancelled: false,
+      },
+    ];
+
+    it('fortnox_unpaid_totals reports each currency instead of one mixed sum', async () => {
+      mockInvoices(mixed);
+      const { client } = await setupClientServer();
+      const text = textOf(await client.callTool({ name: 'fortnox_unpaid_totals', arguments: {} }));
+      expect(text).toContain('MXN 5000.00 (1 st)');
+      expect(text).toContain('USD 1000.00 (2 st)');
+      expect(text).not.toContain('6000.00');
+      expect(text).toContain('Varav förfallna: 2 st, 1000.00 USD.');
+    });
+
+    it('fortnox_overdue_invoices reports each currency instead of one mixed sum', async () => {
+      mockInvoices([...mixed.slice(0, 2), { ...mixed[2], DueDate: '2025-01-01' }]);
+      const { client } = await setupClientServer();
+      const text = textOf(
+        await client.callTool({ name: 'fortnox_overdue_invoices', arguments: {} }),
+      );
+      expect(text).toContain('USD 1000.00 (2 st)');
+      expect(text).toContain('MXN 5000.00 (1 st)');
+      expect(text).not.toContain('6000.00');
+    });
+  });
+
   describe('fortnox_top_customers', () => {
     it('ranks customers by invoiced total', async () => {
       mockInvoices([

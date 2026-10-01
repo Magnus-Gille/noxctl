@@ -4,6 +4,7 @@ import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/
 import { invoiceListColumns, topCustomerColumns } from '../views.js';
 import { formatTable, formatTaxReport } from '../formatter.js';
 import { textResponse } from '../tool-output.js';
+import { formatBalances } from '../operations/analytics.js';
 
 export function registerAnalyticsTools(
   server: McpServer,
@@ -12,7 +13,7 @@ export function registerAnalyticsTools(
   const { getOverdueSummary, getUnpaidTotals, getTopCustomers, getVatSummary } = operations;
   server.tool(
     'fortnox_overdue_invoices',
-    'Sammanfattning av förfallna obetalda fakturor: antal, totalt utestående belopp, äldsta förfallodatum och listan (äldst först). Användbart för snabb ekonomisk överblick.',
+    'Sammanfattning av förfallna obetalda fakturor: antal, utestående belopp per valuta, äldsta förfallodatum och listan (äldst först). Användbart för snabb ekonomisk överblick.',
     {},
     async () => {
       const summary = await getOverdueSummary();
@@ -20,7 +21,7 @@ export function registerAnalyticsTools(
         return textResponse('Inga förfallna fakturor.');
       }
       const lines = [
-        `Förfallna fakturor: ${summary.count} st, ${summary.totalBalance.toFixed(2)} utestående.`,
+        `Förfallna fakturor: ${summary.count} st, ${formatBalances(summary.byCurrency, summary.totalBalance)} utestående.`,
         `Äldsta förfallodatum: ${summary.oldestDueDate}.`,
         '',
         formatTable(summary.invoices, invoiceListColumns),
@@ -31,14 +32,14 @@ export function registerAnalyticsTools(
 
   server.tool(
     'fortnox_unpaid_totals',
-    'Totalt utestående kundfordringar: antal obetalda fakturor och summa, med förfallen andel separat.',
+    'Totalt utestående kundfordringar: antal obetalda fakturor och summa per valuta, med förfallen andel separat.',
     {},
     async () => {
       const s = await getUnpaidTotals();
       return textResponse(
         [
-          `Obetalda fakturor: ${s.count} st, ${s.totalBalance.toFixed(2)} utestående.`,
-          `Varav förfallna: ${s.overdueCount} st, ${s.overdueBalance.toFixed(2)}.`,
+          `Obetalda fakturor: ${s.count} st, ${formatBalances(s.byCurrency, s.totalBalance)} utestående.`,
+          `Varav förfallna: ${s.overdueCount} st, ${formatBalances(s.overdueByCurrency, s.overdueBalance)}.`,
         ].join('\n'),
       );
     },

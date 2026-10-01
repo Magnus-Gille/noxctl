@@ -5620,7 +5620,7 @@ analytics
   .command('overdue')
   .description('Summarize overdue counts and balances, with overdue invoice rows')
   .action(async () => {
-    const { getOverdueSummary } = await import('./operations/analytics.js');
+    const { getOverdueSummary, formatBalances } = await import('./operations/analytics.js');
     const summary = await getOverdueSummary();
     if (json()) {
       console.log(JSON.stringify(summary, null, 2));
@@ -5631,7 +5631,7 @@ analytics
       return;
     }
     console.log(
-      `Overdue: ${summary.count} invoice(s), ${summary.totalBalance.toFixed(2)} outstanding. Oldest due ${summary.oldestDueDate}.\n`,
+      `Overdue: ${summary.count} invoice(s), ${formatBalances(summary.byCurrency, summary.totalBalance)} outstanding. Oldest due ${summary.oldestDueDate}.\n`,
     );
     outputList(summary.invoices, invoiceListColumns, false, summary.invoices);
   });
@@ -5640,14 +5640,18 @@ analytics
   .command('unpaid')
   .description('Summarize outstanding and overdue receivable totals')
   .action(async () => {
-    const { getUnpaidTotals } = await import('./operations/analytics.js');
+    const { getUnpaidTotals, formatBalances } = await import('./operations/analytics.js');
     const s = await getUnpaidTotals();
     if (json()) {
       console.log(JSON.stringify(s, null, 2));
       return;
     }
-    console.log(`Unpaid:  ${s.count} invoice(s), ${s.totalBalance.toFixed(2)} outstanding.`);
-    console.log(`Overdue: ${s.overdueCount} invoice(s), ${s.overdueBalance.toFixed(2)}.`);
+    console.log(
+      `Unpaid:  ${s.count} invoice(s), ${formatBalances(s.byCurrency, s.totalBalance)} outstanding.`,
+    );
+    console.log(
+      `Overdue: ${s.overdueCount} invoice(s), ${formatBalances(s.overdueByCurrency, s.overdueBalance)}.`,
+    );
   });
 
 analytics
@@ -5743,7 +5747,7 @@ Examples:
   noxctl invoices list --filter unpaidoverdue`,
   )
   .action(async (opts: { months?: number }) => {
-    const { getDashboard } = await import('./operations/analytics.js');
+    const { getDashboard, formatBalances } = await import('./operations/analytics.js');
     const dash = await getDashboard({ months: opts.months });
     if (json()) {
       console.log(JSON.stringify(dash, null, 2));
@@ -5752,10 +5756,10 @@ Examples:
 
     console.log('OUTSTANDING');
     console.log(
-      `  Unpaid:  ${dash.unpaid.count} invoice(s), ${dash.unpaid.totalBalance.toFixed(2)}`,
+      `  Unpaid:  ${dash.unpaid.count} invoice(s), ${formatBalances(dash.unpaid.byCurrency, dash.unpaid.totalBalance)}`,
     );
     console.log(
-      `  Overdue: ${dash.overdue.count} invoice(s), ${dash.overdue.totalBalance.toFixed(2)}` +
+      `  Overdue: ${dash.overdue.count} invoice(s), ${formatBalances(dash.overdue.byCurrency, dash.overdue.totalBalance)}` +
         (dash.overdue.oldestDueDate ? ` (oldest due ${dash.overdue.oldestDueDate})` : ''),
     );
 

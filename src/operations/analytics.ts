@@ -2,8 +2,9 @@
 // pure (invoice rows in, summary out) so they can be unit-tested without the
 // API; the exported get* functions fetch via listInvoices and delegate.
 //
-// Amounts are summed in the invoice currency as returned by Fortnox (no FX
-// conversion) — for single-currency (SEK) tenants the totals are exact.
+// Amounts are never converted (no FX): totals are kept per invoice currency
+// (`byCurrency`), and `totalBalance` — the plain sum — is only meaningful when
+// every invoice shares one currency. Render with `formatBalances`.
 
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { createInvoiceOperations } from './invoices.js';
@@ -28,9 +29,42 @@ function isOverdue(inv: InvoiceRow, today: string): boolean {
   return isOpen(inv) && String(inv.DueDate ?? '') < today;
 }
 
+export interface CurrencyBalance {
+  currency: string;
+  count: number;
+  balance: number;
+}
+
+// Open balance per invoice currency, largest first. An invoice without a
+// Currency field groups under '' (rendered without a code).
+export function balancesByCurrency(invoices: InvoiceRow[]): CurrencyBalance[] {
+  const by = new Map<string, CurrencyBalance>();
+  for (const inv of invoices) {
+    const currency = String(inv.Currency ?? '');
+    const entry = by.get(currency) ?? { currency, count: 0, balance: 0 };
+    entry.count += 1;
+    entry.balance += num(inv.Balance);
+    by.set(currency, entry);
+  }
+  return [...by.values()].sort((a, b) => b.balance - a.balance);
+}
+
+// One currency → "1400.00 SEK" (the plain total); several → one entry each,
+// never a sum across currencies.
+export function formatBalances(byCurrency: CurrencyBalance[], total: number): string {
+  if (byCurrency.length <= 1) {
+    const code = byCurrency[0]?.currency;
+    return code ? `${total.toFixed(2)} ${code}` : total.toFixed(2);
+  }
+  return byCurrency
+    .map((c) => `${c.currency ? `${c.currency} ` : ''}${c.balance.toFixed(2)} (${c.count} st)`)
+    .join(', ');
+}
+
 export interface OverdueSummary {
   count: number;
   totalBalance: number;
+  byCurrency: CurrencyBalance[];
   oldestDueDate: string | null;
   invoices: InvoiceRow[];
 }
@@ -42,6 +76,7 @@ export function summarizeOverdue(invoices: InvoiceRow[], today: string): Overdue
   return {
     count: overdue.length,
     totalBalance: overdue.reduce((sum, inv) => sum + num(inv.Balance), 0),
+    byCurrency: balancesByCurrency(overdue),
     oldestDueDate: overdue.length > 0 ? String(overdue[0].DueDate) : null,
     invoices: overdue,
   };
@@ -50,8 +85,10 @@ export function summarizeOverdue(invoices: InvoiceRow[], today: string): Overdue
 export interface UnpaidSummary {
   count: number;
   totalBalance: number;
+  byCurrency: CurrencyBalance[];
   overdueCount: number;
   overdueBalance: number;
+  overdueByCurrency: CurrencyBalance[];
 }
 
 export function summarizeUnpaid(invoices: InvoiceRow[], today: string): UnpaidSummary {
@@ -60,8 +97,10 @@ export function summarizeUnpaid(invoices: InvoiceRow[], today: string): UnpaidSu
   return {
     count: open.length,
     totalBalance: open.reduce((sum, inv) => sum + num(inv.Balance), 0),
+    byCurrency: balancesByCurrency(open),
     overdueCount: overdue.length,
     overdueBalance: overdue.reduce((sum, inv) => sum + num(inv.Balance), 0),
+    overdueByCurrency: balancesByCurrency(overdue),
   };
 }
 

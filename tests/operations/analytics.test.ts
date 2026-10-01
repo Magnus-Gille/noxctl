@@ -7,6 +7,7 @@ import {
   localIsoDate,
   netVatFromVatAccounts,
   dashboardWindowStart,
+  formatBalances,
 } from '../../src/operations/analytics.js';
 
 const today = '2026-06-10';
@@ -89,6 +90,44 @@ describe('summarizeUnpaid', () => {
     expect(s.totalBalance).toBe(4000);
     expect(s.overdueCount).toBe(2);
     expect(s.overdueBalance).toBe(2000);
+  });
+});
+
+describe('per-currency balances', () => {
+  const mixed = [
+    { Balance: 100, Currency: 'USD', DueDate: '2026-01-01' },
+    { Balance: 50, Currency: 'USD', DueDate: '2099-01-01' },
+    { Balance: 900, Currency: 'SEK', DueDate: '2026-01-01' },
+  ];
+
+  it('groups open balances by currency, largest first, with the overdue part', () => {
+    const s = summarizeUnpaid(mixed, today);
+    expect(s.byCurrency).toEqual([
+      { currency: 'SEK', count: 1, balance: 900 },
+      { currency: 'USD', count: 2, balance: 150 },
+    ]);
+    expect(s.overdueByCurrency).toEqual([
+      { currency: 'SEK', count: 1, balance: 900 },
+      { currency: 'USD', count: 1, balance: 100 },
+    ]);
+    expect(summarizeOverdue(mixed, today).byCurrency).toEqual(s.overdueByCurrency);
+  });
+
+  it('formats one currency as a plain amount with its code, several as a list', () => {
+    expect(formatBalances([{ currency: 'SEK', count: 2, balance: 1400 }], 1400)).toBe(
+      '1400.00 SEK',
+    );
+    expect(formatBalances([], 0)).toBe('0.00');
+    expect(formatBalances([{ currency: '', count: 1, balance: 5 }], 5)).toBe('5.00');
+    expect(
+      formatBalances(
+        [
+          { currency: 'USD', count: 2, balance: 1000 },
+          { currency: 'MXN', count: 1, balance: 5000 },
+        ],
+        6000,
+      ),
+    ).toBe('USD 1000.00 (2 st), MXN 5000.00 (1 st)');
   });
 });
 
