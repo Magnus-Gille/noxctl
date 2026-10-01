@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- `noxctl completion zsh` now completes each command's own options with their
+  descriptions and short flags, fixed choices such as `--output json|table`,
+  and file names for file options and arguments. Completion also keeps working
+  when a global option precedes the command, for command aliases, and at any
+  nesting depth. The script can be installed into `fpath` or loaded with
+  `source <(noxctl completion zsh)`.
+
 ## [0.11.0] - 2026-09-25
 
 ### Added
