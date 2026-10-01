@@ -195,10 +195,10 @@
       "id": "contract-create",
       "declaredPropertyCount": 11,
       "specificationPropertyCount": 34,
-      "missingPropertyCount": 40,
+      "missingPropertyCount": 41,
       "checkedNodeCount": 17,
       "issuesByDimension": {
-        "field": 40,
+        "field": 41,
         "nesting": 0,
         "requiredness": 3,
         "type": 1,
@@ -208,16 +208,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "b2ade189f80417e04121c7f098965ae2b758fe86cb9b828379085ddc98196ea6"
+      "stateHash": "a9dc5eadc9eda457658b78e75219f5a2a9e38dcb642ed8e22665d9a443066e96"
     },
     {
       "id": "contract-update",
       "declaredPropertyCount": 11,
       "specificationPropertyCount": 49,
-      "missingPropertyCount": 56,
+      "missingPropertyCount": 57,
       "checkedNodeCount": 16,
       "issuesByDimension": {
-        "field": 56,
+        "field": 57,
         "nesting": 0,
         "requiredness": 4,
         "type": 1,
@@ -227,7 +227,7 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "7f6c80e1afa2a7f1c585b823511d499c1488ee43b63a01010531d0df8ed85a3c"
+      "stateHash": "50170a24ed296cc7e6ccb55189075b745e5580cbd4a8b72d4b419d3f5ffe9aa4"
     },
     {
       "id": "cost-center-create",
@@ -461,10 +461,10 @@
       "id": "invoice-create",
       "declaredPropertyCount": 11,
       "specificationPropertyCount": 52,
-      "missingPropertyCount": 44,
+      "missingPropertyCount": 45,
       "checkedNodeCount": 28,
       "issuesByDimension": {
-        "field": 44,
+        "field": 45,
         "nesting": 0,
         "requiredness": 4,
         "type": 1,
@@ -474,7 +474,7 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "ccdc9a82f75494750ac0d2b70496a35a935badf8e65bd5d9659870974eeaae7c"
+      "stateHash": "752f60cf11f9c8eff96006792ee45d7c9d8666796095815da9b34e9fc0db9087"
     },
     {
       "id": "invoice-payment-create",
@@ -517,11 +517,11 @@
     {
       "id": "invoice-row",
       "declaredPropertyCount": 18,
-      "specificationPropertyCount": 18,
-      "missingPropertyCount": 0,
+      "specificationPropertyCount": 19,
+      "missingPropertyCount": 1,
       "checkedNodeCount": 19,
       "issuesByDimension": {
-        "field": 0,
+        "field": 1,
         "nesting": 0,
         "requiredness": 3,
         "type": 1,
@@ -531,16 +531,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "7effac25c5c7c1d4f08052a39b5c865d8419d08a2ccac6377e17ab2b5df0dfb3"
+      "stateHash": "dcb60cfe48dde2b641bca57a632e719b655af97cf25c3bd87a09a15ec1facab7"
     },
     {
       "id": "invoice-update",
       "declaredPropertyCount": 12,
       "specificationPropertyCount": 52,
-      "missingPropertyCount": 44,
+      "missingPropertyCount": 45,
       "checkedNodeCount": 28,
       "issuesByDimension": {
-        "field": 44,
+        "field": 45,
         "nesting": 0,
         "requiredness": 1,
         "type": 1,
@@ -550,16 +550,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "96648e54f2cdfc3f1c88247cc747de15cee8c2520f821844dfb3d8b24c1b739d"
+      "stateHash": "ceb1f9fb7c81901aa835d00cb946859f7644b58bc11274806bb079f12c59ae80"
     },
     {
       "id": "offer-create",
       "declaredPropertyCount": 11,
       "specificationPropertyCount": 45,
-      "missingPropertyCount": 37,
+      "missingPropertyCount": 38,
       "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 37,
+        "field": 38,
         "nesting": 0,
         "requiredness": 3,
         "type": 0,
@@ -569,16 +569,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "84cbfdad8ed8c862f84320b800147e8302a6f36aa373edf072536ec484dda0b2"
+      "stateHash": "7248f00623f8bfd243f2869ab133594d981f4628247cd7c7333b8405576d8ff8"
     },
     {
       "id": "offer-row",
       "declaredPropertyCount": 20,
-      "specificationPropertyCount": 19,
-      "missingPropertyCount": 0,
+      "specificationPropertyCount": 20,
+      "missingPropertyCount": 1,
       "checkedNodeCount": 20,
       "issuesByDimension": {
-        "field": 0,
+        "field": 1,
         "nesting": 0,
         "requiredness": 2,
         "type": 0,
@@ -588,16 +588,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "2ba9c3a594429bae66928ecc16e125ee898d30d34632edf6b60f127bc046e48f"
+      "stateHash": "0a2302e5c28ecbe96b086588614d6c7dd263fdcb42b5617ffbeca4c96d038f5c"
     },
     {
       "id": "offer-update",
       "declaredPropertyCount": 12,
       "specificationPropertyCount": 45,
-      "missingPropertyCount": 37,
+      "missingPropertyCount": 38,
       "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 37,
+        "field": 38,
         "nesting": 0,
         "requiredness": 1,
         "type": 0,
@@ -607,16 +607,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "eb9d6c348a4d0577a4db7876f9a3fa9c23c5511e17208909c85dcfd035721266"
+      "stateHash": "c30a57a72a992f778a7fb44efc342de4d469c4e5ea7d4bb997d32cb3c4e0d7ea"
     },
     {
       "id": "order-create",
       "declaredPropertyCount": 11,
       "specificationPropertyCount": 50,
-      "missingPropertyCount": 42,
+      "missingPropertyCount": 43,
       "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 42,
+        "field": 43,
         "nesting": 0,
         "requiredness": 4,
         "type": 1,
@@ -626,16 +626,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "390f2803c511d97beb99572dddadb9218946e0849a7fa73b7b47447d4ce529cf"
+      "stateHash": "13eb45763bdcfd0e54af56ee55950049981c1544581b483663932856fc8fb25c"
     },
     {
       "id": "order-row",
       "declaredPropertyCount": 19,
-      "specificationPropertyCount": 19,
-      "missingPropertyCount": 0,
+      "specificationPropertyCount": 20,
+      "missingPropertyCount": 1,
       "checkedNodeCount": 20,
       "issuesByDimension": {
-        "field": 0,
+        "field": 1,
         "nesting": 0,
         "requiredness": 3,
         "type": 1,
@@ -645,16 +645,16 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "7f6fc87656c93631d90cba7383ce38ccf42386742a1068711f87c0d211acae56"
+      "stateHash": "f0cccc11f19e6069eee50cd94011a72f8441a3879d449b6462737f819c845f86"
     },
     {
       "id": "order-update",
       "declaredPropertyCount": 12,
       "specificationPropertyCount": 50,
-      "missingPropertyCount": 42,
+      "missingPropertyCount": 43,
       "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 42,
+        "field": 43,
         "nesting": 0,
         "requiredness": 1,
         "type": 1,
@@ -664,7 +664,7 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "3b046c26717c58100bb1c83ef87a7fd61b11b6d13d86000af907ef192fa394f3"
+      "stateHash": "abf2fd89a5d7739b464728d2143d5852eb791ae5f568d59266103ddf93ce3caa"
     },
     {
       "id": "price-create",
@@ -812,11 +812,11 @@
         "type": 1,
         "enum": 0,
         "nullability": 0,
-        "constraint": 2,
+        "constraint": 3,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "521f69c18c8427b133ac8da6ca1f1d3d6c421b72f381624c0a76e9ca0ff8919a"
+      "stateHash": "ac4d5898ee241ad552d8d9596f21d0e711bb7df8da8b2c3081c0d4c79a41fa83"
     },
     {
       "id": "salary-transaction-create",
