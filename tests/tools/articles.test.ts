@@ -148,6 +148,39 @@ describe('article tools', () => {
       expect(body.Article.SalesAccount).toBe(3001);
     });
 
+    it('forwards the EU, export, construction and purchase accounts and the type', async () => {
+      mockFetch({ Article: { ArticleNumber: 'ART-006', Description: 'Kopia' } });
+      const accounts = {
+        EUAccount: 3108,
+        EUVATAccount: 3106,
+        ExportAccount: 3105,
+        ConstructionAccount: 3231,
+        PurchaseAccount: 4000,
+        Type: 'SERVICE',
+      };
+
+      const { client } = await setupClientServer();
+      const created = await client.callTool({
+        name: 'fortnox_create_article',
+        arguments: { Description: 'Kopia', ArticleNumber: 'ART-006', ...accounts, confirm: true },
+      });
+      expect(created.isError).toBeFalsy();
+      const createBody = JSON.parse(
+        (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+      );
+      expect(createBody.Article).toMatchObject(accounts);
+
+      const updated = await client.callTool({
+        name: 'fortnox_update_article',
+        arguments: { articleNumber: 'ART-006', ...accounts, confirm: true },
+      });
+      expect(updated.isError).toBeFalsy();
+      const updateBody = JSON.parse(
+        (global.fetch as ReturnType<typeof vi.fn>).mock.calls[1][1].body,
+      );
+      expect(updateBody.Article).toMatchObject(accounts);
+    });
+
     it('supports dry run', async () => {
       mockFetch({ Article: {} });
       const { client } = await setupClientServer();

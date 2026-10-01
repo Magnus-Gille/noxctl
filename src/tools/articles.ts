@@ -10,6 +10,23 @@ import {
   textResponse,
 } from '../tool-output.js';
 
+// The accounts an article books to beyond domestic sales, and its type —
+// without them a new article cannot copy an existing one's bookkeeping.
+const ArticleAccountNumber = z.number().int().min(1000).max(99999);
+const ArticleAccountFields = {
+  EUAccount: ArticleAccountNumber.optional().describe('Försäljningskonto EU (varor)'),
+  EUVATAccount: ArticleAccountNumber.optional().describe('Försäljningskonto EU momspliktig'),
+  ExportAccount: ArticleAccountNumber.optional().describe('Försäljningskonto export'),
+  ConstructionAccount: ArticleAccountNumber.optional().describe(
+    'Försäljningskonto omvänd byggmoms',
+  ),
+  PurchaseAccount: ArticleAccountNumber.optional().describe('Inköpskonto'),
+  Type: z
+    .enum(['STOCK', 'SERVICE'])
+    .optional()
+    .describe('Artikeltyp: STOCK (vara) eller SERVICE (tjänst)'),
+};
+
 export function registerArticleTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
@@ -63,6 +80,7 @@ export function registerArticleTools(
       PurchasePrice: z.number().optional().describe('Inköpspris'),
       Unit: z.string().optional().describe('Enhet (t.ex. st, tim, kg)'),
       SalesAccount: z.number().optional().describe('Försäljningskonto'),
+      ...ArticleAccountFields,
       VAT: z.number().optional().describe('Momssats i procent (t.ex. 25)'),
       Active: z.boolean().optional().describe('Om artikeln är aktiv'),
       confirm: z.boolean().optional().describe('Bekräfta att artikeln ska skapas'),
@@ -93,6 +111,7 @@ export function registerArticleTools(
       PurchasePrice: z.number().optional().describe('Inköpspris'),
       Unit: z.string().optional().describe('Enhet (t.ex. st, tim, kg)'),
       SalesAccount: z.number().optional().describe('Försäljningskonto'),
+      ...ArticleAccountFields,
       VAT: z.number().optional().describe('Momssats i procent (t.ex. 25)'),
       Active: z.boolean().optional().describe('Om artikeln är aktiv'),
       confirm: z.boolean().optional().describe('Bekräfta att artikeln ska uppdateras'),
