@@ -48,7 +48,8 @@ describe('weekly API drift workflow', () => {
   });
 
   it('never writes to the repository, so a protected main cannot block reporting', () => {
-    expect(workflow).toMatch(/permissions:\n {2}contents: read\n {2}issues: write\n/);
+    // \r? because a Windows checkout may convert line endings.
+    expect(workflow).toMatch(/permissions:\r?\n {2}contents: read\r?\n {2}issues: write\r?\n/);
     expect(workflow).not.toContain('contents: write');
     expect(workflow).not.toContain('git push');
     expect(workflow).not.toContain('git commit');
