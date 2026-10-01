@@ -94,7 +94,7 @@ jobs:
       # rejected push used to fail the job before any issue was opened. The
       # fingerprint is refreshed in the pull request that handles the drift.
       - name: Open issue on API change
-        if: steps.diff.outputs.changed == 'true'
+        if: ${{ !cancelled() && steps.diff.outputs.changed == 'true' }}
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           DIFF_SUMMARY: ${{ steps.diff.outputs.summary }}
@@ -150,7 +150,7 @@ jobs:
             }
 
       - name: Open issue on fetch error
-        if: steps.diff.outputs.error == 'true'
+        if: ${{ !cancelled() && steps.diff.outputs.error == 'true' }}
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           DIFF_SUMMARY: ${{ steps.diff.outputs.summary }}
@@ -200,7 +200,7 @@ jobs:
             }
 
       - name: Report MCP write-schema audit
-        if: steps.schema_audit.outputs.changed == 'true' || steps.schema_audit.outputs.error == 'true'
+        if: ${{ !cancelled() && (steps.schema_audit.outputs.changed == 'true' || steps.schema_audit.outputs.error == 'true') }}
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           SCHEMA_AUDIT_SUMMARY: ${{ steps.schema_audit.outputs.summary }}
@@ -265,6 +265,7 @@ jobs:
             }
 
       # Last on purpose: a coverage failure must not suppress the reports above.
+      # Report steps use !cancelled() so one failed report cannot skip the others.
       - name: Check implementation coverage
-        if: steps.diff.outputs.error != 'true' && steps.schema_audit.outputs.error != 'true'
+        if: ${{ !cancelled() && steps.diff.outputs.error != 'true' && steps.schema_audit.outputs.error != 'true' }}
         run: npm run audit:api-coverage --silent
