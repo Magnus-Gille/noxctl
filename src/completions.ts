@@ -27,6 +27,7 @@ export interface CommandNode {
   aliases: string[];
   optionDetails: OptionNode[];
   args: ArgumentNode[];
+  hidden: boolean;
 }
 
 function firstLine(text: string): string {
@@ -54,7 +55,8 @@ export function extractCommandTree(cmd: Command): CommandNode {
     description: cmd.description(),
     options: cmd.options.map((o) => o.long).filter((l): l is string => Boolean(l)),
     aliases: cmd.aliases(),
-    optionDetails: cmd.options.filter((o) => !o.hidden).map(extractOption),
+    optionDetails: cmd.createHelp().visibleOptions(cmd).map(extractOption),
+    hidden: Boolean((cmd as unknown as { _hidden?: boolean })._hidden),
     args: cmd.registeredArguments.map((a) => ({
       name: a.name(),
       required: a.required,
@@ -62,7 +64,7 @@ export function extractCommandTree(cmd: Command): CommandNode {
       choices: a.argChoices && a.argChoices.length > 0 ? [...a.argChoices] : undefined,
     })),
     subcommands: cmd.commands
-      .filter((sub) => sub.name() !== 'help' && !(sub as unknown as { _hidden?: boolean })._hidden)
+      .filter((sub) => sub.name() !== 'help')
       .map((sub) => extractCommandTree(sub as Command)),
   };
 }
@@ -144,7 +146,9 @@ function zshValueSpec(name: string, choices: string[] | undefined, optional: boo
   const colons = optional ? '::' : ':';
   const label = safeLabel(name);
   if (choices && choices.length > 0) {
-    return `${colons}${label}:(${choices.map((c) => c.replace(/[\s()'\\]/g, '')).join(' ')})`;
+    // One single-quoted word per choice so the evaluated action cannot run or split them.
+    const words = choices.map((c) => shellQuote(c.replace(/:/g, '\\:')));
+    return `${colons}${label}:(${words.join(' ')})`;
   }
   if (FILE_LIKE.test(name)) return `${colons}${label}:_files`;
   return `${colons}${label}: `;
@@ -158,7 +162,8 @@ function zshOptionSpecs(opt: OptionNode): string[] {
     : '';
   return flags.map((flag) => {
     const prefix = opt.variadic ? '*' : flags.length > 1 ? `(${flags.join(' ')})` : '';
-    return shellQuote(`${prefix}${flag}[${desc}]${value}`);
+    const marker = opt.takesValue && flag.startsWith('--') ? '=' : '';
+    return shellQuote(`${prefix}${flag}${marker}[${desc}]${value}`);
   });
 }
 
@@ -187,36 +192,55 @@ function zshPositionalSpecs(args: ArgumentNode[]): string[] {
   });
 }
 
-const HELP_OPTION: OptionNode = {
-  long: '--help',
-  short: '-h',
-  description: 'display help for command',
-  takesValue: false,
-  valueOptional: false,
-  variadic: false,
-};
+function mergeOptions(inherited: OptionNode[], own: OptionNode[]): OptionNode[] {
+  let merged = [...inherited];
+  for (const o of own) {
+    // Same long flag: the descendant replaces the ancestor entry.
+    if (o.long) merged = merged.filter((v) => v.long !== o.long);
+    // Same short flag only: keep the ancestor entry without its short flag.
+    if (o.short) {
+      merged = merged.flatMap((v) => {
+        if (v.short !== o.short) return [v];
+        return v.long ? [{ ...v, short: undefined }] : [];
+      });
+    }
+    merged.push(o);
+  }
+  return merged;
+}
+
+/** Assign every command path a unique zsh function name (sanitising can collide). */
+function assignNames(
+  node: CommandNode,
+  path: string[],
+  used: Set<string>,
+  names: Map<CommandNode, string>,
+): void {
+  const base = zshFunctionName(path);
+  let name = base;
+  for (let n = 2; used.has(name); n++) name = `${base}_${n}`;
+  used.add(name);
+  names.set(node, name);
+  for (const sub of node.subcommands) assignNames(sub, [...path, sub.name], used, names);
+}
 
 function emitZshNode(
   node: CommandNode,
   path: string[],
-  inherited: Map<string, OptionNode>,
+  inherited: OptionNode[],
+  names: Map<CommandNode, string>,
   lines: string[],
 ): void {
-  const merged = new Map(inherited);
-  for (const o of [...node.optionDetails, HELP_OPTION]) {
-    // Drop any ancestor entry sharing either flag so the descendant wins.
-    for (const [k, v] of merged) {
-      if ((o.long && v.long === o.long) || (o.short && v.short === o.short)) merged.delete(k);
-    }
-    merged.set(o.long ?? o.short ?? '', o);
-  }
-  const optSpecs = [...merged.values()].flatMap(zshOptionSpecs);
-  const fn = zshFunctionName(path);
-  const isGroup = node.subcommands.length > 0;
+  const merged = mergeOptions(inherited, node.optionDetails);
+  const optSpecs = merged.flatMap(zshOptionSpecs);
+  const fn = names.get(node) as string;
+  // Hidden commands are skipped in zsh only (bash/fish keep them).
+  const subs = node.subcommands.filter((c) => !c.hidden);
+  const isGroup = subs.length > 0;
 
   // Children first so each function is defined before the dispatcher runs.
-  for (const sub of node.subcommands) {
-    emitZshNode(sub, [...path, sub.name], merged, lines);
+  for (const sub of subs) {
+    emitZshNode(sub, [...path, sub.name], merged, names, lines);
   }
 
   const specs = isGroup
@@ -233,18 +257,19 @@ function emitZshNode(
   }
   specs.forEach((spec, i) => lines.push(`    ${spec}${i < specs.length - 1 ? ' \\' : ''}`));
   if (isGroup) {
+    // Limitation: a group command's own positional arguments are not completed.
     lines.push('  case $state in');
     lines.push('    command)');
     lines.push('      commands=(');
-    for (const e of describeEntries(node.subcommands)) lines.push(`        ${e}`);
+    for (const e of describeEntries(subs)) lines.push(`        ${e}`);
     lines.push('      )');
     lines.push("      _describe -t commands 'command' commands");
     lines.push('      ;;');
     lines.push('    args)');
     lines.push('      case $words[1] in');
-    for (const sub of node.subcommands) {
-      const names = [sub.name, ...sub.aliases].map((n) => n.replace(/[^A-Za-z0-9_.-]/g, '?'));
-      lines.push(`        ${names.join('|')}) ${zshFunctionName([...path, sub.name])} ;;`);
+    for (const sub of subs) {
+      const patterns = [sub.name, ...sub.aliases].map(shellQuote);
+      lines.push(`        ${patterns.join('|')}) ${names.get(sub)} ;;`);
     }
     lines.push('      esac');
     lines.push('      ;;');
@@ -261,7 +286,9 @@ export function renderZshCompletion(tree: CommandNode): string {
     '#      or: source <(noxctl completion zsh)',
     '',
   ];
-  emitZshNode(tree, [], new Map(), lines);
+  const names = new Map<CommandNode, string>();
+  assignNames(tree, [], new Set(), names);
+  emitZshNode(tree, [], [], names, lines);
   lines.push(
     'if [ "$funcstack[1]" = "_noxctl" ]; then',
     '  _noxctl "$@"',
