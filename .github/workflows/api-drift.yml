@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
@@ -90,19 +90,9 @@ jobs:
             echo "error=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check implementation coverage
-        if: steps.diff.outputs.error != 'true' && steps.schema_audit.outputs.error != 'true'
-        run: npm run audit:api-coverage --silent
-
-      - name: Commit updated snapshot
-        if: steps.diff.outputs.changed == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add api-spec/openapi-fingerprint.json
-          git commit -m "chore: update Fortnox API fingerprint"
-          git push
-
+      # This job never writes to the repository: main is protected, and a
+      # rejected push used to fail the job before any issue was opened. The
+      # fingerprint is refreshed in the pull request that handles the drift.
       - name: Open issue on API change
         if: steps.diff.outputs.changed == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
@@ -111,23 +101,53 @@ jobs:
         with:
           script: |
             const summary = process.env.DIFF_SUMMARY;
-            await github.rest.issues.create({
+            const today = new Date().toISOString().slice(0, 10);
+
+            // Dedup: the same drift is detected every week until the committed
+            // fingerprint is refreshed, so keep the history in one open issue.
+            const open = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `Fortnox API spec changed (${new Date().toISOString().slice(0, 10)})`,
-              body: [
-                'The weekly API drift check detected changes in the Fortnox OpenAPI spec.',
-                '',
-                '```',
-                summary,
-                '```',
-                '',
-                'Review the changes and update operations/tools if needed.',
-                '',
-                'Updated fingerprint committed to `api-spec/openapi-fingerprint.json`. The full Fortnox spec is not stored in the repo — run `npm run check:api` locally to fetch it and inspect the actual diff.',
-              ].join('\n'),
-              labels: ['api-drift'],
+              state: 'open',
+              labels: 'api-drift',
+              per_page: 100,
             });
+            const existing = open.find(
+              (i) => !i.pull_request && i.title.startsWith('Fortnox API spec changed'),
+            );
+
+            if (existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body: [
+                  'Still differs from the committed fingerprint on ' + today + ':',
+                  '',
+                  '```',
+                  summary,
+                  '```',
+                ].join('\n'),
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Fortnox API spec changed (${today})`,
+                body: [
+                  'The weekly API drift check detected changes in the Fortnox OpenAPI spec.',
+                  '',
+                  '```',
+                  summary,
+                  '```',
+                  '',
+                  'Review the changes and update operations/tools if needed.',
+                  '',
+                  'The fingerprint is not updated automatically. Run `npm run check:api` locally to fetch the spec, inspect the actual diff, and commit the refreshed `api-spec/openapi-fingerprint.json` in the pull request that handles this change. The full Fortnox spec is not stored in the repo.',
+                ].join('\n'),
+                labels: ['api-drift'],
+              });
+            }
 
       - name: Open issue on fetch error
         if: steps.diff.outputs.error == 'true'
@@ -243,3 +263,8 @@ jobs:
                 labels: ['api-drift'],
               });
             }
+
+      # Last on purpose: a coverage failure must not suppress the reports above.
+      - name: Check implementation coverage
+        if: steps.diff.outputs.error != 'true' && steps.schema_audit.outputs.error != 'true'
+        run: npm run audit:api-coverage --silent

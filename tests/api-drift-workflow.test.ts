@@ -46,4 +46,43 @@ describe('weekly API drift workflow', () => {
     expect(workflow).toContain('github.rest.issues.createComment');
     expect(workflow).toContain('github.rest.issues.create({');
   });
+
+  it('never writes to the repository, so a protected main cannot block reporting', () => {
+    expect(workflow).toMatch(/permissions:\n {2}contents: read\n {2}issues: write\n/);
+    expect(workflow).not.toContain('contents: write');
+    expect(workflow).not.toContain('git push');
+    expect(workflow).not.toContain('git commit');
+    expect(workflow).not.toContain('git add');
+  });
+
+  it('deduplicates spec-drift issues, because drift repeats until the fingerprint is refreshed', () => {
+    const start = workflow.indexOf('- name: Open issue on API change');
+    const end = workflow.indexOf('- name: Open issue on fetch error');
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    const step = workflow.slice(start, end);
+
+    expect(step).toContain('github.paginate(github.rest.issues.listForRepo');
+    expect(step).toContain("i.title.startsWith('Fortnox API spec changed')");
+    expect(step).toContain('github.rest.issues.createComment');
+    expect(step).toContain('github.rest.issues.create({');
+    expect(step).toContain('npm run check:api');
+    expect(step).not.toContain('fingerprint committed');
+  });
+
+  it('reports drift before the implementation coverage check can fail the job', () => {
+    const coverageIndex = workflow.indexOf('- name: Check implementation coverage');
+    const reportSteps = [
+      '- name: Open issue on API change',
+      '- name: Open issue on fetch error',
+      '- name: Report MCP write-schema audit',
+    ];
+
+    expect(coverageIndex).toBeGreaterThan(-1);
+    for (const name of reportSteps) {
+      const index = workflow.indexOf(name);
+      expect(index).toBeGreaterThan(-1);
+      expect(index).toBeLessThan(coverageIndex);
+    }
+  });
 });
