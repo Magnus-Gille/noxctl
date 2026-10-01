@@ -165,6 +165,39 @@ describe('invoice tools', () => {
     });
   });
 
+  describe('invoice rows from an article', () => {
+    it('lets Fortnox fill Description and Price from the article', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1004', CustomerNumber: '42' } });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_invoice',
+        arguments: {
+          CustomerNumber: '42',
+          InvoiceRows: [{ ArticleNumber: 'ART-1', DeliveredQuantity: 3 }],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+      expect(body.Invoice.InvoiceRows).toEqual([{ ArticleNumber: 'ART-1', DeliveredQuantity: 3 }]);
+    });
+
+    it('still requires Description and Price on a row without an article', async () => {
+      mockFetch({ Invoice: { DocumentNumber: '1005' } });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_invoice',
+        arguments: { CustomerNumber: '42', InvoiceRows: [{ DeliveredQuantity: 1 }], confirm: true },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe('fortnox_create_invoice', () => {
     it('creates an invoice with rows', async () => {
       mockFetch({

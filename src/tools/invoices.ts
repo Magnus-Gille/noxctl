@@ -17,7 +17,7 @@ import {
   textResponse,
 } from '../tool-output.js';
 
-const InvoiceRowSchema = z.strictObject({
+const InvoiceRowFields = z.strictObject({
   AccountNumber: z.number().int().min(1000).max(9999).optional().describe('Kontonummer'),
   ArticleNumber: z.string().optional().describe('Artikelnummer'),
   Cost: z.number().min(-9_999_999_999).max(9_999_999_999).nullable().optional().describe('Kostnad'),
@@ -25,7 +25,11 @@ const InvoiceRowSchema = z.strictObject({
   DeliveredQuantity: z
     .union([z.string(), z.number()])
     .describe('Levererat antal (nummer eller decimalsträng)'),
-  Description: z.string().max(255).describe('Beskrivning (max 255 tecken)'),
+  Description: z
+    .string()
+    .max(255)
+    .optional()
+    .describe('Beskrivning (max 255 tecken; hämtas från artikeln om ArticleNumber anges)'),
   Discount: z.number().optional().describe('Rabattvärde'),
   DiscountType: z.enum(['AMOUNT', 'PERCENT']).optional().describe('Rabatttyp'),
   HouseWork: z.boolean().optional().describe('Markera raden som husarbete (ROT/RUT)'),
@@ -66,13 +70,32 @@ const InvoiceRowSchema = z.strictObject({
     ])
     .optional()
     .describe('Typ av husarbete'),
-  Price: z.number().describe('Pris per enhet (exkl. moms)'),
+  Price: z
+    .number()
+    .optional()
+    .describe(
+      'Pris per enhet exkl. moms (hämtas från artikel och prislista om ArticleNumber anges)',
+    ),
   Project: z.string().optional().describe('Projektnummer'),
   RowId: z.number().int().optional().describe('Rad-id'),
   StockPointCode: z.string().optional().describe('Lagerställekod'),
   Unit: z.string().max(20).optional().describe('Enhet (max 20 tecken)'),
   VAT: z.number().int().optional().describe('Momssats i procent (default: 25)'),
   VATCode: z.string().optional().describe('Momskod'),
+});
+// A row naming an article lets Fortnox fill Description and Price from the
+// article and the customer's price list; a free-text row still needs both.
+const InvoiceRowSchema = InvoiceRowFields.superRefine((row, ctx) => {
+  if (row.ArticleNumber) return;
+  for (const key of ['Description', 'Price'] as const) {
+    if (row[key] === undefined) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [key],
+        message: `${key} krävs när raden saknar ArticleNumber`,
+      });
+    }
+  }
 });
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
@@ -195,7 +218,7 @@ export function registerInvoiceTools(
       documentNumber: DocumentNumberSchema.describe('Fakturanummer att uppdatera'),
       CustomerNumber: z.string().optional().describe('Kundnummer'),
       InvoiceRows: z
-        .array(InvoiceRowSchema.partial())
+        .array(InvoiceRowFields.partial())
         .optional()
         .describe('Fakturarader (ersätter alla befintliga rader)'),
       DueDate: z.string().optional().describe('Förfallodatum (YYYY-MM-DD)'),
