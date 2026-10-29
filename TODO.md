@@ -1,7 +1,7 @@
 # TODO
 
 This file contains the long-lived roadmap and the recipe for adding Fortnox
-resources. [GitHub Issues](https://github.com/Magnus-Gille/noxctl/issues) are the
+resources. [Plane project `NOX`](https://tickets.gille.ai) is the
 canonical operational backlog; [STATUS.md](STATUS.md) contains the current
 execution handoff. Current release and capability information belongs in the
 package metadata, changelog, and README rather than as snapshots here.
