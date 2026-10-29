@@ -1,7 +1,7 @@
 # TODO
 
 This file contains the long-lived roadmap and the recipe for adding Fortnox
-resources. [Plane project `NOX`](https://tickets.gille.ai) is the
+resources. The maintainer's Plane project `NOX` is the
 canonical operational backlog; [STATUS.md](STATUS.md) contains the current
 execution handoff. Current release and capability information belongs in the
 package metadata, changelog, and README rather than as snapshots here.

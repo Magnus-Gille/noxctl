@@ -30,7 +30,7 @@ noxctl invoices create --customer 25 --input data.json --dry-run
 
 ## Work tracking
 
-Plane project `NOX` (https://tickets.gille.ai) is the canonical operational
+The maintainer's Plane project `NOX` is the canonical operational
 backlog. GitHub Issues on this public repo are only an intake for outside
 reports; an agent moves an actionable report into a Plane ticket and closes the
 GitHub issue with a link to it. See `TODO.md` for the long-lived roadmap and
