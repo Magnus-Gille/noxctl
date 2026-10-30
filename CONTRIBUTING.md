@@ -16,8 +16,11 @@ By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Work tracking
 
-- [GitHub Issues](https://github.com/Magnus-Gille/noxctl/issues) are the canonical
-  operational backlog for non-trivial bugs, features, and follow-up work.
+- The maintainer's Plane project `NOX` is the canonical operational
+  backlog for non-trivial bugs, features, and follow-up work. GitHub Issues on
+  this public repo are only an intake for outside reports; an agent moves an
+  actionable report into a Plane ticket and closes the GitHub issue with a link
+  to it.
 - [TODO.md](TODO.md) is a long-lived roadmap and resource-implementation recipe.
   It is not a live release, test-count, or execution-status dashboard.
 - [STATUS.md](STATUS.md) is the current execution handoff. It records branch,
@@ -116,8 +119,9 @@ Tests:
 - Run `npm run format` and `npm run lint` before pushing. Husky runs Prettier on
   staged files automatically, but running the full check locally catches CI failures early.
 - Update `README.md` if you add, remove, or rename a public CLI/MCP command.
-- Update `TODO.md` when finishing a roadmap item (strikethrough + ✅) and link
-  the pull request to its GitHub issue for closure.
+- Update `TODO.md` when finishing a roadmap item (strikethrough + ✅) and
+  reference its `NOX-N` ticket in the pull request (`Refs NOX-N` or
+  `Fixes NOX-N`, plus the Plane URL); the ticket is closed in Plane after merge.
 - Include new/updated tests. CI is the bar; aim for the behaviour your PR changes
   to be covered.
 - Keep PR descriptions concrete: what changed, why, and anything a reviewer should
@@ -137,7 +141,7 @@ are true, or a concrete blocker is reported:
    evidence and rationale.
 4. The pull request is merged with the repository's established merge method.
 5. The merge commit is verified on the intended target branch.
-6. Issues linked for automatic closure are confirmed closed; issues deliberately
+6. `NOX` tickets the pull request fixes are closed in Plane; tickets deliberately
    left open have a documented follow-up.
 
 Review-and-merge authorization does not imply branch deletion, a version bump,
@@ -147,7 +151,9 @@ separate, explicitly authorized workflows.
 ## API drift
 
 When the Fortnox OpenAPI spec changes, the weekly `api-drift` workflow opens a
-GitHub issue labelled `api-drift` with the diff. If you pick up such an issue:
+GitHub issue labelled `api-drift` with the diff. If you pick up such an issue,
+first move it into a `NOX` ticket and close the GitHub issue with a link to the
+ticket:
 
 1. Read the diff summary on the issue (endpoint/schema-level; run `npm run check:api` locally to fetch the spec and inspect the full diff).
 2. Decide which changes require action (new fields to expose, breaking changes).

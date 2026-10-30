@@ -30,9 +30,12 @@ noxctl invoices create --customer 25 --input data.json --dry-run
 
 ## Work tracking
 
-GitHub Issues are the canonical operational backlog. See `TODO.md` for the
-long-lived roadmap and instructions for adding new resources, and `STATUS.md`
-for the current execution handoff.
+The maintainer's Plane project `NOX` is the canonical operational
+backlog. GitHub Issues on this public repo are only an intake for outside
+reports; an agent moves an actionable report into a Plane ticket and closes the
+GitHub issue with a link to it. See `TODO.md` for the long-lived roadmap and
+instructions for adding new resources, and `STATUS.md` for the current
+execution handoff.
 
 ## Project structure
 
