@@ -8,7 +8,7 @@ package metadata, changelog, and README rather than as snapshots here.
 
 ## API Drift Detection
 
-Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and compares it against the committed **fingerprint** (`api-spec/openapi-fingerprint.json` — opaque hashes only; the full spec is not stored in the repo, per Fortnox Developer Agreement cl. 6.1/6.3). Opens a GitHub issue labeled `api-drift` when endpoints/schemas change. Run locally with `npm run check:api`. Can also be triggered manually from the Actions tab.
+Weekly GitHub Actions workflow (`api-drift.yml`) fetches the Fortnox OpenAPI spec and compares it against the committed **fingerprint** (`api-spec/openapi-fingerprint.json` — opaque hashes only; the full spec is not stored in the repo, per Fortnox Developer Agreement cl. 6.1/6.3). Files a Plane ticket labelled `api-drift` in `NOX` when endpoints/schemas change (see [CONTRIBUTING.md](CONTRIBUTING.md#api-drift)). Run locally with `npm run check:api`. Can also be triggered manually from the Actions tab.
 
 After fetching the local, git-ignored cache, run `npm run audit:schemas` to inventory
 every discovered mutating MCP tool and recursively compare every mapped structured
