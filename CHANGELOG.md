@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The weekly API drift workflow files its reports as tickets in the maintainer's
+  Plane project instead of GitHub issues, through `scripts/file-plane-ticket.mjs`.
+  It keeps the one-open-ticket-per-report deduplication, no longer needs
+  `issues: write`, and fails the run when the gateway secrets are missing.
+
 ## [0.12.0] - 2026-10-01
 
 ### Added
