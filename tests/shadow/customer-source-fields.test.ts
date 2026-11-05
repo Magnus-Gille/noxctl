@@ -98,10 +98,8 @@ describe('customer source-only fields', () => {
     'DeliveryZipCode',
     'DeliveryCity',
     'DeliveryCountry',
-    'EmailOffer',
     'EmailOfferCC',
     'EmailOfferBCC',
-    'EmailOrder',
     'EmailOrderCC',
     'EmailOrderBCC',
     'Phone2',
@@ -125,8 +123,13 @@ describe('customer source-only fields', () => {
     expect(result).toHaveProperty('request');
   });
 
-  it('treats EmailInvoice equal to Email as neutral (nothing extra mapped)', () => {
-    const result = prepare({ Email: 'a@example.test', EmailInvoice: 'a@example.test' });
+  it('treats EmailInvoice/EmailOffer/EmailOrder equal to Email as neutral (nothing extra mapped)', () => {
+    const result = prepare({
+      Email: 'a@example.test',
+      EmailInvoice: 'a@example.test',
+      EmailOffer: 'a@example.test',
+      EmailOrder: 'a@example.test',
+    });
     expect(result.request).toEqual({
       name: 'Exempel AB',
       customer_type: 'swedish_business',
@@ -145,6 +148,15 @@ describe('customer source-only fields', () => {
       blocked: expect.stringContaining(
         `${CUSTOMER_FIELD_UNSUPPORTED}: source EmailInvoice differs`,
       ),
+    });
+  });
+
+  it.each(['EmailOffer', 'EmailOrder'])('refuses %s differing from Email', (field) => {
+    expect(prepare({ Email: 'a@example.test', [field]: 'b@example.test' })).toEqual({
+      blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source ${field} differs`),
+    });
+    expect(prepare({ [field]: 'b@example.test' })).toEqual({
+      blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source ${field} differs`),
     });
   });
 

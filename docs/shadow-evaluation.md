@@ -93,9 +93,9 @@ not ignored:
 
 The customer mapper likewise mirrors every populated supported source field (not only those in
 the call's input; input/source equality is still required for keys the input carries) and
-refuses populated source `Delivery*`, `EmailOffer*`, `EmailOrder*` (with CC/BCC), `Phone2`,
-`Fax` and `WWW` with `CUSTOMER_FIELD_UNSUPPORTED`. `EmailInvoice` is neutral only when exactly
-equal to `Email`, otherwise refused. `EmailInvoiceCC`/`EmailInvoiceBCC` are split on `,`/`;`
+refuses populated source `Delivery*`, `EmailOfferCC/BCC`, `EmailOrderCC/BCC`, `Phone2`,
+`Fax` and `WWW` with `CUSTOMER_FIELD_UNSUPPORTED`. `EmailInvoice`, `EmailOffer` and `EmailOrder`
+are neutral only when exactly equal to `Email`, otherwise refused. `EmailInvoiceCC`/`EmailInvoiceBCC` are split on `,`/`;`
 (each part trimmed, must be a valid address, at most 19 in total) and mapped to
 `invoice_email_cc_addresses`/`invoice_email_bcc_addresses`; `Comments` maps verbatim to
 `notes`. All are verified on customer readback (arrays by deep equality).

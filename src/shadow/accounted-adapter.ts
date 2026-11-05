@@ -70,8 +70,8 @@ export const CUSTOMER_FIELD_UNSUPPORTED = 'CUSTOMER_FIELD_UNSUPPORTED';
 
 /**
  * Populated source customer data that cannot be mirrored (Accounted has no delivery address,
- * offer/order e-mail routing, second phone, fax or web address). EmailInvoice is neutral only when
- * equal to Email; EmailInvoiceCC/BCC map to invoice_email_{cc,bcc}_addresses; Comments to notes. Fortnox
+ * offer/order e-mail copies, second phone, fax or web address). EmailInvoice, EmailOffer and
+ * EmailOrder are neutral only when equal to Email (owner decision 2026-11-05); EmailInvoiceCC/BCC map to invoice_email_{cc,bcc}_addresses; Comments to notes. Fortnox
  * defaults/derived fields (Currency, VATType, TermsOfPayment, PriceList, ...) stay neutral.
  */
 const UNMAPPABLE_SOURCE_FIELDS = [
@@ -81,10 +81,8 @@ const UNMAPPABLE_SOURCE_FIELDS = [
   'DeliveryZipCode',
   'DeliveryCity',
   'DeliveryCountry',
-  'EmailOffer',
   'EmailOfferCC',
   'EmailOfferBCC',
-  'EmailOrder',
   'EmailOrderCC',
   'EmailOrderBCC',
   'Phone2',
@@ -350,10 +348,13 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       }
     }
 
-    if (!emptyCountry(source.EmailInvoice) && source.EmailInvoice !== source.Email) {
-      return {
-        blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source EmailInvoice differs from Email (or Email is empty); the invoice e-mail has no Accounted mapping.`,
-      };
+    // Fortnox per-document e-mail routing: accepted only as an exact copy of Email.
+    for (const field of ['EmailInvoice', 'EmailOffer', 'EmailOrder'] as const) {
+      if (!emptyCountry(source[field]) && source[field] !== source.Email) {
+        return {
+          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${field} differs from Email (or Email is empty); it has no Accounted mapping.`,
+        };
+      }
     }
 
     for (const key of Object.keys(input)) {
