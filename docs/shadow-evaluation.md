@@ -56,8 +56,12 @@ and price, because the target does not fill those from the article. Unlinked row
 omit `article_id` and must read back as null; the UUID is part of the receipt
 `expected` content that the draft, issue and stage verifiers compare. An unmapped,
 unresolved/unknown-outcome, conflicting or malformed article identity refuses the
-row with an `ARTICLE_*` reason and nothing is dispatched. Empty units and
-non-positive quantities remain refused.
+row with an `ARTICLE_*` reason and nothing is dispatched. A source Unit that is exactly
+`''` is preserved as "not specified": the draft sends `unit: ''` (never a default such
+as `st`, never null), and draft, issue and stage readback require exactly `''` (`'st'`
+or null is a verification failure with no replay). Absent, non-string, whitespace-only,
+padded or control-character units are refused with a `UNIT_INVALID` reason. Payment
+parity does not depend on the unit. Non-positive quantities remain refused.
 Experimental strict invoice draft and issue adapters are described below and remain
 unwired. There are no voucher, document, article or payment replay adapters yet.
 The reviewed native v1 article surface is read-only; an MCP create tool does not

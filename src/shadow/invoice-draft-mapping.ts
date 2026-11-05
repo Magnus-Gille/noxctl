@@ -95,6 +95,7 @@ const ROW_FIELDS = new Set([
 const MAX_CUSTOMER_ID_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 2000;
 const MAX_QUANTITY = 10_000;
+const MAX_UNIT_LENGTH = 50;
 const MAX_UNIT_PRICE = 1_000_000;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -196,6 +197,22 @@ export const ARTICLE_REFUSAL = {
   conflict: 'ARTICLE_IDENTITY_CONFLICT',
   malformed: 'ARTICLE_IDENTITY_MALFORMED',
 } as const;
+
+/** Stable refusal-reason prefix for invoice-row units. */
+export const UNIT_REFUSAL = {
+  invalid: 'UNIT_INVALID',
+} as const;
+
+/** A unit is exactly '' ("not specified") or an unpadded string without control characters. */
+function isValidUnit(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (value === '') return true;
+  return (
+    value.trim() === value &&
+    value.length <= MAX_UNIT_LENGTH &&
+    !/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(value)
+  );
+}
 
 /** ArticleNumber is an opaque string; never coerced, trimmed, or parsed as a number. */
 function sourceArticleNumber(value: unknown): string | null | undefined {
@@ -303,8 +320,11 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     }
     if (row.VAT !== 25) return { blocked: 'Only 25 percent VAT is supported.' };
     const unit = row.Unit;
-    if (typeof unit !== 'string' || !unit.trim())
-      return { blocked: 'Invoice product unit must be a nonblank string.' };
+    if (!isValidUnit(unit)) {
+      return {
+        blocked: `${UNIT_REFUSAL.invalid}: Invoice product unit must be exactly empty or an unpadded string without control characters.`,
+      };
+    }
 
     const inputAccount = Object.hasOwn(row, 'AccountNumber')
       ? explicitAccountNumber(row.AccountNumber)

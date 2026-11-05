@@ -224,6 +224,17 @@ describe('mapBookedInvoicePayment', () => {
     expect(result.request.lines.map((row) => row.account_number)).toEqual(['2611', '3001', '1930']);
   });
 
+  it('treats an empty-unit invoice row exactly like any other unit for payment parity', () => {
+    const input = fixture();
+    const base = map(input);
+    const item = expectedInvoice().items[0]!;
+    input.expectedInvoice = expectedInvoice({ items: [{ ...item, unit: '' }] });
+    const result = map(input);
+    if (!('request' in result) || !('request' in base)) throw new Error('expected a plan');
+    expect(result.request).toEqual(base.request);
+    expect(JSON.stringify(result.request)).not.toContain('"unit"');
+  });
+
   it('does not silently ignore an unrecognized financial field', () => {
     const input = fixture();
     const changed = paymentResult({ NewSettlementAdjustment: 1 });

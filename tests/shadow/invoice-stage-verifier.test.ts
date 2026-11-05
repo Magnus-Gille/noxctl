@@ -19,7 +19,7 @@ const binding = {
 const customerId = '11111111-1111-4111-8111-111111111111';
 const invoiceId = '22222222-2222-4222-8222-222222222222';
 
-function invoiceSource(sent = false, documentNumber = '10'): Record<string, unknown> {
+function invoiceSource(sent = false, documentNumber = '10', unit = 'st'): Record<string, unknown> {
   return {
     CustomerNumber: '7',
     InvoiceDate: '2026-01-01',
@@ -58,7 +58,7 @@ function invoiceSource(sent = false, documentNumber = '10'): Record<string, unkn
         Total: 100,
         Discount: 0,
         VAT: 25,
-        Unit: 'st',
+        Unit: unit,
         HouseWork: false,
         CostCenter: '',
         Project: '',
@@ -69,7 +69,7 @@ function invoiceSource(sent = false, documentNumber = '10'): Record<string, unkn
   };
 }
 
-function invoiceArgs(customerNumber = '7') {
+function invoiceArgs(customerNumber = '7', unit = 'st') {
   return [
     {
       CustomerNumber: customerNumber,
@@ -77,13 +77,17 @@ function invoiceArgs(customerNumber = '7') {
       DueDate: '2026-01-31',
       Currency: 'SEK',
       InvoiceRows: [
-        { Description: 'Synthetic service', DeliveredQuantity: 1, Price: 100, VAT: 25, Unit: 'st' },
+        { Description: 'Synthetic service', DeliveredQuantity: 1, Price: 100, VAT: 25, Unit: unit },
       ],
     },
   ];
 }
 
-function targetInvoice(status: 'draft' | 'sent', invoiceNumber: string | null = null) {
+function targetInvoice(
+  status: 'draft' | 'sent',
+  invoiceNumber: string | null = null,
+  unit: string | null = 'st',
+) {
   return {
     id: invoiceId,
     customer_id: customerId,
@@ -118,7 +122,7 @@ function targetInvoice(status: 'draft' | 'sent', invoiceNumber: string | null = 
       {
         description: 'Synthetic service',
         quantity: 1,
-        unit: 'st',
+        unit,
         unit_price: 100,
         vat_rate: 25,
         revenue_account: '3001',
@@ -149,12 +153,13 @@ function issueResponse(overrides: Record<string, unknown> = {}) {
 type Runtime = { queue: ShadowQueue; root: string; request: ReturnType<typeof vi.fn> };
 
 async function seedRuntime(
-  options: { issue?: boolean; issueResponse?: Record<string, unknown> } = {},
+  options: { issue?: boolean; issueResponse?: Record<string, unknown>; unit?: string } = {},
 ): Promise<Runtime> {
   const root = mkdtempSync(join(tmpdir(), 'invoice-stage-runtime-'));
   const queue = await openShadowQueue(root, binding);
   let sent = false;
   const response = options.issueResponse ?? issueResponse();
+  const unit = options.unit ?? 'st';
   const request = vi.fn(async (input: AccountedRequest): Promise<AccountedResponse> => {
     if (input.method === 'POST' && input.path.endsWith('/customers'))
       return {
@@ -191,7 +196,7 @@ async function seedRuntime(
     if (input.method === 'GET' && input.path.includes(`/invoices/${invoiceId}?expand=items`))
       return {
         status: 200,
-        json: { data: targetInvoice(sent ? 'sent' : 'draft', sent ? 'A-10' : null) },
+        json: { data: targetInvoice(sent ? 'sent' : 'draft', sent ? 'A-10' : null, unit) },
       };
     throw new Error(`Unexpected synthetic target call: ${input.method} ${input.path}`);
   });
@@ -214,8 +219,8 @@ async function seedRuntime(
     true,
   );
   await queue.execute(
-    { id: 'invoice-intent', operation: 'createInvoice', args: invoiceArgs() },
-    async () => invoiceSource(false),
+    { id: 'invoice-intent', operation: 'createInvoice', args: invoiceArgs('7', unit) },
+    async () => invoiceSource(false, '10', unit),
   );
   const draft = new AccountedInvoiceDraftAdapter(
     binding,
@@ -227,7 +232,7 @@ async function seedRuntime(
     await queue.execute(
       { id: 'issue-intent', operation: 'markInvoicePrinted', args: ['10'] },
       async () => ({
-        invoice: invoiceSource(true),
+        invoice: invoiceSource(true, '10', unit),
         confirmed: true,
         pdf: Buffer.from('%PDF-synthetic'),
       }),
@@ -271,6 +276,31 @@ describe('read-only invoice stage verifier', () => {
       const returned = runtime.queue.snapshot();
       returned[0]!.record.id = 'mutated-local-copy';
       expect(runtime.queue.snapshot()).toEqual(before);
+    } finally {
+      await dispose(runtime);
+    }
+  });
+
+  it('verifies draft and sent stages for an empty-unit row and rejects a changed target unit', async () => {
+    const runtime = await seedRuntime({ issue: true, unit: '' });
+    try {
+      await expect(verifier(runtime).verify('10')).resolves.toMatchObject({
+        state: 'verified',
+        stage: 'sent',
+        proof: 'issue-receipt',
+      });
+      for (const unit of ['st', null]) {
+        const request = vi.fn(async (): Promise<AccountedResponse> => ({
+          status: 200,
+          json: { data: targetInvoice('sent', 'A-10', unit) },
+        }));
+        const result = await new AccountedInvoiceStageVerifier(
+          binding,
+          () => runtime.queue.snapshot(),
+          request,
+        ).verify('10');
+        expect(result.state).not.toBe('verified');
+      }
     } finally {
       await dispose(runtime);
     }

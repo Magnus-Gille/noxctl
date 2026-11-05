@@ -68,14 +68,14 @@ no default worker, credential lookup, source voucher fetch or automatic live act
 
 This lane covers full settlement of ordered domestic CASH/SEK product invoices with
 25 percent VAT and an exactly matching captured voucher. Input and confirmed source rows
-must match position by position. Nonblank units are preserved; positive integer quantities,
+must match position by position. Units are preserved exactly (an empty unit stays `''`; padded, whitespace-only and control-character units are refused); positive integer quantities,
 cent prices and source/target per-item and aggregate amounts must agree. Target item readback
 uses unique IDs and contiguous `sort_order` positions for multiple rows instead of trusting
 the returned array order. Historical single-item receipts keep their existing expected shape.
 
 Captured payment credits may be split or coalesced per confirmed revenue account and VAT;
 the complete original line array is sent and verified without merging or dropping rows.
-Empty units, article links, discounts, dimensions, zero/negative/text rows, other VAT rates,
+Discounts, dimensions, zero/negative/text rows, other VAT rates,
 FX, partial payments and credit flows remain unsupported. Arithmetic mismatches are refused
 before target dispatch rather than silently changing amounts. The
 adapter checks the persisted issued invoice, performs a noncommitting preview, then one commit.
