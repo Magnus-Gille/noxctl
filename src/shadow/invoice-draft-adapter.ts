@@ -41,6 +41,13 @@ export function matchesInvoiceExpected(
     if (key !== 'items' && key !== 'status' && key !== 'invoice_number' && invoice[key] !== wanted)
       return false;
   }
+  // Optional text fields are verified exactly; when not requested the target must hold none.
+  for (const key of ['our_reference', 'your_reference', 'notes'] as const) {
+    if (!Object.hasOwn(expected, key)) {
+      const stored = invoice[key];
+      if (stored !== undefined && stored !== null && stored !== '') return false;
+    }
+  }
   if (invoice.status !== state.status || invoice.invoice_number !== (state.invoiceNumber ?? null))
     return false;
   if (

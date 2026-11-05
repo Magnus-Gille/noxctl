@@ -72,6 +72,9 @@ describe('resolveShadowIdentity', () => {
       requestHash: record.requestHash,
       sourceCompany: binding.sourceCompany,
       targetCompany: binding.targetCompany,
+      ...(fixture.kind === 'customer'
+        ? { sourceAddress: { Address1: '', Address2: '', ZipCode: '', City: '' } }
+        : {}),
     });
   });
 
@@ -334,4 +337,25 @@ describe('resolveShadowIdentity', () => {
       });
     },
   );
+});
+
+describe('customer source address evidence', () => {
+  it('exposes the confirmed source customer address on the ready resolution', () => {
+    const record = makeRecord({
+      kind: 'customer',
+      operation: 'createCustomer',
+      sourceField: 'CustomerNumber',
+      sourceId: 'C-ADDR',
+    });
+    record.sourceResult = {
+      CustomerNumber: 'C-ADDR',
+      Address1: 'Testgatan 1',
+      ZipCode: '11122',
+      City: 'Teststad',
+    };
+    expect(resolveShadowIdentity([record], binding, 'customer', 'C-ADDR')).toMatchObject({
+      state: 'ready',
+      sourceAddress: { Address1: 'Testgatan 1', Address2: '', ZipCode: '11122', City: 'Teststad' },
+    });
+  });
 });

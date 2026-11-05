@@ -73,6 +73,29 @@ or null is a verification failure with no replay). Absent, non-string, whitespac
 padded or control-character units are refused with a `UNIT_INVALID` reason. Payment
 parity does not depend on the unit. Non-positive quantities remain refused.
 
+Invoice header fields that Fortnox fills from customer/company defaults are classified,
+not ignored:
+
+- Mapped and verified on draft/issue/stage readback: `OurReference` -> `our_reference`,
+  `YourReference` -> `your_reference`, `Remarks` -> `notes`, verbatim (no trimming);
+  empty/null/absent is omitted, and readback must then store none. A mismatch blocks.
+- Invoice address (`Address1`, `Address2`, `ZipCode`, `City`): Accounted invoices have no
+  address and use the customer's. An empty invoice address is accepted; a populated one must
+  equal the mirrored customer's confirmed source address (carried as `sourceAddress` on the
+  customer identity resolution) or the invoice is refused with `INVOICE_ADDRESS_MISMATCH`.
+- Refused when non-empty: `YourOrderNumber` (`INVOICE_YOUR_ORDER_NUMBER_UNSUPPORTED`),
+  `Comments` (`INVOICE_COMMENTS_UNSUPPORTED`), any `Delivery*` address field
+  (`INVOICE_DELIVERY_ADDRESS_UNSUPPORTED`), and `InvoiceReference` / `OrderReference` /
+  `ContractReference` unless absent, null, `''`, `0` or `'0'`
+  (`INVOICE_LINKED_DOCUMENT_UNSUPPORTED`).
+- Derived/neutral Fortnox defaults, not inspected: `OCR`, `TermsOfPayment`, `PriceList`,
+  `Language`, `EmailInformation`, `CustomerName`.
+
+The customer mapper likewise mirrors every populated supported source field (not only those in
+the call's input; input/source equality is still required for keys the input carries) and
+refuses populated source `Delivery*`, `Email{Invoice,Offer,Order}[CC|BCC]`, `Phone2`, `Fax`,
+`WWW` and `Comments` with `CUSTOMER_FIELD_UNSUPPORTED`.
+
 Experimental strict invoice draft and issue adapters are described below and remain
 unwired. There are no voucher, document, article or payment replay adapters yet.
 The reviewed native v1 article surface is read-only; an MCP create tool does not
@@ -117,17 +140,17 @@ the error explicitly says that Fortnox succeeded and must not be repeated.
 
 States shown in status:
 
-| State | Meaning / safe next action |
-| --- | --- |
-| prepared | Stored intent, no dispatch claim |
-| source_in_flight | Claimed source call; after interruption, treat as unknown |
-| source_unknown | Source outcome needs operation-specific readback |
-| pending | Confirmed source receipt waiting for target |
-| retry_wait | Host proved no target mutation was dispatched; retry after nextAttemptAt |
-| target_in_flight | Claimed target call; after interruption, treat as unknown |
-| target_unknown | Target may have changed; do not retry create |
-| blocked | Unsupported semantics or readback drift requiring resolution |
-| applied | Target identity and verified receipt durably recorded |
+| State            | Meaning / safe next action                                               |
+| ---------------- | ------------------------------------------------------------------------ |
+| prepared         | Stored intent, no dispatch claim                                         |
+| source_in_flight | Claimed source call; after interruption, treat as unknown                |
+| source_unknown   | Source outcome needs operation-specific readback                         |
+| pending          | Confirmed source receipt waiting for target                              |
+| retry_wait       | Host proved no target mutation was dispatched; retry after nextAttemptAt |
+| target_in_flight | Claimed target call; after interruption, treat as unknown                |
+| target_unknown   | Target may have changed; do not retry create                             |
+| blocked          | Unsupported semantics or readback drift requiring resolution             |
+| applied          | Target identity and verified receipt durably recorded                    |
 
 `drainOne` advances the oldest unresolved intent only. A blocked or unknown item
 pauses later target work to preserve dependencies. Source work can continue.
@@ -248,7 +271,6 @@ webhooks. This local implementation has synthetic evidence only and must not be
 armed without separate native prerequisites. The read-only stage verifier below selects the supported current receipt;
 full cross-operation lifecycle coverage remains incomplete. `sendInvoice`, email, payments, credits and broader
 invoice variants remain outside this adapter's scope.
-
 
 ## Read-only current invoice stage
 
