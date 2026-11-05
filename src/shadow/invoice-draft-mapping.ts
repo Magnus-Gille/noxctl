@@ -420,10 +420,12 @@ const HEADER_CLASSIFIED = new Set<string>([
 /**
  * Invoice row keys: validated against the input/confirmed amounts (Description, DeliveredQuantity,
  * Price, VAT, Unit, AccountNumber, ArticleNumber, PriceExcludingVAT, TotalExcludingVAT, Total,
- * Discount, HouseWork, CostCenter, Project) or derived/neutral Fortnox values (the rest). Any other
- * populated row key is refused as INVOICE_FIELD_UNCLASSIFIED.
+ * Discount, HouseWork, CostCenter, Project), Cost (the internal purchase cost: neutral only when
+ * zero, otherwise refused) or derived/neutral Fortnox values (the rest). Any other populated row key
+ * is refused as INVOICE_FIELD_UNCLASSIFIED.
  */
 const ROW_CLASSIFIED = new Set([
+  'Cost',
   'Description',
   'DeliveredQuantity',
   'Price',
@@ -871,6 +873,12 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     } = validated;
     const sourceRow = source.InvoiceRows[index];
     if (!isPlainObject(sourceRow)) return { blocked: 'Confirmed source invoice row is malformed.' };
+    const cost = sourceRow.Cost;
+    if (!emptyHeaderValue(cost) && cost !== 0 && cost !== '0') {
+      return {
+        blocked: `${INVOICE_REFUSAL.fieldUnsupported}: row Cost is populated and has no Accounted mapping.`,
+      };
+    }
     for (const [field, value] of Object.entries(sourceRow)) {
       if (!ROW_CLASSIFIED.has(field) && !emptyHeaderValue(value)) {
         return {

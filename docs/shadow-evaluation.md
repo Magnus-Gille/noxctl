@@ -117,8 +117,9 @@ Invoice row keys: Description, DeliveredQuantity, Price, VAT, Unit, AccountNumbe
 PriceExcludingVAT, TotalExcludingVAT, Total, Discount, HouseWork, CostCenter and Project are
 validated against the input and amounts; `@url`, ContributionPercent/Value, DiscountType,
 HouseWorkHoursToReport, HouseWorkType, RowId, StockPointCode, VATCode and OrderedQuantity are
-neutral derived values. Any other populated row key is `INVOICE_FIELD_UNCLASSIFIED`. This row
-list is from the Fortnox row schema, not from real exports, and must be checked against them.
+neutral derived values. `Cost` (internal purchase cost) is neutral only when zero and otherwise
+`INVOICE_FIELD_UNSUPPORTED`. Any other populated row key is `INVOICE_FIELD_UNCLASSIFIED`. The row
+list was checked against a real export (2026-11-05): every key it contains is classified.
 
 Experimental strict invoice draft and issue adapters are described below and remain
 unwired. There are no voucher, document, article or payment replay adapters yet.

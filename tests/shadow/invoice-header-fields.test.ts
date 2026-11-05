@@ -374,6 +374,32 @@ describe('invoice header allowlist', () => {
     expect('blocked' in map({ SomeNewFortnoxKey: '', Other: null, More: [] })).toBe(false);
   });
 
+  it.each([0, '0', null])('treats a zero row Cost (%j) as neutral', (cost) => {
+    const base = record();
+    const source = base.sourceResult as Obj;
+    const rows = source.InvoiceRows as Obj[];
+    const patched = {
+      ...base,
+      sourceResult: { ...source, InvoiceRows: [{ ...rows[0], Cost: cost }] },
+    };
+    expect('blocked' in mapInvoiceDraft(patched, binding, lookupFor())).toBe(false);
+  });
+
+  it('refuses a nonzero row Cost', () => {
+    const base = record();
+    const source = base.sourceResult as Obj;
+    const rows = source.InvoiceRows as Obj[];
+    const patched = {
+      ...base,
+      sourceResult: { ...source, InvoiceRows: [{ ...rows[0], Cost: 12.5 }] },
+    };
+    expect(mapInvoiceDraft(patched, binding, lookupFor())).toEqual({
+      blocked: expect.stringContaining(
+        `${INVOICE_REFUSAL.fieldUnsupported}: row Cost is populated`,
+      ),
+    });
+  });
+
   it('refuses a populated unclassified row key', () => {
     const base = record();
     const source = base.sourceResult as Obj;
