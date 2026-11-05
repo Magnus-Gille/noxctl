@@ -114,6 +114,7 @@ function targetInvoice(
     default_dimensions: {},
     customer: {
       id: customerId,
+      name: 'Synthetic Customer',
       customer_type: 'swedish_business',
       country: 'SE',
       archived_at: null,

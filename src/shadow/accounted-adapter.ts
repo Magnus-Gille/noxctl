@@ -35,6 +35,7 @@ type CustomerBody = {
   invoice_email_cc_addresses?: string[];
   invoice_email_bcc_addresses?: string[];
   notes?: string;
+  contact_person?: string;
 };
 
 type NativeData = Record<string, unknown> & { id: string };
@@ -68,27 +69,114 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 /** Stable refusal reason: a populated source customer field has no Accounted counterpart. */
 export const CUSTOMER_FIELD_UNSUPPORTED = 'CUSTOMER_FIELD_UNSUPPORTED';
 
+/** Stable refusal reason: a populated source key that no allowlist group covers. */
+export const CUSTOMER_FIELD_UNCLASSIFIED = 'CUSTOMER_FIELD_UNCLASSIFIED';
+
 /**
- * Populated source customer data that cannot be mirrored (Accounted has no delivery address,
- * offer/order e-mail copies, second phone, fax or web address). EmailInvoice, EmailOffer and
- * EmailOrder are neutral only when equal to Email (owner decision 2026-11-05); EmailInvoiceCC/BCC map to invoice_email_{cc,bcc}_addresses; Comments to notes. Fortnox
- * defaults/derived fields (Currency, VATType, TermsOfPayment, PriceList, ...) stay neutral.
+ * Allowlist classification of every Fortnox customer key (docs/shadow-evaluation.md). "Populated"
+ * means not undefined/null/''/[]. Unlisted populated keys are refused as unclassified.
+ *  - mapped and verified: CustomerNumber, Name, OrganisationNumber, Email, Phone1, Address1/2,
+ *    ZipCode, City, VATNumber, EmailInvoiceCC/BCC, Comments (notes), YourReference (contact_person);
+ *  - validated: Type, Country, CountryCode, Currency, VATType, Active (false refused), and
+ *    EmailInvoice/EmailOffer/EmailOrder (neutral only when equal to Email);
+ *  - derived/neutral: @url, DefaultDeliveryTypes, DefaultTemplates, PriceList, TermsOfPayment;
+ *  - refused when populated (CUSTOMER_FIELD_UNSUPPORTED): the rest below. For the numeric and
+ *    boolean ones 0 and false mean "none" and are neutral.
  */
+const CUSTOMER_MAPPED = new Set([
+  'CustomerNumber',
+  'Name',
+  'OrganisationNumber',
+  'Email',
+  'Phone1',
+  'Address1',
+  'Address2',
+  'ZipCode',
+  'City',
+  'VATNumber',
+  'EmailInvoiceCC',
+  'EmailInvoiceBCC',
+  'Comments',
+  'YourReference',
+]);
+const CUSTOMER_VALIDATED = new Set([
+  'Type',
+  'Country',
+  'CountryCode',
+  'Currency',
+  'VATType',
+  'Active',
+  'EmailInvoice',
+  'EmailOffer',
+  'EmailOrder',
+]);
+const CUSTOMER_DERIVED = new Set([
+  '@url',
+  'DefaultDeliveryTypes',
+  'DefaultTemplates',
+  'PriceList',
+  'TermsOfPayment',
+]);
 const UNMAPPABLE_SOURCE_FIELDS = [
+  'OurReference',
+  'GLN',
+  'GLNDelivery',
+  'VisitingAddress',
+  'VisitingCity',
+  'VisitingCountry',
+  'VisitingCountryCode',
+  'VisitingZipCode',
   'DeliveryName',
   'DeliveryAddress1',
   'DeliveryAddress2',
   'DeliveryZipCode',
   'DeliveryCity',
   'DeliveryCountry',
+  'DeliveryCountryCode',
+  'DeliveryFax',
+  'DeliveryPhone1',
+  'DeliveryPhone2',
   'EmailOfferCC',
   'EmailOfferBCC',
   'EmailOrderCC',
   'EmailOrderBCC',
-  'Phone2',
+  'ExternalReference',
   'Fax',
+  'InvoiceRemark',
+  'Phone2',
   'WWW',
+  'TermsOfDelivery',
+  'WayOfDelivery',
+  'CostCenter',
+  'Project',
+  'SalesAccount',
+  'InvoiceAdministrationFee',
+  'InvoiceDiscount',
+  'InvoiceFreight',
+  'ShowPriceVATIncluded',
 ] as const;
+const ZERO_NEUTRAL_FIELDS: ReadonlySet<string> = new Set([
+  'SalesAccount',
+  'InvoiceAdministrationFee',
+  'InvoiceDiscount',
+  'InvoiceFreight',
+  'ShowPriceVATIncluded',
+]);
+const CUSTOMER_CLASSIFIED = new Set<string>([
+  ...CUSTOMER_MAPPED,
+  ...CUSTOMER_VALIDATED,
+  ...CUSTOMER_DERIVED,
+  ...UNMAPPABLE_SOURCE_FIELDS,
+]);
+
+function populated(value: unknown): boolean {
+  return !(
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
 
 /** Stable refusal reason: customer has no country and does not meet the SEVAT/SEK/COMPANY rule. */
 export const CUSTOMER_COUNTRY_UNVERIFIED = 'CUSTOMER_COUNTRY_UNVERIFIED';
@@ -140,6 +228,31 @@ function matchesMappedValues(
   );
 }
 
+/** Optional target fields a customer request may set; when absent from the request they must be empty. */
+const OPTIONAL_CUSTOMER_KEYS: readonly string[] = [
+  'org_number',
+  'email',
+  'phone',
+  'address_line1',
+  'address_line2',
+  'postal_code',
+  'city',
+  'vat_number',
+  'invoice_email_cc_addresses',
+  'invoice_email_bcc_addresses',
+  'notes',
+  'contact_person',
+];
+
+function emptyTargetValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  );
+}
+
 function sameObject(left: unknown, right: unknown): boolean {
   return isDeepStrictEqual(left, right);
 }
@@ -152,8 +265,17 @@ abstract class AccountedCreateAdapter implements ShadowAdapter {
     protected readonly targetCompany: string,
     private readonly request: AccountedRequestCallback,
     private readonly resource: 'customers' | 'suppliers',
+    private readonly optionalKeys: readonly string[] = [],
   ) {
     this.resourcePath = `/api/v1/companies/${encodeURIComponent(targetCompany)}/${resource}`;
+  }
+
+  /** Mapped values equal, and optional fields not requested hold nothing. */
+  private matches(data: Record<string, unknown>, expected: Record<string, unknown>): boolean {
+    return (
+      matchesMappedValues(data, expected) &&
+      this.optionalKeys.every((key) => Object.hasOwn(expected, key) || emptyTargetValue(data[key]))
+    );
   }
 
   abstract prepare(record: ShadowRecord): { request: unknown } | { blocked: string };
@@ -199,7 +321,7 @@ abstract class AccountedCreateAdapter implements ShadowAdapter {
         cause: new Error(`Accounted ${this.resource} create returned HTTP ${created.status}.`),
       });
     }
-    if (!matchesMappedValues(createdData, expected)) {
+    if (!this.matches(createdData, expected)) {
       throw new TargetReceiptPendingError(createdData.id, pendingReceipt, {
         cause: new Error(
           `Accounted ${this.resource} create receipt does not match the requested mapping.`,
@@ -218,7 +340,7 @@ abstract class AccountedCreateAdapter implements ShadowAdapter {
       if (
         !readbackData ||
         readbackData.id !== createdData.id ||
-        !matchesMappedValues(readbackData, expected)
+        !this.matches(readbackData, expected)
       ) {
         throw new Error(
           `Accounted ${this.resource} readback does not match the requested mapping.`,
@@ -262,7 +384,7 @@ abstract class AccountedCreateAdapter implements ShadowAdapter {
     const receiptData = record.targetReceipt.data as Record<string, unknown>;
     if (
       receiptData.id !== record.targetId ||
-      !matchesMappedValues(receiptData, prepared.request as Record<string, unknown>)
+      !this.matches(receiptData, prepared.request as Record<string, unknown>)
     )
       return false;
 
@@ -275,13 +397,13 @@ abstract class AccountedCreateAdapter implements ShadowAdapter {
     if (
       !data ||
       data.id !== record.targetId ||
-      !matchesMappedValues(data, prepared.request as Record<string, unknown>)
+      !this.matches(data, prepared.request as Record<string, unknown>)
     )
       return false;
     return (
       receiptData.id === data.id &&
-      matchesMappedValues(data, prepared.request as Record<string, unknown>) &&
-      matchesMappedValues(receiptData, prepared.request as Record<string, unknown>)
+      this.matches(data, prepared.request as Record<string, unknown>) &&
+      this.matches(receiptData, prepared.request as Record<string, unknown>)
     );
   }
 }
@@ -289,7 +411,7 @@ abstract class AccountedCreateAdapter implements ShadowAdapter {
 /** Limited field mapping, not full customer parity. Unrequested defaults are not transferred. */
 export class AccountedShadowAdapter extends AccountedCreateAdapter {
   constructor(targetCompany: string, request: AccountedRequestCallback) {
-    super(targetCompany, request, 'customers');
+    super(targetCompany, request, 'customers', OPTIONAL_CUSTOMER_KEYS);
   }
 
   prepare(record: ShadowRecord): { request: unknown } | { blocked: string } {
@@ -339,9 +461,22 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
         };
     }
 
+    for (const [field, value] of Object.entries(source)) {
+      if (!CUSTOMER_CLASSIFIED.has(field) && populated(value)) {
+        return {
+          blocked: `${CUSTOMER_FIELD_UNCLASSIFIED}: populated source key ${field} is not classified.`,
+        };
+      }
+    }
+    if (source.Active === false) {
+      return {
+        blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source customer is inactive (Active=false).`,
+      };
+    }
     for (const field of UNMAPPABLE_SOURCE_FIELDS) {
       const value = source[field];
-      if (value !== undefined && value !== null && value !== '') {
+      const none = ZERO_NEUTRAL_FIELDS.has(field) && (value === 0 || value === false);
+      if (populated(value) && !none) {
         return {
           blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: populated source ${field} has no Accounted mapping.`,
         };
@@ -400,6 +535,19 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       return {
         blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: more than ${MAX_INVOICE_COPY_RECIPIENTS} invoice copy recipients.`,
       };
+    }
+    if (!emptyCountry(source.YourReference)) {
+      const reference = source.YourReference;
+      if (
+        typeof reference !== 'string' ||
+        reference.length > 200 ||
+        reference !== reference.trim()
+      ) {
+        return {
+          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source YourReference must be a string of at most 200 characters without surrounding whitespace (contact_person is trimmed).`,
+        };
+      }
+      body.contact_person = reference;
     }
     if (!emptyCountry(source.Comments)) {
       if (typeof source.Comments !== 'string') {

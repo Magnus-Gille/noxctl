@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ShadowRecord } from '../../src/shadow/types.js';
 import {
   AccountedShadowAdapter,
+  CUSTOMER_FIELD_UNCLASSIFIED,
   CUSTOMER_FIELD_UNSUPPORTED,
 } from '../../src/shadow/accounted-adapter.js';
 
@@ -92,6 +93,29 @@ describe('customer source-only fields', () => {
   });
 
   it.each([
+    'OurReference',
+    'GLN',
+    'GLNDelivery',
+    'VisitingAddress',
+    'VisitingCity',
+    'VisitingCountry',
+    'VisitingCountryCode',
+    'VisitingZipCode',
+    'DeliveryCountryCode',
+    'DeliveryFax',
+    'DeliveryPhone1',
+    'DeliveryPhone2',
+    'ExternalReference',
+    'InvoiceRemark',
+    'SalesAccount',
+    'InvoiceAdministrationFee',
+    'InvoiceDiscount',
+    'InvoiceFreight',
+    'ShowPriceVATIncluded',
+    'TermsOfDelivery',
+    'WayOfDelivery',
+    'CostCenter',
+    'Project',
     'DeliveryName',
     'DeliveryAddress1',
     'DeliveryAddress2',
@@ -238,5 +262,151 @@ describe('customer readback of array and notes fields', () => {
     [{ ...body, notes: 'X' }],
   ])('blocks a differing readback', async (stored) => {
     await expect(run(stored)).rejects.toThrow();
+  });
+});
+
+describe('customer allowlist', () => {
+  it('refuses a populated unclassified key (including 0/false) and ignores empty ones', () => {
+    for (const value of ['x', 0, false]) {
+      expect(prepare({ BrandNewKey: value })).toEqual({
+        blocked: expect.stringContaining(
+          `${CUSTOMER_FIELD_UNCLASSIFIED}: populated source key BrandNewKey`,
+        ),
+      });
+    }
+    expect(prepare({ BrandNewKey: '', Other: null, More: [] })).toHaveProperty('request');
+  });
+
+  it.each([
+    ['SalesAccount', 0],
+    ['InvoiceAdministrationFee', 0],
+    ['InvoiceDiscount', 0],
+    ['InvoiceFreight', 0],
+    ['ShowPriceVATIncluded', false],
+  ])('treats %s=%j as none', (field, value) => {
+    expect(prepare({ [field]: value })).toHaveProperty('request');
+    expect(prepare({ [field]: field === 'ShowPriceVATIncluded' ? true : 5 })).toEqual({
+      blocked: expect.stringContaining(CUSTOMER_FIELD_UNSUPPORTED),
+    });
+  });
+
+  it('keeps derived Fortnox keys neutral', () => {
+    expect(
+      prepare({
+        '@url': 'https://example.test/c',
+        DefaultDeliveryTypes: { Invoice: 'PRINT' },
+        DefaultTemplates: { Invoice: 'x' },
+        PriceList: 'A',
+        TermsOfPayment: '30',
+        Active: true,
+      }),
+    ).toHaveProperty('request');
+  });
+
+  it('refuses an inactive customer', () => {
+    expect(prepare({ Active: false })).toEqual({
+      blocked: expect.stringContaining('inactive'),
+    });
+  });
+
+  it('maps YourReference verbatim to contact_person', () => {
+    expect(prepare({ YourReference: 'Kim Kontakt' }).request).toMatchObject({
+      contact_person: 'Kim Kontakt',
+    });
+  });
+
+  it.each([' padded', 'padded ', 'x'.repeat(201), 5])(
+    'refuses YourReference %j that trim or length would change',
+    (value) => {
+      expect(prepare({ YourReference: value })).toEqual({
+        blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source YourReference`),
+      });
+    },
+  );
+
+  it('accepts a 200-character YourReference', () => {
+    expect(prepare({ YourReference: 'x'.repeat(200) })).toHaveProperty('request');
+  });
+});
+
+describe('customer readback of unrequested optional fields', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const minimal = {
+    name: 'Exempel AB',
+    customer_type: 'swedish_business',
+    country: 'SE',
+    customer_number: 'C-100',
+  };
+  function run(readback: Record<string, unknown>, mutation: Record<string, unknown> = {}) {
+    const adapter = new AccountedShadowAdapter('company-123', async (req) =>
+      req.method === 'POST'
+        ? { status: 201, json: { data: { id, ...minimal, ...mutation } } }
+        : { status: 200, json: { data: { id, ...minimal, ...readback } } },
+    );
+    const record = {
+      id: 'i',
+      version: 1,
+      operation: 'createCustomer',
+      args: [{ Name: 'Exempel AB' }],
+      sourceCompany: 's',
+      targetCompany: 'company-123',
+      requestHash: 'h',
+      state: 'pending',
+      createdAt: 1,
+      updatedAt: 1,
+      sourceResult: { ...base },
+    } as ShadowRecord;
+    return adapter.apply(record, minimal);
+  }
+
+  it('accepts null, empty and absent optional fields', async () => {
+    await expect(
+      run({ email: null, notes: '', invoice_email_cc_addresses: [], contact_person: null }),
+    ).resolves.toMatchObject({ targetId: id });
+  });
+
+  it.each([
+    ['email', 'x@example.test'],
+    ['phone', '08-1'],
+    ['address_line1', 'Gatan 1'],
+    ['org_number', '556000-0000'],
+    ['notes', 'unexpected'],
+    ['contact_person', 'Someone'],
+    ['invoice_email_cc_addresses', ['cc@example.test']],
+    ['invoice_email_bcc_addresses', ['bcc@example.test']],
+  ])('blocks an unexpected target %s on readback', async (key, value) => {
+    await expect(run({ [key]: value })).rejects.toThrow();
+  });
+
+  it('blocks an unexpected cc array in the create receipt', async () => {
+    await expect(run({}, { invoice_email_cc_addresses: ['cc@example.test'] })).rejects.toThrow();
+  });
+
+  it('verify() blocks an unexpected cc array appearing after creation', async () => {
+    let drift: Record<string, unknown> = {};
+    const adapter = new AccountedShadowAdapter('company-123', async (req) =>
+      req.method === 'POST'
+        ? { status: 201, json: { data: { id, ...minimal } } }
+        : { status: 200, json: { data: { id, ...minimal, ...drift } } },
+    );
+    const record = {
+      id: 'i',
+      version: 1,
+      operation: 'createCustomer',
+      args: [{ Name: 'Exempel AB' }],
+      sourceCompany: 's',
+      targetCompany: 'company-123',
+      requestHash: 'h',
+      state: 'applied',
+      createdAt: 1,
+      updatedAt: 1,
+      sourceResult: { ...base },
+      targetId: id,
+    } as ShadowRecord;
+    const applied = await adapter.apply(record, minimal);
+    const full = { ...record, targetReceipt: applied.receipt } as ShadowRecord;
+    await expect(adapter.verify(full)).resolves.toBe(true);
+    drift = { invoice_email_cc_addresses: ['cc@example.test'] };
+    await expect(adapter.verify(full)).resolves.toBe(false);
   });
 });

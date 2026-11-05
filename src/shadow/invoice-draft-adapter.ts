@@ -38,11 +38,23 @@ export function matchesInvoiceExpected(
   const invoice = data(value);
   if (!invoice || invoice.id !== targetId) return false;
   for (const [key, wanted] of Object.entries(expected)) {
-    if (key !== 'items' && key !== 'status' && key !== 'invoice_number' && invoice[key] !== wanted)
+    if (
+      key !== 'items' &&
+      key !== 'status' &&
+      key !== 'invoice_number' &&
+      key !== 'mirrored_customer' &&
+      invoice[key] !== wanted
+    )
       return false;
   }
   // Optional text fields are verified exactly; when not requested the target must hold none.
-  for (const key of ['our_reference', 'your_reference', 'notes', 'invoice_marking'] as const) {
+  for (const key of [
+    'our_reference',
+    'your_reference',
+    'notes',
+    'invoice_marking',
+    'delivery_date',
+  ] as const) {
     if (!Object.hasOwn(expected, key)) {
       const stored = invoice[key];
       if (stored !== undefined && stored !== null && stored !== '') return false;
@@ -70,6 +82,13 @@ export function matchesInvoiceExpected(
     invoice.customer.archived_at !== null
   )
     return false;
+  // Live target customer drift: the customer's current fields must still equal the mirrored ones.
+  if (expected.mirrored_customer) {
+    for (const [key, wanted] of Object.entries(expected.mirrored_customer)) {
+      const stored = invoice.customer[key];
+      if ((stored === undefined || stored === null ? '' : stored) !== wanted) return false;
+    }
+  }
   if (
     !Array.isArray(expected.items) ||
     expected.items.length === 0 ||

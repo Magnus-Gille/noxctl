@@ -2,7 +2,7 @@ import type { ShadowBinding, ShadowRecord } from './types.js';
 import type {
   ShadowIdentityResolution,
   ShadowResourceKind,
-  ShadowSourceAddress,
+  ShadowSourceCustomer,
 } from './identity.js';
 
 export interface InvoiceDraftItem {
@@ -42,6 +42,8 @@ export interface InvoiceDraftBody {
   notes?: string;
   /** Fortnox YourOrderNumber, verbatim (at most 200 characters); omitted when empty. */
   invoice_marking?: string;
+  /** Fortnox DeliveryDate (ISO date); omitted when empty. */
+  delivery_date?: string;
   items: Array<InvoiceDraftItem | InvoiceDraftTextItem>;
 }
 
@@ -56,7 +58,26 @@ export interface InvoiceDraftExpectedTextItem extends InvoiceDraftTextItem {
   vat_amount: 0;
 }
 
+/** Expected live target customer values (target keys); '' means the target must hold none. */
+export type MirroredCustomer = Record<
+  'name' | 'org_number' | 'phone' | 'address_line1' | 'address_line2' | 'postal_code' | 'city',
+  string
+>;
+
+function mirroredCustomerKeys(source: ShadowSourceCustomer): MirroredCustomer {
+  return {
+    name: source.Name,
+    org_number: source.OrganisationNumber,
+    phone: source.Phone1,
+    address_line1: source.Address1,
+    address_line2: source.Address2,
+    postal_code: source.ZipCode,
+    city: source.City,
+  };
+}
+
 export interface InvoiceDraftExpected extends Omit<InvoiceDraftBody, 'items'> {
+  mirrored_customer?: MirroredCustomer;
   status: 'draft';
   invoice_number: null;
   subtotal: number;
@@ -101,9 +122,11 @@ type ValidatedDraft = {
     your_reference?: string;
     notes?: string;
     invoice_marking?: string;
+    delivery_date?: string;
   };
   /** Populated invoice address that must equal the mirrored customer's address. */
-  address?: ShadowSourceAddress;
+  /** Populated customer-copied header values to compare with the mirrored customer. */
+  copies: Record<string, string>;
   rows: ValidatedRow[];
   netCents: number;
   vatCents: number;
@@ -259,22 +282,95 @@ export const INVOICE_REFUSAL = {
   addressMismatch: 'INVOICE_ADDRESS_MISMATCH',
   /** InvoiceReference / OrderReference / ContractReference links the invoice to another document. */
   linkedDocumentUnsupported: 'INVOICE_LINKED_DOCUMENT_UNSUPPORTED',
+  /** A populated header field with no Accounted mapping (references, period, labels, vouchers ...). */
+  fieldUnsupported: 'INVOICE_FIELD_UNSUPPORTED',
+  /** A populated source key that no allowlist group covers. */
+  fieldUnclassified: 'INVOICE_FIELD_UNCLASSIFIED',
   /** A mapped text header field (OurReference, YourReference, Remarks, YourOrderNumber) is not a string/null. */
   headerTextInvalid: 'INVOICE_HEADER_TEXT_INVALID',
 } as const;
 
 /**
- * Classification of Fortnox invoice header fields beyond the confirmed-source amounts:
+ * Allowlist classification of every Fortnox invoice header key (docs/shadow-evaluation.md).
+ * "Populated" means not undefined/null/''/[]; for the refused groups 0, '0' and false are
+ * neutral ("none"). A key outside every group that is populated is refused as unclassified.
+ *  - validated elsewhere against the confirmed amounts/settings (HEADER_VALIDATED);
  *  - mapped and verified on readback: OurReference -> our_reference, YourReference ->
- *    your_reference, Remarks -> notes, YourOrderNumber -> invoice_marking (max 200; verbatim;
- *    empty/null/absent -> omitted);
- *  - address (Address1, Address2, ZipCode, City): Accounted uses the customer's address, so a
- *    populated invoice address must equal the mirrored customer's address, else refused;
- *  - refused when non-empty: Comments, every Delivery* address field, and the
- *    InvoiceReference / OrderReference / ContractReference links (neutral: absent, null, '', 0, '0');
- *  - derived/neutral Fortnox defaults, not inspected: OCR, TermsOfPayment, PriceList, Language,
- *    EmailInformation, CustomerName, plus labels and delivery terms not listed above.
+ *    your_reference, Remarks -> notes, YourOrderNumber -> invoice_marking (max 200),
+ *    DeliveryDate -> delivery_date (ISO date); all verbatim, empty -> omitted, and the target
+ *    must hold none when not requested;
+ *  - copied from the customer (HEADER_CUSTOMER_COPIED): Address1/2, ZipCode, City,
+ *    OrganisationNumber, Phone1, Phone2 and CustomerName are neutral when empty and otherwise
+ *    must equal the mirrored customer's value, which is also verified live on readback;
+ *  - refused when populated: Comments, Delivery* address fields, document links, external
+ *    references, period, labels, flags, reminders, voucher and payment data (HEADER_REFUSED);
+ *  - derived/neutral Fortnox values (HEADER_DERIVED), not inspected.
  */
+const HEADER_VALIDATED = new Set([
+  'AccountingMethod',
+  'AdministrationFee',
+  'AdministrationFeeVAT',
+  'Balance',
+  'Booked',
+  'Cancelled',
+  'CostCenter',
+  'Country',
+  'Credit',
+  'Currency',
+  'CurrencyRate',
+  'CurrencyUnit',
+  'CustomerNumber',
+  'DocumentNumber',
+  'DueDate',
+  'Freight',
+  'FreightVAT',
+  'HouseWork',
+  'InvoiceDate',
+  'InvoiceRows',
+  'InvoiceType',
+  'Net',
+  'Project',
+  'RoundOff',
+  'Sent',
+  'TaxReduction',
+  'TaxReductionType',
+  'Total',
+  'TotalToPay',
+  'TotalVAT',
+  'VATIncluded',
+]);
+const HEADER_MAPPED = [
+  ['OurReference', 'our_reference'],
+  ['YourReference', 'your_reference'],
+  ['Remarks', 'notes'],
+  ['YourOrderNumber', 'invoice_marking'],
+  ['DeliveryDate', 'delivery_date'],
+] as const;
+const ADDRESS_FIELDS = ['Address1', 'Address2', 'ZipCode', 'City'] as const;
+const HEADER_CUSTOMER_COPIED = [
+  ...ADDRESS_FIELDS,
+  'OrganisationNumber',
+  'Phone1',
+  'Phone2',
+  'CustomerName',
+] as const;
+const HEADER_DERIVED = new Set([
+  '@url',
+  '@urlTaxReductionList',
+  'ContributionPercent',
+  'ContributionValue',
+  'Gross',
+  'EDIInformation',
+  'EmailInformation',
+  'FinalPayDate',
+  'OutboundDate',
+  'PrintTemplate',
+  'WarehouseReady',
+  'Language',
+  'PriceList',
+  'TermsOfPayment',
+  'OCR',
+]);
 const DELIVERY_FIELDS = [
   'DeliveryName',
   'DeliveryAddress1',
@@ -283,21 +379,95 @@ const DELIVERY_FIELDS = [
   'DeliveryCity',
   'DeliveryCountry',
 ] as const;
-const LINK_FIELDS = ['InvoiceReference', 'OrderReference', 'ContractReference'] as const;
-const ADDRESS_FIELDS = ['Address1', 'Address2', 'ZipCode', 'City'] as const;
+const LINK_FIELDS = [
+  'InvoiceReference',
+  'OrderReference',
+  'ContractReference',
+  'CreditInvoiceReference',
+  'OfferReference',
+  'TimeBasisReference',
+] as const;
+const OTHER_REFUSED_FIELDS = [
+  'ExternalInvoiceReference1',
+  'ExternalInvoiceReference2',
+  'InvoicePeriodStart',
+  'InvoicePeriodEnd',
+  'Labels',
+  'NoxFinans',
+  'EUQuarterlyReport',
+  'NotCompleted',
+  'Reminders',
+  'LastRemindDate',
+  'VoucherNumber',
+  'VoucherSeries',
+  'VoucherYear',
+  'PaymentWay',
+  'BasisTaxReduction',
+  'TermsOfDelivery',
+  'WayOfDelivery',
+] as const;
+const HEADER_CLASSIFIED = new Set<string>([
+  ...HEADER_VALIDATED,
+  ...HEADER_MAPPED.map(([field]) => field),
+  ...HEADER_CUSTOMER_COPIED,
+  ...HEADER_DERIVED,
+  'Comments',
+  ...DELIVERY_FIELDS,
+  ...LINK_FIELDS,
+  ...OTHER_REFUSED_FIELDS,
+]);
+
+/**
+ * Invoice row keys: validated against the input/confirmed amounts (Description, DeliveredQuantity,
+ * Price, VAT, Unit, AccountNumber, ArticleNumber, PriceExcludingVAT, TotalExcludingVAT, Total,
+ * Discount, HouseWork, CostCenter, Project) or derived/neutral Fortnox values (the rest). Any other
+ * populated row key is refused as INVOICE_FIELD_UNCLASSIFIED.
+ */
+const ROW_CLASSIFIED = new Set([
+  'Description',
+  'DeliveredQuantity',
+  'Price',
+  'VAT',
+  'Unit',
+  'AccountNumber',
+  'ArticleNumber',
+  'PriceExcludingVAT',
+  'TotalExcludingVAT',
+  'Total',
+  'Discount',
+  'HouseWork',
+  'CostCenter',
+  'Project',
+  '@url',
+  'ContributionPercent',
+  'ContributionValue',
+  'DiscountType',
+  'HouseWorkHoursToReport',
+  'HouseWorkType',
+  'RowId',
+  'StockPointCode',
+  'VATCode',
+  'OrderedQuantity',
+]);
 
 function emptyHeaderValue(value: unknown): boolean {
-  return value === undefined || value === null || value === '';
+  return (
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  );
 }
 
+/** Empty, or a "none" marker (0, '0', false) for flag/link/number fields. */
 function emptyLink(value: unknown): boolean {
-  return emptyHeaderValue(value) || value === 0 || value === '0';
+  return emptyHeaderValue(value) || value === 0 || value === '0' || value === false;
 }
 
 /** Header fields beyond the amounts; returns a refusal or the validated pieces. */
 function validateHeaderFields(
   source: Record<string, unknown>,
-): { blocked: string } | { texts: ValidatedDraft['texts']; address?: ShadowSourceAddress } {
+): { blocked: string } | { texts: ValidatedDraft['texts']; copies: Record<string, string> } {
   if (!emptyHeaderValue(source.Comments)) {
     return {
       blocked: `${INVOICE_REFUSAL.commentsUnsupported}: Comments has no Accounted mapping.`,
@@ -317,13 +487,22 @@ function validateHeaderFields(
       };
     }
   }
+  for (const field of OTHER_REFUSED_FIELDS) {
+    if (!emptyLink(source[field])) {
+      return {
+        blocked: `${INVOICE_REFUSAL.fieldUnsupported}: ${field} is populated and has no Accounted mapping.`,
+      };
+    }
+  }
+  for (const [field, value] of Object.entries(source)) {
+    if (!HEADER_CLASSIFIED.has(field) && !emptyHeaderValue(value)) {
+      return {
+        blocked: `${INVOICE_REFUSAL.fieldUnclassified}: populated source key ${field} is not classified.`,
+      };
+    }
+  }
   const texts: ValidatedDraft['texts'] = {};
-  for (const [field, key] of [
-    ['OurReference', 'our_reference'],
-    ['YourReference', 'your_reference'],
-    ['Remarks', 'notes'],
-    ['YourOrderNumber', 'invoice_marking'],
-  ] as const) {
+  for (const [field, key] of HEADER_MAPPED) {
     const value = source[field];
     if (emptyHeaderValue(value)) continue;
     if (typeof value !== 'string') {
@@ -334,18 +513,23 @@ function validateHeaderFields(
         blocked: `${INVOICE_REFUSAL.yourOrderNumberTooLong}: YourOrderNumber exceeds 200 characters.`,
       };
     }
+    if (key === 'delivery_date' && !isRealDate(value)) {
+      return {
+        blocked: `${INVOICE_REFUSAL.headerTextInvalid}: DeliveryDate must be a real ISO date.`,
+      };
+    }
     texts[key] = value;
   }
-  if (ADDRESS_FIELDS.every((field) => emptyHeaderValue(source[field]))) return { texts };
-  const address = {} as Record<string, string>;
-  for (const field of ADDRESS_FIELDS) {
+  const copies: Record<string, string> = {};
+  for (const field of HEADER_CUSTOMER_COPIED) {
     const value = source[field];
-    if (!emptyHeaderValue(value) && typeof value !== 'string') {
+    if (emptyHeaderValue(value)) continue;
+    if (typeof value !== 'string') {
       return { blocked: `${INVOICE_REFUSAL.addressMismatch}: ${field} must be a string.` };
     }
-    address[field] = typeof value === 'string' ? value : '';
+    copies[field] = value;
   }
-  return { texts, address: address as unknown as ShadowSourceAddress };
+  return { texts, copies };
 }
 
 /** Stable refusal-reason prefix for invoice-row units. */
@@ -687,6 +871,13 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     } = validated;
     const sourceRow = source.InvoiceRows[index];
     if (!isPlainObject(sourceRow)) return { blocked: 'Confirmed source invoice row is malformed.' };
+    for (const [field, value] of Object.entries(sourceRow)) {
+      if (!ROW_CLASSIFIED.has(field) && !emptyHeaderValue(value)) {
+        return {
+          blocked: `${INVOICE_REFUSAL.fieldUnclassified}: populated source row key ${field} is not classified.`,
+        };
+      }
+    }
     if (validated.kind === 'text') {
       if (
         sourceRow.Description !== description ||
@@ -768,7 +959,7 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     dueDate: input.DueDate,
     sourceInvoiceId,
     texts: header.texts,
-    ...(header.address ? { address: header.address } : {}),
+    copies: header.copies,
     rows,
     netCents,
     vatCents,
@@ -861,17 +1052,19 @@ export function mapInvoiceDraft(
   if (!isMatchingCustomerIdentity(customer, binding, validated.customerNumber)) {
     return { blocked: 'Confirmed customer identity is missing, unresolved, or conflicting.' };
   }
-  if (validated.address) {
-    const mirrored = customer.sourceAddress;
-    if (
-      !isPlainObject(mirrored) ||
-      ADDRESS_FIELDS.some((f) => mirrored[f] !== validated.address![f])
-    ) {
-      return {
-        blocked: `${INVOICE_REFUSAL.addressMismatch}: Invoice address differs from the mirrored customer's address (Accounted uses the customer address).`,
-      };
+  const mirrored = customer.sourceCustomer;
+  const copied = Object.entries(validated.copies);
+  if (copied.length > 0) {
+    const evidence: Record<string, unknown> = isPlainObject(mirrored) ? mirrored : {};
+    for (const [field, value] of copied) {
+      if (evidence[field === 'CustomerName' ? 'Name' : field] !== value) {
+        return {
+          blocked: `${INVOICE_REFUSAL.addressMismatch}: Invoice ${field} differs from the mirrored customer's value (Accounted uses the customer record).`,
+        };
+      }
     }
   }
+  const mirroredCustomer = isPlainObject(mirrored) ? mirroredCustomerKeys(mirrored) : undefined;
 
   const subtotal = validated.netCents / 100;
   const vatAmount = validated.vatCents / 100;
@@ -925,6 +1118,7 @@ export function mapInvoiceDraft(
     payment_link_auto: false,
     ore_rounding: false,
     ...validated.texts,
+    ...(mirroredCustomer ? { mirrored_customer: mirroredCustomer } : {}),
     status: 'draft',
     invoice_number: null,
     subtotal,

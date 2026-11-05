@@ -73,7 +73,18 @@ describe('resolveShadowIdentity', () => {
       sourceCompany: binding.sourceCompany,
       targetCompany: binding.targetCompany,
       ...(fixture.kind === 'customer'
-        ? { sourceAddress: { Address1: '', Address2: '', ZipCode: '', City: '' } }
+        ? {
+            sourceCustomer: {
+              Name: '',
+              OrganisationNumber: '',
+              Phone1: '',
+              Phone2: '',
+              Address1: '',
+              Address2: '',
+              ZipCode: '',
+              City: '',
+            },
+          }
         : {}),
     });
   });
@@ -349,13 +360,24 @@ describe('customer source address evidence', () => {
     });
     record.sourceResult = {
       CustomerNumber: 'C-ADDR',
+      Name: 'Exempel AB',
+      OrganisationNumber: '556000-0000',
       Address1: 'Testgatan 1',
       ZipCode: '11122',
       City: 'Teststad',
     };
     expect(resolveShadowIdentity([record], binding, 'customer', 'C-ADDR')).toMatchObject({
       state: 'ready',
-      sourceAddress: { Address1: 'Testgatan 1', Address2: '', ZipCode: '11122', City: 'Teststad' },
+      sourceCustomer: {
+        Name: 'Exempel AB',
+        OrganisationNumber: '556000-0000',
+        Phone1: '',
+        Phone2: '',
+        Address1: 'Testgatan 1',
+        Address2: '',
+        ZipCode: '11122',
+        City: 'Teststad',
+      },
     });
   });
 });

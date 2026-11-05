@@ -94,7 +94,7 @@ const ADDRESS = {
   City: 'Teststad',
 };
 
-function lookupFor(sourceAddress?: Obj) {
+function lookupFor(sourceCustomer?: Obj) {
   return (kind: ShadowResourceKind): ShadowIdentityResolution => ({
     state: 'ready',
     resource: kind,
@@ -103,12 +103,12 @@ function lookupFor(sourceAddress?: Obj) {
     intentId: 'customer-intent',
     requestHash: 'customer-hash',
     ...binding,
-    ...(sourceAddress ? { sourceAddress: sourceAddress as never } : {}),
+    ...(sourceCustomer ? { sourceCustomer: sourceCustomer as never } : {}),
   });
 }
 
-function map(headerPatch: Obj = {}, sourceAddress?: Obj) {
-  return mapInvoiceDraft(record(headerPatch), binding, lookupFor(sourceAddress));
+function map(headerPatch: Obj = {}, sourceCustomer?: Obj) {
+  return mapInvoiceDraft(record(headerPatch), binding, lookupFor(sourceCustomer));
 }
 
 describe('invoice text header fields', () => {
@@ -200,7 +200,6 @@ describe('unsupported invoice header fields', () => {
       PriceList: 'A',
       Language: 'SV',
       EmailInformation: { EmailAddressFrom: '', EmailAddressTo: '' },
-      CustomerName: 'Synthetic AB',
     });
     expect('blocked' in result).toBe(false);
   });
@@ -291,8 +290,8 @@ function nativeDraft(extra: Obj = {}) {
   };
 }
 
-function expectedFor(headerPatch: Obj) {
-  const result = map(headerPatch);
+function expectedFor(headerPatch: Obj, sourceCustomer?: Obj) {
+  const result = map(headerPatch, sourceCustomer);
   if ('blocked' in result) throw new Error(result.blocked);
   return result.expected;
 }
@@ -303,19 +302,21 @@ describe('draft readback of text header fields', () => {
     YourReference: 'Erik',
     Remarks: 'Note',
     YourOrderNumber: 'PO-1',
+    DeliveryDate: '2026-01-10',
   };
   const stored = {
     our_reference: 'Anna',
     your_reference: 'Erik',
     notes: 'Note',
     invoice_marking: 'PO-1',
+    delivery_date: '2026-01-10',
   };
 
   it('accepts a draft that stores the mapped values', () => {
     expect(matchesDraft({ data: nativeDraft(stored) }, invoiceId, expectedFor(patch))).toBe(true);
   });
 
-  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking'])(
+  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking', 'delivery_date'])(
     'blocks a mismatching %s',
     (key) => {
       expect(
@@ -328,7 +329,7 @@ describe('draft readback of text header fields', () => {
     },
   );
 
-  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking'])(
+  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking', 'delivery_date'])(
     'blocks a missing %s',
     (key) => {
       const partial: Obj = { ...stored };
@@ -339,7 +340,7 @@ describe('draft readback of text header fields', () => {
     },
   );
 
-  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking'])(
+  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking', 'delivery_date'])(
     'blocks a stored %s when none was requested',
     (key) => {
       expect(
@@ -349,7 +350,190 @@ describe('draft readback of text header fields', () => {
   );
 
   it('accepts null or empty stored values when none was requested', () => {
-    const empty = { our_reference: null, your_reference: '', notes: null, invoice_marking: '' };
+    const empty = {
+      our_reference: null,
+      your_reference: '',
+      notes: null,
+      invoice_marking: '',
+      delivery_date: null,
+    };
     expect(matchesDraft({ data: nativeDraft(empty) }, invoiceId, expectedFor({}))).toBe(true);
+  });
+});
+
+describe('invoice header allowlist', () => {
+  it('refuses a populated unclassified header key and ignores an empty one', () => {
+    expect(map({ SomeNewFortnoxKey: 'x' })).toEqual({
+      blocked: expect.stringContaining(
+        `${INVOICE_REFUSAL.fieldUnclassified}: populated source key SomeNewFortnoxKey`,
+      ),
+    });
+    expect(map({ SomeNewFortnoxKey: 0 })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.fieldUnclassified),
+    });
+    expect('blocked' in map({ SomeNewFortnoxKey: '', Other: null, More: [] })).toBe(false);
+  });
+
+  it('refuses a populated unclassified row key', () => {
+    const base = record();
+    const source = base.sourceResult as Obj;
+    const rows = source.InvoiceRows as Obj[];
+    const patched = {
+      ...base,
+      sourceResult: { ...source, InvoiceRows: [{ ...rows[0], Surprise: 'x' }] },
+    };
+    expect(mapInvoiceDraft(patched, binding, lookupFor())).toEqual({
+      blocked: expect.stringContaining(
+        `${INVOICE_REFUSAL.fieldUnclassified}: populated source row key Surprise`,
+      ),
+    });
+  });
+
+  it.each([
+    'CreditInvoiceReference',
+    'OfferReference',
+    'TimeBasisReference',
+    'ExternalInvoiceReference1',
+    'ExternalInvoiceReference2',
+    'InvoicePeriodStart',
+    'InvoicePeriodEnd',
+    'Labels',
+    'NoxFinans',
+    'EUQuarterlyReport',
+    'NotCompleted',
+    'Reminders',
+    'LastRemindDate',
+    'VoucherNumber',
+    'VoucherSeries',
+    'VoucherYear',
+    'PaymentWay',
+    'BasisTaxReduction',
+    'TermsOfDelivery',
+    'WayOfDelivery',
+  ])('refuses populated %s and treats none markers as neutral', (field) => {
+    const populatedValue =
+      field === 'Labels'
+        ? [{ Id: 1 }]
+        : field.startsWith('No') || field.startsWith('EU') || field === 'NotCompleted'
+          ? true
+          : 'x';
+    expect(map({ [field]: populatedValue })).toEqual({
+      blocked: expect.stringContaining(
+        field.endsWith('Reference') && !field.startsWith('External')
+          ? INVOICE_REFUSAL.linkedDocumentUnsupported
+          : INVOICE_REFUSAL.fieldUnsupported,
+      ),
+    });
+    for (const none of ['', null, 0, '0', false, []]) {
+      expect('blocked' in map({ [field]: none })).toBe(false);
+    }
+  });
+
+  it('keeps explicitly derived Fortnox values neutral', () => {
+    const result = map({
+      '@url': 'https://example.test/x',
+      ContributionPercent: 12,
+      ContributionValue: 3,
+      Gross: 125,
+      EDIInformation: { EDIGlobalLocationNumber: '' },
+      FinalPayDate: '',
+      OutboundDate: '2026-01-02',
+      PrintTemplate: 'standard',
+      WarehouseReady: false,
+    });
+    expect('blocked' in result).toBe(false);
+  });
+
+  it('maps DeliveryDate to delivery_date and refuses a non-date', () => {
+    const result = map({ DeliveryDate: '2026-01-10' });
+    if ('blocked' in result) throw new Error(result.blocked);
+    expect(result.request).toMatchObject({ delivery_date: '2026-01-10' });
+    expect(result.expected).toMatchObject({ delivery_date: '2026-01-10' });
+    expect(map({ DeliveryDate: '2026-02-30' })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.headerTextInvalid),
+    });
+    const empty = map({ DeliveryDate: '' });
+    if ('blocked' in empty) throw new Error(empty.blocked);
+    expect(empty.request).not.toHaveProperty('delivery_date');
+  });
+});
+
+describe('invoice copies of customer data', () => {
+  const customer = {
+    Name: 'Synthetic AB',
+    OrganisationNumber: '556000-0000',
+    Phone1: '08-1',
+    Phone2: '',
+  };
+
+  it('accepts OrganisationNumber, Phone1, Phone2 and CustomerName equal to the customer', () => {
+    const copy = {
+      OrganisationNumber: '556000-0000',
+      Phone1: '08-1',
+      Phone2: '',
+      CustomerName: 'Synthetic AB',
+    };
+    expect('blocked' in map(copy, customer)).toBe(false);
+  });
+
+  it.each([
+    ['OrganisationNumber', '556999-9999'],
+    ['Phone1', '08-2'],
+    ['Phone2', '08-3'],
+    ['CustomerName', 'Other AB'],
+  ])('refuses %s differing from the customer', (field, value) => {
+    expect(map({ [field]: value }, customer)).toEqual({
+      blocked: expect.stringContaining(`${INVOICE_REFUSAL.addressMismatch}: Invoice ${field}`),
+    });
+  });
+
+  it('refuses a populated copy without customer evidence', () => {
+    expect(map({ CustomerName: 'Synthetic AB' })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.addressMismatch),
+    });
+  });
+});
+
+describe('live target customer drift on invoice readback', () => {
+  const mirrored = {
+    ...ADDRESS,
+    Name: 'Synthetic AB',
+    OrganisationNumber: '556000-0000',
+    Phone1: '08-1',
+    Phone2: '',
+  };
+  const live = {
+    name: 'Synthetic AB',
+    org_number: '556000-0000',
+    phone: '08-1',
+    address_line1: 'Testgatan 1',
+    address_line2: 'c/o Test',
+    postal_code: '11122',
+    city: 'Teststad',
+  };
+  const customerWith = (patch: Obj) => {
+    const base = nativeDraft();
+    return { data: { ...base, customer: { ...base.customer, ...live, ...patch } } };
+  };
+
+  it('carries the mirrored customer into the expectation', () => {
+    expect(expectedFor({}, mirrored)).toMatchObject({ mirrored_customer: live });
+    expect(expectedFor({})).not.toHaveProperty('mirrored_customer');
+  });
+
+  it('accepts a target customer that still matches', () => {
+    expect(matchesDraft(customerWith({}), invoiceId, expectedFor({}, mirrored))).toBe(true);
+  });
+
+  it.each(Object.keys(live))('blocks drift of target customer %s', (key) => {
+    expect(
+      matchesDraft(customerWith({ [key]: 'drifted' }), invoiceId, expectedFor({}, mirrored)),
+    ).toBe(false);
+  });
+
+  it('blocks a target customer whose address was cleared', () => {
+    expect(
+      matchesDraft(customerWith({ address_line1: null }), invoiceId, expectedFor({}, mirrored)),
+    ).toBe(false);
   });
 });

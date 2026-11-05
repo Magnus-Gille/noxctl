@@ -17,13 +17,17 @@ export type ShadowIdentityResolution =
       sourceCompany: string;
       targetCompany: string;
       /**
-       * Customer resources only: the confirmed source customer's address fields (empty string when
-       * absent), so an invoice header address can be checked against the mirrored customer.
+       * Customer resources only: the confirmed source customer's evidence fields (empty string when
+       * absent), so invoice header copies can be checked against the mirrored customer.
        */
-      sourceAddress?: ShadowSourceAddress;
+      sourceCustomer?: ShadowSourceCustomer;
     };
 
-export interface ShadowSourceAddress {
+export interface ShadowSourceCustomer {
+  Name: string;
+  OrganisationNumber: string;
+  Phone1: string;
+  Phone2: string;
   Address1: string;
   Address2: string;
   ZipCode: string;
@@ -208,7 +212,7 @@ export function resolveShadowIdentity(
     requestHash: record.requestHash,
     sourceCompany: binding.sourceCompany,
     targetCompany: binding.targetCompany,
-    ...(kind === 'customer' ? { sourceAddress: sourceAddress(record) } : {}),
+    ...(kind === 'customer' ? { sourceCustomer: sourceCustomer(record) } : {}),
   };
 }
 
@@ -217,9 +221,13 @@ function addressText(value: unknown): string {
   return typeof value === 'string' ? value : `\u0000${typeof value}`;
 }
 
-function sourceAddress(record: ShadowRecord): ShadowSourceAddress {
+function sourceCustomer(record: ShadowRecord): ShadowSourceCustomer {
   const source = isPlainObject(record.sourceResult) ? record.sourceResult : {};
   return {
+    Name: addressText(source.Name),
+    OrganisationNumber: addressText(source.OrganisationNumber),
+    Phone1: addressText(source.Phone1),
+    Phone2: addressText(source.Phone2),
     Address1: addressText(source.Address1),
     Address2: addressText(source.Address2),
     ZipCode: addressText(source.ZipCode),
