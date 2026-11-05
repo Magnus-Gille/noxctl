@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface ArticleResponse {
   Article: Record<string, unknown>;
@@ -41,7 +42,7 @@ export function createArticleOperations(transport: FortnoxTransport) {
 
   async function getArticle(articleNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<ArticleResponse>(
-      `articles/${encodeURIComponent(articleNumber)}`,
+      `articles/${pathSegment('article number', articleNumber)}`,
     );
     return data.Article;
   }
@@ -60,7 +61,7 @@ export function createArticleOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { ArticleNumber: _, ...body } = fields;
     const data = await transport.request<ArticleResponse>(
-      `articles/${encodeURIComponent(articleNumber)}`,
+      `articles/${pathSegment('article number', articleNumber)}`,
       {
         method: 'PUT',
         body: { Article: body },
@@ -70,7 +71,7 @@ export function createArticleOperations(transport: FortnoxTransport) {
   }
 
   async function deleteArticle(articleNumber: string): Promise<void> {
-    await transport.request(`articles/${encodeURIComponent(articleNumber)}`, {
+    await transport.request(`articles/${pathSegment('article number', articleNumber)}`, {
       method: 'DELETE',
     });
   }

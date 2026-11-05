@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface EmployeeResponse {
   Employee: Record<string, unknown>;
@@ -35,7 +36,7 @@ export function createEmployeeOperations(transport: FortnoxTransport) {
 
   async function getEmployee(employeeId: string): Promise<Record<string, unknown>> {
     const data = await transport.request<EmployeeResponse>(
-      `employees/${encodeURIComponent(employeeId)}`,
+      `employees/${pathSegment('employee id', employeeId)}`,
     );
     return data.Employee;
   }
@@ -55,7 +56,7 @@ export function createEmployeeOperations(transport: FortnoxTransport) {
     // EmployeeId is the path key — never send it in the PUT body.
     const { EmployeeId: _, ...body } = fields;
     const data = await transport.request<EmployeeResponse>(
-      `employees/${encodeURIComponent(employeeId)}`,
+      `employees/${pathSegment('employee id', employeeId)}`,
       {
         method: 'PUT',
         body: { Employee: body },

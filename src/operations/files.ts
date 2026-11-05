@@ -1,6 +1,7 @@
 import { basename, extname } from 'node:path';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -52,7 +53,7 @@ export function createFileOperations(transport: FortnoxTransport) {
 
   async function getArchiveEntry(id: string, params: { path?: string; fileId?: string } = {}) {
     const { buffer, contentType } = await transport.requestFile(
-      `archive/${encodeURIComponent(id)}`,
+      `archive/${pathSegment('archive entry id', id)}`,
       {
         params: { path: params.path, fileid: params.fileId },
       },
@@ -76,7 +77,7 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function deleteArchiveEntry(id: string, path?: string): Promise<void> {
-    await transport.request(`archive/${encodeURIComponent(id)}`, {
+    await transport.request(`archive/${pathSegment('archive entry id', id)}`, {
       method: 'DELETE',
       params: { path },
     });
@@ -95,12 +96,8 @@ export function createFileOperations(transport: FortnoxTransport) {
       return transport.request<Record<string, unknown>>('inbox');
     }
     const folderId = params.folderId.trim();
-    if (!folderId) throw new Error('folderId must not be empty');
-    // encodeURIComponent leaves dots alone, and URL parsing then collapses
-    // `inbox/.` to the root and `inbox/..` to the API root.
-    if (folderId === '.' || folderId === '..') {
-      throw new Error(`folderId must be an inbox folder Id, not "${folderId}"`);
-    }
+    // Rejects an empty id, `.` and `..`, which would list the inbox root or the API root.
+    const folderSegment = pathSegment('folderId', folderId);
 
     const notAFolder = (cause?: unknown) =>
       new Error(
@@ -112,9 +109,7 @@ export function createFileOperations(transport: FortnoxTransport) {
 
     let raw: Record<string, unknown>;
     try {
-      raw = await transport.request<Record<string, unknown>>(
-        `inbox/${encodeURIComponent(folderId)}`,
-      );
+      raw = await transport.request<Record<string, unknown>>(`inbox/${folderSegment}`);
     } catch (error) {
       // A file Id answers with file bytes, which the JSON transport cannot parse.
       if (error instanceof SyntaxError) throw notAFolder(error);
@@ -142,12 +137,14 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function getInboxFile(id: string) {
-    const { buffer, contentType } = await transport.requestFile(`inbox/${encodeURIComponent(id)}`);
+    const { buffer, contentType } = await transport.requestFile(
+      `inbox/${pathSegment('inbox entry id', id)}`,
+    );
     return { id, buffer, contentType };
   }
 
   async function deleteInboxEntry(id: string): Promise<void> {
-    await transport.request(`inbox/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await transport.request(`inbox/${pathSegment('inbox entry id', id)}`, { method: 'DELETE' });
   }
 
   return {

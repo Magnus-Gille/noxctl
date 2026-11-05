@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 // --- Price Lists ---
 
@@ -37,7 +38,7 @@ export function createPriceListOperations(transport: FortnoxTransport) {
 
   async function getPriceList(code: string): Promise<Record<string, unknown>> {
     const data = await transport.request<PriceListResponse>(
-      `pricelists/${encodeURIComponent(code)}`,
+      `pricelists/${pathSegment('price list code', code)}`,
     );
     return data.PriceList;
   }
@@ -58,7 +59,7 @@ export function createPriceListOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { Code: _, ...body } = fields;
     const data = await transport.request<PriceListResponse>(
-      `pricelists/${encodeURIComponent(code)}`,
+      `pricelists/${pathSegment('price list code', code)}`,
       {
         method: 'PUT',
         body: { PriceList: body },
@@ -96,8 +97,8 @@ export function createPriceOperations(transport: FortnoxTransport) {
     const endpoint = !params.priceListCode
       ? 'prices'
       : params.articleNumber
-        ? `prices/sublist/${encodeURIComponent(params.priceListCode)}/${encodeURIComponent(params.articleNumber)}`
-        : `prices/sublist/${encodeURIComponent(params.priceListCode)}`;
+        ? `prices/sublist/${pathSegment('price list code', params.priceListCode)}/${pathSegment('article number', params.articleNumber)}`
+        : `prices/sublist/${pathSegment('price list code', params.priceListCode)}`;
 
     return transport.request<PricesResponse>(endpoint, {
       params: { page: params.page || 1, limit: params.limit || 100 },
@@ -111,7 +112,7 @@ export function createPriceOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const quantitySegment = fromQuantity === undefined ? '' : `/${fromQuantity}`;
     const data = await transport.request<PriceResponse>(
-      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}${quantitySegment}`,
+      `prices/${pathSegment('price list code', priceListCode)}/${pathSegment('article number', articleNumber)}${quantitySegment}`,
     );
     return data.Price;
   }
@@ -124,7 +125,7 @@ export function createPriceOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const quantitySegment = fromQuantity === undefined ? '' : `/${fromQuantity}`;
     const data = await transport.request<PriceResponse>(
-      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}${quantitySegment}`,
+      `prices/${pathSegment('price list code', priceListCode)}/${pathSegment('article number', articleNumber)}${quantitySegment}`,
       {
         method: 'PUT',
         body: { Price: fields },
@@ -147,7 +148,7 @@ export function createPriceOperations(transport: FortnoxTransport) {
     fromQuantity: number,
   ): Promise<void> {
     await transport.request(
-      `prices/${encodeURIComponent(priceListCode)}/${encodeURIComponent(articleNumber)}/${fromQuantity}`,
+      `prices/${pathSegment('price list code', priceListCode)}/${pathSegment('article number', articleNumber)}/${fromQuantity}`,
       { method: 'DELETE' },
     );
   }

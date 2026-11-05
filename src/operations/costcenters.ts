@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface CostCenterResponse {
   CostCenter: Record<string, unknown>;
@@ -35,7 +36,7 @@ export function createCostCenterOperations(transport: FortnoxTransport) {
 
   async function getCostCenter(code: string): Promise<Record<string, unknown>> {
     const data = await transport.request<CostCenterResponse>(
-      `costcenters/${encodeURIComponent(code)}`,
+      `costcenters/${pathSegment('cost center code', code)}`,
     );
     return data.CostCenter;
   }
@@ -56,7 +57,7 @@ export function createCostCenterOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { Code: _, ...body } = fields;
     const data = await transport.request<CostCenterResponse>(
-      `costcenters/${encodeURIComponent(code)}`,
+      `costcenters/${pathSegment('cost center code', code)}`,
       {
         method: 'PUT',
         body: { CostCenter: body },
@@ -66,7 +67,7 @@ export function createCostCenterOperations(transport: FortnoxTransport) {
   }
 
   async function deleteCostCenter(code: string): Promise<void> {
-    await transport.request(`costcenters/${encodeURIComponent(code)}`, {
+    await transport.request(`costcenters/${pathSegment('cost center code', code)}`, {
       method: 'DELETE',
     });
   }

@@ -347,6 +347,27 @@ async function sendRequest(
   return response;
 }
 
+// WHATWG URL parsing collapses `.` and `..` path segments and reads `%2e` (any
+// case) as a dot, so `inbox/.` would become `/3/inbox/` and `inbox/..` the API
+// root: a request for a different resource than the caller named. Ids are
+// percent-encoded before they get here, which turns a `/` inside an id into
+// `%2F`, so a legitimate segment is never made of dots alone.
+const DOT_SEGMENT = /^(?:\.|%2e){1,2}$/i;
+
+function assertNoDotSegments(endpoint: string): void {
+  // Normalise the way WHATWG URL parsing does before it collapses dot segments:
+  // tabs and newlines are removed, and for https a backslash is a separator.
+  const stripped = endpoint.replace(/[\t\n\r]/g, '');
+  const path = (stripped.split(/[?#]/, 1)[0] ?? '').replace(/\\/g, '/');
+  const segment = path.split('/').find((part) => DOT_SEGMENT.test(part));
+  if (segment !== undefined) {
+    throw new Error(
+      `Refusing to request "${endpoint}": the dot segment "${segment}" would be collapsed by ` +
+        'URL parsing and address a different resource. Ids must be encoded with pathSegment().',
+    );
+  }
+}
+
 // Shared retry/timeout envelope; `readBody` turns a successful Response into T.
 async function request<T>(
   runtime: ClientRuntime,
@@ -354,6 +375,7 @@ async function request<T>(
   options: RequestOptions,
   readBody: (response: Response) => Promise<T>,
 ): Promise<T> {
+  assertNoDotSegments(endpoint);
   const method = (options.method || 'GET').toUpperCase();
   const isMutation =
     options.mutation ?? !(method === 'GET' || method === 'HEAD' || method === 'OPTIONS');

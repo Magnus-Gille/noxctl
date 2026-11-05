@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
-import { documentSegment } from '../identifiers.js';
+import { documentSegment, pathSegment } from '../identifiers.js';
 import { createCustomerOperations } from './customers.js';
 import { assessEinvoiceDraft } from '../einvoice-preflight.js';
 
@@ -370,14 +370,14 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     fields: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     return transport.request<Record<string, unknown>>(
-      `/api/fileattachments/attachments-v1/${encodeURIComponent(attachmentId)}`,
+      `/api/fileattachments/attachments-v1/${pathSegment('attachment id', attachmentId)}`,
       { method: 'PUT', body: fields },
     );
   }
 
   async function detachDocumentAttachment(attachmentId: string): Promise<void> {
     await transport.request(
-      `/api/fileattachments/attachments-v1/${encodeURIComponent(attachmentId)}`,
+      `/api/fileattachments/attachments-v1/${pathSegment('attachment id', attachmentId)}`,
       { method: 'DELETE' },
     );
   }

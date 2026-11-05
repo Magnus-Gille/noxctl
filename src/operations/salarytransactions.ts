@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface SalaryTransactionResponse {
   SalaryTransaction: Record<string, unknown>;
@@ -44,7 +45,7 @@ export function createSalaryTransactionOperations(transport: FortnoxTransport) {
 
   async function getSalaryTransaction(salaryRow: string): Promise<Record<string, unknown>> {
     const data = await transport.request<SalaryTransactionResponse>(
-      `salarytransactions/${encodeURIComponent(String(salaryRow))}`,
+      `salarytransactions/${pathSegment('salary row', String(salaryRow))}`,
     );
     return data.SalaryTransaction;
   }
@@ -60,7 +61,7 @@ export function createSalaryTransactionOperations(transport: FortnoxTransport) {
   }
 
   async function deleteSalaryTransaction(salaryRow: string): Promise<void> {
-    await transport.request(`salarytransactions/${encodeURIComponent(String(salaryRow))}`, {
+    await transport.request(`salarytransactions/${pathSegment('salary row', String(salaryRow))}`, {
       method: 'DELETE',
     });
   }
@@ -70,7 +71,7 @@ export function createSalaryTransactionOperations(transport: FortnoxTransport) {
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<SalaryTransactionResponse>(
-      `salarytransactions/${encodeURIComponent(String(salaryRow))}`,
+      `salarytransactions/${pathSegment('salary row', String(salaryRow))}`,
       { method: 'PUT', body: { SalaryTransaction: params } },
     );
     return data.SalaryTransaction;
