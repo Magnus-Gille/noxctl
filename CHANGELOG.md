@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-05
+
 ### Added
 
 - **List the files in an inbox folder.** `noxctl inbox list --folder-id <id>` and
@@ -412,6 +414,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.13.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.9.0...v0.10.0
