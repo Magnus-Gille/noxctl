@@ -648,6 +648,10 @@ export async function openShadowQueue(
 ): Promise<ShadowQueue> {
   identity(binding.sourceCompany);
   identity(binding.targetCompany);
+  if (process.platform === 'win32')
+    throw new Error(
+      'Shadow queue is supported on macOS and Linux only (needs POSIX private directories)',
+    );
   const root = resolve(directory);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const stat = lstatSync(root);

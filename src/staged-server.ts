@@ -123,6 +123,10 @@ export async function createStagedServer(
     return value;
   }
   now();
+  if (process.platform === 'win32')
+    throw new StagedHostError(
+      'Staged server is supported on macOS and Linux only (needs POSIX private directories)',
+    );
   const root = resolve(options.directory);
   mkdirSync(root, { recursive: true, mode: 0o700 });
   const stat = lstatSync(root);
