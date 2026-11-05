@@ -227,6 +227,12 @@ export const ROW_REFUSAL = {
   textRowInvalid: 'ROW_TEXT_INVALID',
 } as const;
 
+/** Stable refusal-reason prefixes for invoice-level fields that are not mapped. */
+export const INVOICE_REFUSAL = {
+  /** Fortnox RoundOff is nonzero; Accounted's ore_rounding is display-only and stores no amount. */
+  roundoffUnsupported: 'ROUNDOFF_UNSUPPORTED',
+} as const;
+
 /** Stable refusal-reason prefix for invoice-row units. */
 export const UNIT_REFUSAL = {
   invalid: 'UNIT_INVALID',
@@ -476,7 +482,12 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
   if (source.InvoiceType !== 'INVOICE') {
     return { blocked: 'Only confirmed standard invoices are supported.' };
   }
-  if (source.Country !== 'Sverige') {
+  // Fortnox leaves the invoice Country empty for domestic customers whose customer record has no
+  // country. The invoice copies no address, and the customer identity lookup below resolves only
+  // for a customer the customer mapper confirmed as CountryCode SE (the readback also requires a
+  // Swedish business customer). Together with SEK and 25 percent domestic VAT, '' is accepted;
+  // any other country is still refused.
+  if (source.Country !== 'Sverige' && source.Country !== '') {
     return { blocked: 'Only confirmed source country Sverige is supported.' };
   }
   if (source.Booked !== false || source.Sent !== false || source.Cancelled !== false) {
@@ -488,12 +499,16 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
   if (source.VATIncluded !== false || source.CurrencyRate !== 1 || source.CurrencyUnit !== 1) {
     return { blocked: 'Source invoice currency and VAT settings are unsupported.' };
   }
+  if (source.RoundOff !== 0) {
+    return {
+      blocked: `${INVOICE_REFUSAL.roundoffUnsupported}: Accounted ore_rounding is display-only and stores no rounding amount.`,
+    };
+  }
   for (const field of [
     'AdministrationFee',
     'AdministrationFeeVAT',
     'Freight',
     'FreightVAT',
-    'RoundOff',
     'TaxReduction',
   ]) {
     if (source[field] !== 0) return { blocked: `Confirmed source ${field} must be zero.` };
