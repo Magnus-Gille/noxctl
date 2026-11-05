@@ -355,7 +355,10 @@ async function sendRequest(
 const DOT_SEGMENT = /^(?:\.|%2e){1,2}$/i;
 
 function assertNoDotSegments(endpoint: string): void {
-  const path = endpoint.split(/[?#]/, 1)[0] ?? '';
+  // Normalise the way WHATWG URL parsing does before it collapses dot segments:
+  // tabs and newlines are removed, and for https a backslash is a separator.
+  const stripped = endpoint.replace(/[\t\n\r]/g, '');
+  const path = (stripped.split(/[?#]/, 1)[0] ?? '').replace(/\\/g, '/');
   const segment = path.split('/').find((part) => DOT_SEGMENT.test(part));
   if (segment !== undefined) {
     throw new Error(

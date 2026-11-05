@@ -405,7 +405,9 @@ function assertNoRequests(transport: ReturnType<typeof mockTransport>['transport
 }
 
 describe('path segments built from user-supplied ids', () => {
-  it('covers every id-taking operation exactly once', () => {
+  // Only guards against a duplicated case. It cannot notice an operation that is
+  // missing from OPERATIONS, so new id-taking operations must be added by hand.
+  it('lists each operation only once', () => {
     const names = OPERATIONS.map((entry) => entry.op);
     expect(new Set(names).size).toBe(names.length);
   });

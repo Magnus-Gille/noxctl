@@ -15,8 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and updates alike, including the inbox, archive, price, schedule and attachment
   ones) now encodes it through one shared `pathSegment()` helper that refuses
   these values before any request is made, and the HTTP client refuses any
-  endpoint containing a dot segment as a backstop. Ordinary ids, including ones
-  with `/` or spaces, are encoded exactly as before (found in review of #212).
+  endpoint containing a dot segment as a backstop, including backslash and
+  tab/newline forms that URL parsing normalises into one. Ordinary ids, including
+  ones with `/` or spaces, are encoded exactly as before. The optional price-list
+  and article-number filters of the price listing still treat an empty value as
+  "not given" and list more broadly (found in review of #212 and #213).
 
 ## [0.13.0] - 2026-11-05
 

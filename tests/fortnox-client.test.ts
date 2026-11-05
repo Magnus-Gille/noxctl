@@ -392,7 +392,17 @@ describe('fortnox-client', () => {
       'archive/a/../b',
       '/api/fileattachments/attachments-v1/..',
       'inbox/..?path=x',
-    ])('refuses %s before sending anything', async (endpoint) => {
+      // WHATWG URL parsing treats a backslash as a separator and drops tabs and
+      // newlines, so these collapse to the same targets as the forms above.
+      'inbox\\..',
+      'inbox\\.',
+      'archive\\a\\..\\b',
+      'inbox/.\t',
+      'in\tbox/..',
+      'inbox/.\n.',
+      'inbox/..\r',
+      'inbox\\%2e%2e',
+    ])('refuses %j before sending anything', async (endpoint) => {
       global.fetch = vi.fn();
 
       await expect(fortnoxRequest(endpoint, { method: 'DELETE' })).rejects.toThrow(/dot segment/i);
@@ -415,6 +425,7 @@ describe('fortnox-client', () => {
       ['inbox/a%2Fb%20c', 'https://api.fortnox.se/3/inbox/a%2Fb%20c'],
       ['inbox/...', 'https://api.fortnox.se/3/inbox/...'],
       ['inbox/%252e', 'https://api.fortnox.se/3/inbox/%252e'],
+      ['inbox/a%5Cb', 'https://api.fortnox.se/3/inbox/a%5Cb'],
       ['archive/file.pdf', 'https://api.fortnox.se/3/archive/file.pdf'],
       ['supplierinvoices?filter=..', 'https://api.fortnox.se/3/supplierinvoices?filter=..'],
     ])('still sends %s', async (endpoint, expectedUrl) => {
