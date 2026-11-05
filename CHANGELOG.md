@@ -6,12 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **List the files in an inbox folder.** `noxctl inbox list --folder-id <id>` and
+  `fortnox_list_inbox` with `folderId` read `GET /3/inbox/{Id}`, so the contents of
+  a folder such as `inbox_v` (Verifikationer) can be inspected — for example to
+  confirm an upload arrived or to spot duplicates before the next batch. Folder
+  ids come from the root listing, which still lists only folders. Fortnox returns
+  no date for inbox files, so duplicate checks rest on name and size. Passing a
+  file Id (or `.` / `..`) as the folder gives a clear error instead of a JSON
+  parse failure or a silent root listing (#210).
+
 ### Changed
 
 - The weekly API drift workflow files its reports as tickets in the maintainer's
   Plane project instead of GitHub issues, through `scripts/file-plane-ticket.mjs`.
   It keeps the one-open-ticket-per-report deduplication, no longer needs
   `issues: write`, and fails the run when the gateway secrets are missing.
+
+### Fixed
+
+- Inbox listings and `inbox upload` output now show `Id`, `Name`, `Size` and
+  `Type` instead of the reference-data `Code`/`Name`/`Description` columns, which
+  left the `Id` blank; the id is what `inbox file`, `inbox delete` and
+  `--folder-id` take (#210).
 
 ## [0.12.0] - 2026-10-01
 

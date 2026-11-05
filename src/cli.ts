@@ -91,6 +91,7 @@ import {
   absenceTransactionDetailColumns,
   scheduleTimeDetailColumns,
   referenceDataColumns,
+  inboxColumns,
   generalLedgerColumns,
 } from './views.js';
 
@@ -5208,16 +5209,27 @@ Examples:
   noxctl inbox list`,
 );
 const inboxList = inbox.command('list');
-inboxList.description('List inbox folders and files');
-inboxList.action(async () => {
-  const { listInbox } = await import('./operations/files.js');
-  const raw = await listInbox();
-  const folder = (raw.Folder ?? {}) as Record<string, unknown>;
-  const items = [
-    ...((folder.Folders ?? []) as Record<string, unknown>[]),
-    ...((folder.Files ?? []) as Record<string, unknown>[]),
-  ];
-  outputList(items, referenceDataColumns, json(), raw);
+inboxList.description('List inbox folders, or the files in one folder with --folder-id');
+inboxList.option(
+  '--folder-id <id>',
+  'List the contents of this folder (an Id from the root listing, e.g. inbox_v)',
+);
+inboxList.addHelpText(
+  'after',
+  `
+Without --folder-id this lists the inbox root, which only contains folders.
+Use a folder's Id to see the files inside it, for example to check that an
+upload arrived or to spot duplicates before the next batch. Long names are cut
+off in the table; use --output json for the full names.
+
+Examples:
+  noxctl inbox list
+  noxctl inbox list --folder-id inbox_v`,
+);
+inboxList.action(async (opts) => {
+  const { listInbox, inboxEntries } = await import('./operations/files.js');
+  const raw = await listInbox({ folderId: opts.folderId });
+  outputList(inboxEntries(raw), inboxColumns, json(), raw);
 });
 inbox
   .command('upload <file>')
@@ -5236,12 +5248,7 @@ inbox
     )
       return;
     const raw = await uploadInboxEntry(file, { folderId: opts.folderId, path: opts.path });
-    outputDetail(
-      (raw.File ?? raw) as Record<string, unknown>,
-      referenceDataColumns,
-      json(),
-      'File',
-    );
+    outputDetail((raw.File ?? raw) as Record<string, unknown>, inboxColumns, json(), 'File');
   });
 inbox
   .command('file <id>')
