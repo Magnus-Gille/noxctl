@@ -28,6 +28,8 @@ import { applyPeriod } from './date-periods.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
 import { formatMissingProfileGuidance, shouldShowProfileBanner } from './profile-suggestions.js';
 import { VERSION } from './version.js';
+import { defaultFortnoxOperations } from './operations/index.js';
+import { prepareAccrualFields } from './operations/accruals.js';
 import {
   invoiceListColumns,
   invoiceDetailColumns,
@@ -120,7 +122,15 @@ program
     '--profile <name>',
     'Use this profile for one invocation only; does not change the saved default',
   )
-  .option('--help-all', 'Show all commands grouped by function');
+  .option('--help-all', 'Show all commands grouped by function')
+  .option(
+    '--shadow-config <path>',
+    'Opt in to local durable shadow capture using an owned configuration file',
+  )
+  .option(
+    '--shadow-intent <id>',
+    'Stable unique command identity for shadow capture; reuse only for the same command',
+  );
 
 function json(): boolean {
   return isJsonMode(program.opts());
@@ -172,6 +182,8 @@ export function getResolvedProfileInfo(): ResolvedProfile {
 }
 
 // Commands that don't need (and shouldn't require) a resolved profile.
+let localShadowStatus: (() => import('./shadow/types.js').ShadowStatus) | undefined;
+
 const PROFILE_RESOLUTION_SKIP = new Set(['help', 'completion']);
 
 program.hook('preAction', async (thisCommand, actionCommand) => {
@@ -216,6 +228,24 @@ program.hook('preAction', async (thisCommand, actionCommand) => {
   }
 
   setResolvedProfile(resolvedProfileInfo.name, resolvedProfileInfo.source);
+  const shadowConfig = program.opts().shadowConfig as string | undefined;
+  if (program.opts().shadowIntent && !shadowConfig)
+    throw new Error('--shadow-intent requires --shadow-config');
+  if (shadowConfig) {
+    if (name === 'serve')
+      throw new Error(
+        'Local stdio shadow activation is not supported; use a tenant-bound embedded host with stable per-request intent identities',
+      );
+    const { loadLocalShadowConfig, createLocalShadowObserver } = await import('./shadow/local.js');
+    const { setDefaultOperationObserver } = await import('./operations/index.js');
+    const config = loadLocalShadowConfig(shadowConfig, resolvedProfileInfo.name);
+    const runtime = await createLocalShadowObserver(config, program.opts().shadowIntent, () =>
+      defaultFortnoxOperations.getCompanyInfo(),
+    );
+    setDefaultOperationObserver(runtime.observer);
+    localShadowStatus = () => runtime.observer.status();
+    process.once('exit', () => runtime.queue.close());
+  }
 
   // Banner ownership: MCP `serve` prints its own banner in bindStartupProfile
   // so host logs (Claude Desktop) always see it. Suppress here to avoid a
@@ -247,6 +277,25 @@ function describePointerFault(
       return 'read timed out';
   }
 }
+
+program
+  .command('shadow')
+  .description('Inspect local shadow capture and lag')
+  .command('status')
+  .description('Show bound queue counts and unknown or blocked operations')
+  .action(() => {
+    console.log(
+      JSON.stringify(localShadowStatus ? localShadowStatus() : { enabled: false }, null, 2),
+    );
+  });
+
+program.hook('postAction', () => {
+  if (!localShadowStatus) return;
+  const status = localShadowStatus();
+  process.stderr.write(
+    `[shadow] ${JSON.stringify({ counts: status.counts, oldestUnappliedAgeMs: status.oldestUnappliedAgeMs })}\n`,
+  );
+});
 
 async function fetchCompanyHint(): Promise<string | undefined> {
   try {
@@ -573,7 +622,7 @@ program
 
       // Step 7: Verify by fetching company info
       try {
-        const { getCompanyInfo } = await import('./operations/company.js');
+        const { getCompanyInfo } = defaultFortnoxOperations;
         const data = await getCompanyInfo();
         const company = data as Record<string, unknown>;
         console.log('');
@@ -970,7 +1019,7 @@ program
 
     // 7. API connectivity — try fetching company info
     try {
-      const { getCompanyInfo } = await import('./operations/company.js');
+      const { getCompanyInfo } = defaultFortnoxOperations;
       const data = await getCompanyInfo();
       const company = data as Record<string, unknown>;
       const name = company['CompanyName'] || 'unknown';
@@ -1380,7 +1429,7 @@ Examples:
   noxctl invoices list --period 2026-Q1`,
   )
   .action(async (opts) => {
-    const { listInvoices } = await import('./operations/invoices.js');
+    const { listInvoices } = defaultFortnoxOperations;
     const data = await listInvoices({
       filter: opts.filter,
       customerNumber: opts.customer,
@@ -1400,7 +1449,7 @@ invoices
   .command('get <documentNumber>')
   .description('Get a single invoice')
   .action(async (documentNumber: string) => {
-    const { getInvoice } = await import('./operations/invoices.js');
+    const { getInvoice } = defaultFortnoxOperations;
     const data = await getInvoice(documentNumber);
     outputDetail(data as Record<string, unknown>, invoiceDetailColumns, json(), 'Invoice');
   });
@@ -1409,7 +1458,7 @@ invoices
   .command('preflight <documentNumber>')
   .description('Read-only e-invoice draft checks; reports unknown/unsupported recipient readiness')
   .action(async (documentNumber: string) => {
-    const { preflightInvoice } = await import('./operations/invoices.js');
+    const { preflightInvoice } = defaultFortnoxOperations;
     const result = await preflightInvoice(documentNumber);
     outputDetail(
       result,
@@ -1449,7 +1498,7 @@ Examples:
   echo '{"InvoiceRows":[{"Description":"Consulting","DeliveredQuantity":8,"Price":1200,"AccountNumber":3001,"VAT":25}]}' | noxctl invoices create --customer 25 --input - --yes`,
   )
   .action(async (opts) => {
-    const { createInvoice } = await import('./operations/invoices.js');
+    const { createInvoice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
@@ -1479,7 +1528,7 @@ Examples:
   )
   .action(
     async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateInvoice } = await import('./operations/invoices.js');
+      const { updateInvoice } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (!(await confirmMutation(`Update invoice ${documentNumber}`, opts, { Invoice: fields }))) {
@@ -1515,7 +1564,7 @@ invoices
         dryRun?: boolean;
       },
     ) => {
-      const { sendInvoice } = await import('./operations/invoices.js');
+      const { sendInvoice } = defaultFortnoxOperations;
       if (!(await confirmMutation(`Send invoice ${documentNumber} via ${opts.method}`, opts))) {
         return;
       }
@@ -1553,7 +1602,7 @@ for (const action of [
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the action without sending it')
     .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-      const operations = await import('./operations/invoices.js');
+      const operations = defaultFortnoxOperations;
       if (!(await confirmMutation(`${action.label} invoice ${documentNumber}`, opts))) return;
       const data = await operations[action.exportName](documentNumber);
       outputConfirmation(
@@ -1574,7 +1623,7 @@ invoices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts) => {
-    const { getInvoiceReminderPdf } = await import('./operations/invoices.js');
+    const { getInvoiceReminderPdf } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Print reminder for invoice ${documentNumber}`, opts))) return;
     const pdf = await getInvoiceReminderPdf(documentNumber);
     if (!pdf) {
@@ -1633,7 +1682,7 @@ Examples:
       documentNumber: string,
       opts: { file?: string; markSent?: boolean; yes?: boolean; dryRun?: boolean },
     ) => {
-      const { getInvoicePdf, markInvoicePrinted } = await import('./operations/invoices.js');
+      const { getInvoicePdf, markInvoicePrinted } = defaultFortnoxOperations;
       const toStdout = opts.file === '-';
 
       // Only an *explicit* --output json conflicts here. json() alone is not the
@@ -1733,7 +1782,7 @@ invoices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { bookkeepInvoice } = await import('./operations/invoices.js');
+    const { bookkeepInvoice } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Bookkeep invoice ${documentNumber}`, opts))) {
       return;
     }
@@ -1753,7 +1802,7 @@ invoices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { creditInvoice } = await import('./operations/invoices.js');
+    const { creditInvoice } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Credit invoice ${documentNumber}`, opts))) {
       return;
     }
@@ -1792,7 +1841,7 @@ Examples:
       files: string[],
       opts: { includeOnSend?: boolean; yes?: boolean; dryRun?: boolean },
     ) => {
-      const { attachInvoiceFiles } = await import('./operations/invoices.js');
+      const { attachInvoiceFiles } = defaultFortnoxOperations;
       if (
         !(await confirmMutation(
           `Attach ${files.length} file(s) to invoice ${documentNumber}`,
@@ -1837,7 +1886,7 @@ Example:
   noxctl invoices attachments 91110646`,
   )
   .action(async (documentNumber: string) => {
-    const { listInvoiceAttachments } = await import('./operations/invoices.js');
+    const { listInvoiceAttachments } = defaultFortnoxOperations;
     const results = await listInvoiceAttachments(documentNumber);
     outputList(
       results as unknown as Record<string, unknown>[],
@@ -1871,7 +1920,7 @@ Examples:
   noxctl tax report --from 2026-01-01 --to 2026-03-31 --year 4`,
   )
   .action(async (opts) => {
-    const { generateTaxReport } = await import('./operations/tax.js');
+    const { generateTaxReport } = defaultFortnoxOperations;
     const range = fromToParams(opts);
     if (!range.fromDate || !range.toDate) {
       fail('tax report requires a period: --from/--to or --period.', 2);
@@ -1905,7 +1954,7 @@ reports
     'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
   )
   .action(async (opts) => {
-    const { getIncomeStatement } = await import('./operations/financial-reports.js');
+    const { getIncomeStatement } = defaultFortnoxOperations;
     const data = await getIncomeStatement({
       financialYear: opts.year,
       ...fromToParams(opts),
@@ -1924,7 +1973,7 @@ reports
   .option('--year <number>', 'Financial year', parseInt)
   .option('--to <date>', 'As-of date (YYYY-MM-DD)')
   .action(async (opts) => {
-    const { getBalanceSheet } = await import('./operations/financial-reports.js');
+    const { getBalanceSheet } = defaultFortnoxOperations;
     const data = await getBalanceSheet({ financialYear: opts.year, toDate: opts.to });
     if (json()) {
       console.log(JSON.stringify(data, null, 2));
@@ -1945,7 +1994,7 @@ accounts
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listAccounts } = await import('./operations/accounts.js');
+    const { listAccounts } = defaultFortnoxOperations;
     const data = await listAccounts({
       search: opts.search,
       financialYear: opts.year,
@@ -1960,7 +2009,7 @@ accounts
   .command('get <number>')
   .description('Get one account')
   .action(async (number: string) => {
-    const { getAccount } = await import('./operations/accounts.js');
+    const { getAccount } = defaultFortnoxOperations;
     const data = await getAccount(Number(number));
     outputDetail(data, accountListColumns, json(), 'Account');
   });
@@ -1974,7 +2023,7 @@ accounts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createAccount } = await import('./operations/accounts.js');
+    const { createAccount } = defaultFortnoxOperations;
     const extra = opts.input
       ? (JSON.parse(
           opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8'),
@@ -1994,7 +2043,7 @@ accounts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (number: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateAccount } = await import('./operations/accounts.js');
+    const { updateAccount } = defaultFortnoxOperations;
     const fields = JSON.parse(
       opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8'),
     ) as Record<string, unknown>;
@@ -2009,7 +2058,7 @@ accounts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (number: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteAccount } = await import('./operations/accounts.js');
+    const { deleteAccount } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete account ${number}`, opts))) return;
     await deleteAccount(Number(number));
     outputConfirmation(
@@ -2032,7 +2081,7 @@ customers
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listCustomers } = await import('./operations/customers.js');
+    const { listCustomers } = defaultFortnoxOperations;
     const data = await listCustomers({
       search: opts.search,
       page: opts.page,
@@ -2056,7 +2105,7 @@ customers
   .command('get <customerNumber>')
   .description('Get a single customer')
   .action(async (customerNumber: string) => {
-    const { getCustomer } = await import('./operations/customers.js');
+    const { getCustomer } = defaultFortnoxOperations;
     const data = await getCustomer(customerNumber);
     outputDetail(data as Record<string, unknown>, customerDetailColumns, json(), 'Customer');
   });
@@ -2076,7 +2125,7 @@ Examples:
   echo '{"OrganisationNumber":"556677-8899","Email":"info@acme.se","City":"Stockholm"}' | noxctl customers create --name "Acme AB" --input - --yes`,
   )
   .action(async (opts) => {
-    const { createCustomer } = await import('./operations/customers.js');
+    const { createCustomer } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -2104,7 +2153,7 @@ Examples:
   )
   .action(
     async (customerNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateCustomer } = await import('./operations/customers.js');
+      const { updateCustomer } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (
@@ -2123,7 +2172,7 @@ customers
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (customerNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteCustomer } = await import('./operations/customers.js');
+    const { deleteCustomer } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete customer ${customerNumber}`, opts))) return;
     await deleteCustomer(customerNumber);
     outputConfirmation(
@@ -2146,7 +2195,7 @@ articles
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listArticles } = await import('./operations/articles.js');
+    const { listArticles } = defaultFortnoxOperations;
     const data = await listArticles({
       search: opts.search,
       page: opts.page,
@@ -2164,7 +2213,7 @@ articles
   .command('get <articleNumber>')
   .description('Get a single article')
   .action(async (articleNumber: string) => {
-    const { getArticle } = await import('./operations/articles.js');
+    const { getArticle } = defaultFortnoxOperations;
     const data = await getArticle(articleNumber);
     outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
   });
@@ -2185,7 +2234,7 @@ Examples:
   echo '{"SalesPrice":1500,"Unit":"tim","SalesAccount":3001,"VAT":25}' | noxctl articles create --description "Konsulttimme" --input - --yes`,
   )
   .action(async (opts) => {
-    const { createArticle } = await import('./operations/articles.js');
+    const { createArticle } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -2216,7 +2265,7 @@ Examples:
   )
   .action(
     async (articleNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateArticle } = await import('./operations/articles.js');
+      const { updateArticle } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (!(await confirmMutation(`Update article ${articleNumber}`, opts, { Article: fields }))) {
@@ -2233,7 +2282,7 @@ articles
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (articleNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteArticle } = await import('./operations/articles.js');
+    const { deleteArticle } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete article ${articleNumber}`, opts))) return;
     await deleteArticle(articleNumber);
     outputConfirmation(
@@ -2256,7 +2305,7 @@ suppliers
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listSuppliers } = await import('./operations/suppliers.js');
+    const { listSuppliers } = defaultFortnoxOperations;
     const data = await listSuppliers({
       search: opts.search,
       page: opts.page,
@@ -2280,7 +2329,7 @@ suppliers
   .command('get <supplierNumber>')
   .description('Get a single supplier')
   .action(async (supplierNumber: string) => {
-    const { getSupplier } = await import('./operations/suppliers.js');
+    const { getSupplier } = defaultFortnoxOperations;
     const data = await getSupplier(supplierNumber);
     outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
   });
@@ -2300,7 +2349,7 @@ Examples:
   echo '{"OrganisationNumber":"556123-4567","BG":"123-4567","Email":"faktura@dustin.se"}' | noxctl suppliers create --name "Dustin AB" --input - --yes`,
   )
   .action(async (opts) => {
-    const { createSupplier } = await import('./operations/suppliers.js');
+    const { createSupplier } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -2328,7 +2377,7 @@ Examples:
   )
   .action(
     async (supplierNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateSupplier } = await import('./operations/suppliers.js');
+      const { updateSupplier } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (
@@ -2375,7 +2424,7 @@ supplierInvoices
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listSupplierInvoices } = await import('./operations/supplier-invoices.js');
+    const { listSupplierInvoices } = defaultFortnoxOperations;
     const data = await listSupplierInvoices({
       filter: opts.filter,
       supplierNumber: opts.supplier,
@@ -2401,7 +2450,7 @@ supplierInvoices
   .command('get <givenNumber>')
   .description('Get a single supplier invoice')
   .action(async (givenNumber: string) => {
-    const { getSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const { getSupplierInvoice } = defaultFortnoxOperations;
     const data = await getSupplierInvoice(givenNumber);
     outputDetail(
       data as Record<string, unknown>,
@@ -2425,7 +2474,7 @@ Examples:
   echo '{"InvoiceDate":"2026-03-01","DueDate":"2026-03-30","Total":1250,"OCR":"12345","SupplierInvoiceRows":[{"Account":6570,"Debit":1000,"Credit":0},{"Account":2641,"Debit":250,"Credit":0},{"Account":2440,"Debit":0,"Credit":1250}]}' | noxctl supplier-invoices create --supplier 1 --input - --dry-run`,
   )
   .action(async (opts) => {
-    const { createSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const { createSupplierInvoice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { SupplierNumber: opts.supplier, ...input };
@@ -2451,7 +2500,7 @@ supplierInvoices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (givenNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { bookkeepSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const { bookkeepSupplierInvoice } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Bookkeep supplier invoice ${givenNumber}`, opts))) {
       return;
     }
@@ -2472,7 +2521,7 @@ supplierInvoices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (givenNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateSupplierInvoice } = await import('./operations/supplier-invoices.js');
+    const { updateSupplierInvoice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (
@@ -2505,7 +2554,7 @@ for (const action of [
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the action without sending it')
     .action(async (givenNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-      const operations = await import('./operations/supplier-invoices.js');
+      const operations = defaultFortnoxOperations;
       if (!(await confirmMutation(`${action.label} supplier invoice ${givenNumber}`, opts))) return;
       const data = await operations[action.exportName](givenNumber);
       outputConfirmation(
@@ -2534,7 +2583,7 @@ Example:
   noxctl supplier-invoices attachments 1`,
   )
   .action(async (givenNumber: string) => {
-    const { listSupplierInvoiceAttachments } = await import('./operations/supplier-invoices.js');
+    const { listSupplierInvoiceAttachments } = defaultFortnoxOperations;
     const attachments = await listSupplierInvoiceAttachments(givenNumber);
     if (json()) {
       console.log(JSON.stringify({ Attachments: attachments }, null, 2));
@@ -2567,8 +2616,8 @@ Examples:
   noxctl supplier-invoices file c7e578d8-59a7-4e00-b29b-b99e4d9ede63 --file invoice-scan.pdf`,
   )
   .action(async (fileId: string, opts: { file?: string; overwrite?: boolean }) => {
-    const { getSupplierInvoiceFile } = await import('./operations/supplier-invoices.js');
-    const { extensionForMime } = await import('./operations/vouchers.js');
+    const { getSupplierInvoiceFile } = defaultFortnoxOperations;
+    const { extensionForMime } = defaultFortnoxOperations;
     const { safeLocalOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
     const toStdout = opts.file === '-';
 
@@ -2610,7 +2659,7 @@ company
   .command('info')
   .description('Get company information')
   .action(async () => {
-    const { getCompanyInfo } = await import('./operations/company.js');
+    const { getCompanyInfo } = defaultFortnoxOperations;
     const data = await getCompanyInfo();
     outputDetail(
       data as Record<string, unknown>,
@@ -2638,7 +2687,7 @@ vouchers
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listVouchers } = await import('./operations/vouchers.js');
+    const { listVouchers } = defaultFortnoxOperations;
     const data = await listVouchers({
       series: opts.series,
       ...fromToParams(opts),
@@ -2659,7 +2708,7 @@ vouchers
   .description('Get a single voucher with rows (account, debit, credit)')
   .option('--year <number>', 'Financial year', parseInt)
   .action(async (series: string, voucherNumber: string, opts: { year?: number }) => {
-    const { getVoucher } = await import('./operations/vouchers.js');
+    const { getVoucher } = defaultFortnoxOperations;
     const data = await getVoucher(series, voucherNumber, opts.year);
     if (json()) {
       console.log(JSON.stringify({ Voucher: data }, null, 2));
@@ -2686,7 +2735,7 @@ Examples:
   echo '{"Description":"Bankkostnad","TransactionDate":"2026-03-01","VoucherRows":[{"Account":6570,"Debit":500},{"Account":1930,"Credit":500}]}' | noxctl vouchers create --input - --dry-run`,
   )
   .action(async (opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { createVoucher } = await import('./operations/vouchers.js');
+    const { createVoucher } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const params = JSON.parse(raw) as Record<string, unknown>;
     if (
@@ -2720,7 +2769,7 @@ Examples:
       files: string[],
       opts: { year?: number; yes?: boolean; dryRun?: boolean },
     ) => {
-      const { attachVoucherFiles } = await import('./operations/vouchers.js');
+      const { attachVoucherFiles } = defaultFortnoxOperations;
       if (
         !(await confirmMutation(
           `Attach ${files.length} file(s) to voucher ${series}/${voucherNumber}`,
@@ -2758,7 +2807,7 @@ vouchers
     parseInt,
   )
   .action(async (series: string, voucherNumber: string, opts: { year?: number }) => {
-    const { listVoucherAttachments } = await import('./operations/vouchers.js');
+    const { listVoucherAttachments } = defaultFortnoxOperations;
     const attachments = await listVoucherAttachments(series, voucherNumber, opts.year);
     if (json()) {
       console.log(JSON.stringify({ Attachments: attachments }, null, 2));
@@ -2788,7 +2837,7 @@ Examples:
   noxctl vouchers file c7e578d8-59a7-4e00-b29b-b99e4d9ede63 --file receipt.pdf`,
   )
   .action(async (fileId: string, opts: { file?: string }) => {
-    const { getVoucherFile, extensionForMime } = await import('./operations/vouchers.js');
+    const { getVoucherFile, extensionForMime } = defaultFortnoxOperations;
     const toStdout = opts.file === '-';
 
     if (toStdout && program.opts().output === 'json') {
@@ -2824,7 +2873,7 @@ vouchers
   .command('connection <fileId>')
   .description('Get voucher file-connection metadata')
   .action(async (fileId: string) => {
-    const { getVoucherFileConnection } = await import('./operations/vouchers.js');
+    const { getVoucherFileConnection } = defaultFortnoxOperations;
     const result = await getVoucherFileConnection(fileId);
     outputDetail(result, voucherAttachmentColumns, json(), 'VoucherFileConnection');
   });
@@ -2834,7 +2883,7 @@ vouchers
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without detaching')
   .action(async (fileId: string, opts) => {
-    const { deleteVoucherFileConnection } = await import('./operations/vouchers.js');
+    const { deleteVoucherFileConnection } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete voucher file connection ${fileId}`, opts))) return;
     await deleteVoucherFileConnection(fileId);
     outputConfirmation(`Voucher file connection ${fileId} deleted.`, json(), {
@@ -2847,7 +2896,7 @@ supplierInvoices
   .command('connection <fileId>')
   .description('Get supplier-invoice file-connection metadata')
   .action(async (fileId: string) => {
-    const { getSupplierInvoiceFileConnection } = await import('./operations/supplier-invoices.js');
+    const { getSupplierInvoiceFileConnection } = defaultFortnoxOperations;
     const result = await getSupplierInvoiceFileConnection(fileId);
     outputDetail(result, supplierInvoiceAttachmentColumns, json(), 'SupplierInvoiceFileConnection');
   });
@@ -2864,8 +2913,7 @@ supplierInvoices
       }))
     )
       return;
-    const { createSupplierInvoiceFileConnection } =
-      await import('./operations/supplier-invoices.js');
+    const { createSupplierInvoiceFileConnection } = defaultFortnoxOperations;
     const result = await createSupplierInvoiceFileConnection(givenNumber, fileId);
     outputDetail(result, supplierInvoiceAttachmentColumns, json(), 'SupplierInvoiceFileConnection');
   });
@@ -2875,8 +2923,7 @@ supplierInvoices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without detaching')
   .action(async (fileId: string, opts) => {
-    const { deleteSupplierInvoiceFileConnection } =
-      await import('./operations/supplier-invoices.js');
+    const { deleteSupplierInvoiceFileConnection } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete supplier invoice file connection ${fileId}`, opts))) return;
     await deleteSupplierInvoiceFileConnection(fileId);
     outputConfirmation(`Supplier invoice file connection ${fileId} deleted.`, json(), {
@@ -2915,7 +2962,7 @@ generalLedger
       account?: string;
       series?: string;
     }) => {
-      const { getGeneralLedger } = await import('./operations/general-ledger.js');
+      const { getGeneralLedger } = defaultFortnoxOperations;
       let rows = await getGeneralLedger({
         fromDate: opts.from,
         toDate: opts.to,
@@ -2941,7 +2988,7 @@ invoicePayments
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listInvoicePayments } = await import('./operations/invoice-payments.js');
+    const { listInvoicePayments } = defaultFortnoxOperations;
     const data = await listInvoicePayments({
       invoiceNumber: opts.invoice,
       page: opts.page,
@@ -2965,7 +3012,7 @@ invoicePayments
   .command('get <paymentNumber>')
   .description('Get a single invoice payment')
   .action(async (paymentNumber: string) => {
-    const { getInvoicePayment } = await import('./operations/invoice-payments.js');
+    const { getInvoicePayment } = defaultFortnoxOperations;
     const data = await getInvoicePayment(paymentNumber);
     outputDetail(
       data as Record<string, unknown>,
@@ -2991,7 +3038,7 @@ Examples:
   noxctl ip create --invoice 1001 --amount 5000 --date 2026-03-20 --yes`,
   )
   .action(async (opts) => {
-    const { createInvoicePayment } = await import('./operations/invoice-payments.js');
+    const { createInvoicePayment } = defaultFortnoxOperations;
     const params = {
       InvoiceNumber: parseInt(opts.invoice, 10),
       Amount: opts.amount,
@@ -3023,7 +3070,7 @@ invoicePayments
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteInvoicePayment } = await import('./operations/invoice-payments.js');
+    const { deleteInvoicePayment } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete invoice payment ${paymentNumber}`, opts))) {
       return;
     }
@@ -3043,7 +3090,7 @@ invoicePayments
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { bookkeepInvoicePayment } = await import('./operations/invoice-payments.js');
+    const { bookkeepInvoicePayment } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Bookkeep invoice payment ${paymentNumber}`, opts))) {
       return;
     }
@@ -3065,7 +3112,7 @@ invoicePayments
   .option('--dry-run', 'Preview the request without sending it')
   .action(
     async (paymentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateInvoicePayment } = await import('./operations/invoice-payments.js');
+      const { updateInvoicePayment } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (
@@ -3093,8 +3140,7 @@ supplierInvoicePayments
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listSupplierInvoicePayments } =
-      await import('./operations/supplier-invoice-payments.js');
+    const { listSupplierInvoicePayments } = defaultFortnoxOperations;
     const data = await listSupplierInvoicePayments({
       invoiceNumber: opts.invoice,
       page: opts.page,
@@ -3118,7 +3164,7 @@ supplierInvoicePayments
   .command('get <paymentNumber>')
   .description('Get a single supplier invoice payment')
   .action(async (paymentNumber: string) => {
-    const { getSupplierInvoicePayment } = await import('./operations/supplier-invoice-payments.js');
+    const { getSupplierInvoicePayment } = defaultFortnoxOperations;
     const data = await getSupplierInvoicePayment(paymentNumber);
     outputDetail(
       data as Record<string, unknown>,
@@ -3144,8 +3190,7 @@ Examples:
   noxctl sip create --invoice 501 --amount 3000 --date 2026-03-20 --yes`,
   )
   .action(async (opts) => {
-    const { createSupplierInvoicePayment } =
-      await import('./operations/supplier-invoice-payments.js');
+    const { createSupplierInvoicePayment } = defaultFortnoxOperations;
     const params = {
       InvoiceNumber: opts.invoice,
       Amount: opts.amount,
@@ -3175,8 +3220,7 @@ supplierInvoicePayments
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteSupplierInvoicePayment } =
-      await import('./operations/supplier-invoice-payments.js');
+    const { deleteSupplierInvoicePayment } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete supplier invoice payment ${paymentNumber}`, opts))) {
       return;
     }
@@ -3198,8 +3242,7 @@ supplierInvoicePayments
   .option('--dry-run', 'Preview the request without sending it')
   .action(
     async (paymentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateSupplierInvoicePayment } =
-        await import('./operations/supplier-invoice-payments.js');
+      const { updateSupplierInvoicePayment } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (
@@ -3219,8 +3262,7 @@ supplierInvoicePayments
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (paymentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { bookkeepSupplierInvoicePayment } =
-      await import('./operations/supplier-invoice-payments.js');
+    const { bookkeepSupplierInvoicePayment } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Bookkeep supplier invoice payment ${paymentNumber}`, opts)))
       return;
     const data = await bookkeepSupplierInvoicePayment(paymentNumber);
@@ -3251,7 +3293,7 @@ offers
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listOffers } = await import('./operations/offers.js');
+    const { listOffers } = defaultFortnoxOperations;
     const data = await listOffers({
       filter: opts.filter,
       customerNumber: opts.customer,
@@ -3271,7 +3313,7 @@ offers
   .command('get <documentNumber>')
   .description('Get a single offer')
   .action(async (documentNumber: string) => {
-    const { getOffer } = await import('./operations/offers.js');
+    const { getOffer } = defaultFortnoxOperations;
     const data = await getOffer(documentNumber);
     outputDetail(data as Record<string, unknown>, offerDetailColumns, json(), 'Offer');
   });
@@ -3290,7 +3332,7 @@ Examples:
   echo '{"OfferRows":[{"Description":"Consulting","DeliveredQuantity":10,"Price":1200}]}' | noxctl offers create --customer 25 --input - --dry-run`,
   )
   .action(async (opts) => {
-    const { createOffer } = await import('./operations/offers.js');
+    const { createOffer } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
@@ -3313,7 +3355,7 @@ offers
   .option('--dry-run', 'Preview the request without sending it')
   .action(
     async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateOffer } = await import('./operations/offers.js');
+      const { updateOffer } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (!(await confirmMutation(`Update offer ${documentNumber}`, opts, { Offer: fields }))) {
@@ -3330,7 +3372,7 @@ offers
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { createInvoiceFromOffer } = await import('./operations/offers.js');
+    const { createInvoiceFromOffer } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Create invoice from offer ${documentNumber}`, opts))) {
       return;
     }
@@ -3350,7 +3392,7 @@ offers
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { createOrderFromOffer } = await import('./operations/offers.js');
+    const { createOrderFromOffer } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Create order from offer ${documentNumber}`, opts))) {
       return;
     }
@@ -3379,7 +3421,7 @@ for (const action of [
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the action without sending it')
     .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-      const operations = await import('./operations/offers.js');
+      const operations = defaultFortnoxOperations;
       if (!(await confirmMutation(`${action.label} offer ${documentNumber}`, opts))) return;
       const data = await operations[action.exportName](documentNumber);
       outputConfirmation(
@@ -3405,7 +3447,7 @@ offers
     if (opts.print || opts.dryRun) {
       if (!(await confirmMutation(`${mode} offer ${documentNumber} as PDF`, opts))) return;
     }
-    const { getOfferPdf } = await import('./operations/offers.js');
+    const { getOfferPdf } = defaultFortnoxOperations;
     const pdf = await getOfferPdf(documentNumber, mode);
     if (!pdf) {
       outputConfirmation(`Offer ${documentNumber} printed without a PDF response.`, json(), {});
@@ -3438,7 +3480,7 @@ orders
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listOrders } = await import('./operations/orders.js');
+    const { listOrders } = defaultFortnoxOperations;
     const data = await listOrders({
       filter: opts.filter,
       customerNumber: opts.customer,
@@ -3458,7 +3500,7 @@ orders
   .command('get <documentNumber>')
   .description('Get a single order')
   .action(async (documentNumber: string) => {
-    const { getOrder } = await import('./operations/orders.js');
+    const { getOrder } = defaultFortnoxOperations;
     const data = await getOrder(documentNumber);
     outputDetail(data as Record<string, unknown>, orderDetailColumns, json(), 'Order');
   });
@@ -3477,7 +3519,7 @@ Examples:
   echo '{"OrderRows":[{"Description":"Consulting","DeliveredQuantity":10,"Price":1200}]}' | noxctl orders create --customer 25 --input - --dry-run`,
   )
   .action(async (opts) => {
-    const { createOrder } = await import('./operations/orders.js');
+    const { createOrder } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
@@ -3500,7 +3542,7 @@ orders
   .option('--dry-run', 'Preview the request without sending it')
   .action(
     async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateOrder } = await import('./operations/orders.js');
+      const { updateOrder } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (!(await confirmMutation(`Update order ${documentNumber}`, opts, { Order: fields }))) {
@@ -3517,7 +3559,7 @@ orders
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { createInvoiceFromOrder } = await import('./operations/orders.js');
+    const { createInvoiceFromOrder } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Create invoice from order ${documentNumber}`, opts))) {
       return;
     }
@@ -3546,7 +3588,7 @@ for (const action of [
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the action without sending it')
     .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-      const operations = await import('./operations/orders.js');
+      const operations = defaultFortnoxOperations;
       if (!(await confirmMutation(`${action.label} order ${documentNumber}`, opts))) return;
       const data = await operations[action.exportName](documentNumber);
       outputConfirmation(
@@ -3572,7 +3614,7 @@ orders
     if (opts.print || opts.dryRun) {
       if (!(await confirmMutation(`${mode} order ${documentNumber} as PDF`, opts))) return;
     }
-    const { getOrderPdf } = await import('./operations/orders.js');
+    const { getOrderPdf } = defaultFortnoxOperations;
     const pdf = await getOrderPdf(documentNumber, mode);
     if (!pdf) {
       outputConfirmation(`Order ${documentNumber} printed without a PDF response.`, json(), {});
@@ -3597,7 +3639,7 @@ projects
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listProjects } = await import('./operations/projects.js');
+    const { listProjects } = defaultFortnoxOperations;
     const data = await listProjects({
       page: opts.page,
       limit: opts.limit,
@@ -3614,7 +3656,7 @@ projects
   .command('get <projectNumber>')
   .description('Get a single project')
   .action(async (projectNumber: string) => {
-    const { getProject } = await import('./operations/projects.js');
+    const { getProject } = defaultFortnoxOperations;
     const data = await getProject(projectNumber);
     outputDetail(data as Record<string, unknown>, projectDetailColumns, json(), 'Project');
   });
@@ -3629,7 +3671,7 @@ projects
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createProject } = await import('./operations/projects.js');
+    const { createProject } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -3655,7 +3697,7 @@ projects
   .option('--dry-run', 'Preview the request without sending it')
   .action(
     async (projectNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-      const { updateProject } = await import('./operations/projects.js');
+      const { updateProject } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (!(await confirmMutation(`Update project ${projectNumber}`, opts, { Project: fields }))) {
@@ -3672,7 +3714,7 @@ projects
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (projectNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteProject } = await import('./operations/projects.js');
+    const { deleteProject } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete project ${projectNumber}`, opts))) return;
     await deleteProject(projectNumber);
     outputConfirmation(`Project ${projectNumber} deleted.`, json(), {
@@ -3691,7 +3733,7 @@ costcenters
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listCostCenters } = await import('./operations/costcenters.js');
+    const { listCostCenters } = defaultFortnoxOperations;
     const data = await listCostCenters({
       page: opts.page,
       limit: opts.limit,
@@ -3714,7 +3756,7 @@ costcenters
   .command('get <code>')
   .description('Get a single cost center')
   .action(async (code: string) => {
-    const { getCostCenter } = await import('./operations/costcenters.js');
+    const { getCostCenter } = defaultFortnoxOperations;
     const data = await getCostCenter(code);
     outputDetail(data as Record<string, unknown>, costCenterDetailColumns, json(), 'CostCenter');
   });
@@ -3728,7 +3770,7 @@ costcenters
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createCostCenter } = await import('./operations/costcenters.js');
+    const { createCostCenter } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -3755,7 +3797,7 @@ costcenters
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (code: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateCostCenter } = await import('./operations/costcenters.js');
+    const { updateCostCenter } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation(`Update cost center ${code}`, opts, { CostCenter: fields }))) {
@@ -3771,7 +3813,7 @@ costcenters
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (code: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteCostCenter } = await import('./operations/costcenters.js');
+    const { deleteCostCenter } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete cost center ${code}`, opts))) {
       return;
     }
@@ -3797,7 +3839,7 @@ employees
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listEmployees } = await import('./operations/employees.js');
+    const { listEmployees } = defaultFortnoxOperations;
     const data = await listEmployees({
       page: opts.page,
       limit: opts.limit,
@@ -3820,7 +3862,7 @@ employees
   .command('get <employeeId>')
   .description('Get a single employee')
   .action(async (employeeId: string) => {
-    const { getEmployee } = await import('./operations/employees.js');
+    const { getEmployee } = defaultFortnoxOperations;
     const data = await getEmployee(employeeId);
     outputDetail(data as Record<string, unknown>, employeeDetailColumns, json(), 'Employee');
   });
@@ -3846,7 +3888,7 @@ employees
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createEmployee } = await import('./operations/employees.js');
+    const { createEmployee } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -3882,7 +3924,7 @@ employees
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (employeeId: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateEmployee } = await import('./operations/employees.js');
+    const { updateEmployee } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation(`Update employee ${employeeId}`, opts, { Employee: fields }))) {
@@ -3906,7 +3948,7 @@ salarytransactions
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listSalaryTransactions } = await import('./operations/salarytransactions.js');
+    const { listSalaryTransactions } = defaultFortnoxOperations;
     const data = await listSalaryTransactions({
       employeeId: opts.employee,
       date: opts.date,
@@ -3931,7 +3973,7 @@ salarytransactions
   .command('get <salaryRow>')
   .description('Get a single salary transaction')
   .action(async (salaryRow: string) => {
-    const { getSalaryTransaction } = await import('./operations/salarytransactions.js');
+    const { getSalaryTransaction } = defaultFortnoxOperations;
     const data = await getSalaryTransaction(salaryRow);
     outputDetail(
       data as Record<string, unknown>,
@@ -3952,7 +3994,7 @@ salarytransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createSalaryTransaction } = await import('./operations/salarytransactions.js');
+    const { createSalaryTransaction } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -3987,7 +4029,7 @@ salarytransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (salaryRow: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteSalaryTransaction } = await import('./operations/salarytransactions.js');
+    const { deleteSalaryTransaction } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete salary transaction ${salaryRow}`, opts))) {
       return;
     }
@@ -4008,7 +4050,7 @@ salarytransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (salaryRow: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateSalaryTransaction } = await import('./operations/salarytransactions.js');
+    const { updateSalaryTransaction } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (
@@ -4035,7 +4077,7 @@ attendancetransactions
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listAttendanceTransactions } = await import('./operations/attendancetransactions.js');
+    const { listAttendanceTransactions } = defaultFortnoxOperations;
     const data = await listAttendanceTransactions({
       employeeId: opts.employee,
       date: opts.date,
@@ -4063,7 +4105,7 @@ attendancetransactions
   .option('--code <code>', 'Cause code for the composite Fortnox key')
   .action(async (id: string, opts: { date?: string; code?: string }) => {
     const { getAttendanceTransaction, getAttendanceTransactionByDateCode } =
-      await import('./operations/attendancetransactions.js');
+      defaultFortnoxOperations;
     if ((opts.date && !opts.code) || (opts.code && !opts.date))
       throw new Error('--date and --code must be supplied together');
     const data =
@@ -4089,7 +4131,7 @@ attendancetransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    const { createAttendanceTransaction } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -4124,7 +4166,7 @@ attendancetransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (id: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    const { deleteAttendanceTransaction } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete attendance transaction ${id}`, opts))) {
       return;
     }
@@ -4145,7 +4187,7 @@ attendancetransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (id: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateAttendanceTransaction } = await import('./operations/attendancetransactions.js');
+    const { updateAttendanceTransaction } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (
@@ -4172,7 +4214,7 @@ absencetransactions
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listAbsenceTransactions } = await import('./operations/absencetransactions.js');
+    const { listAbsenceTransactions } = defaultFortnoxOperations;
     const data = await listAbsenceTransactions({
       employeeId: opts.employee,
       date: opts.date,
@@ -4199,8 +4241,7 @@ absencetransactions
   .option('--date <date>', 'Date for the composite Fortnox key (YYYY-MM-DD)')
   .option('--code <code>', 'Cause code for the composite Fortnox key')
   .action(async (id: string, opts: { date?: string; code?: string }) => {
-    const { getAbsenceTransaction, getAbsenceTransactionByDateCode } =
-      await import('./operations/absencetransactions.js');
+    const { getAbsenceTransaction, getAbsenceTransactionByDateCode } = defaultFortnoxOperations;
     if ((opts.date && !opts.code) || (opts.code && !opts.date))
       throw new Error('--date and --code must be supplied together');
     const data =
@@ -4227,7 +4268,7 @@ absencetransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    const { createAbsenceTransaction } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -4263,7 +4304,7 @@ absencetransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (id: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    const { deleteAbsenceTransaction } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete absence transaction ${id}`, opts))) {
       return;
     }
@@ -4284,7 +4325,7 @@ absencetransactions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (id: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateAbsenceTransaction } = await import('./operations/absencetransactions.js');
+    const { updateAbsenceTransaction } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (
@@ -4306,7 +4347,7 @@ scheduletimes
   .command('get <employeeId> <date>')
   .description('Get the schedule for an employee on a date (YYYY-MM-DD)')
   .action(async (employeeId: string, date: string) => {
-    const { getScheduleTime } = await import('./operations/scheduletimes.js');
+    const { getScheduleTime } = defaultFortnoxOperations;
     const data = await getScheduleTime(employeeId, date);
     outputDetail(
       data as Record<string, unknown>,
@@ -4328,7 +4369,7 @@ scheduletimes
       date: string,
       opts: { input: string; yes?: boolean; dryRun?: boolean },
     ) => {
-      const { updateScheduleTime } = await import('./operations/scheduletimes.js');
+      const { updateScheduleTime } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (
@@ -4360,7 +4401,7 @@ scheduletimes
       date: string,
       opts: { input: string; yes?: boolean; dryRun?: boolean },
     ) => {
-      const { resetScheduleTimeDay } = await import('./operations/scheduletimes.js');
+      const { resetScheduleTimeDay } = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
       const fields = JSON.parse(raw) as Record<string, unknown>;
       if (
@@ -4393,7 +4434,7 @@ taxreductions
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listTaxReductions } = await import('./operations/taxreductions.js');
+    const { listTaxReductions } = defaultFortnoxOperations;
     const data = await listTaxReductions({
       filter: opts.filter,
       page: opts.page,
@@ -4417,7 +4458,7 @@ taxreductions
   .command('get <id>')
   .description('Get a single tax reduction')
   .action(async (id: string) => {
-    const { getTaxReduction } = await import('./operations/taxreductions.js');
+    const { getTaxReduction } = defaultFortnoxOperations;
     const data = await getTaxReduction(parseInt(id, 10));
     outputDetail(
       data as Record<string, unknown>,
@@ -4440,7 +4481,7 @@ taxreductions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createTaxReduction } = await import('./operations/taxreductions.js');
+    const { createTaxReduction } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -4480,7 +4521,7 @@ taxreductions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (id: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updateTaxReduction } = await import('./operations/taxreductions.js');
+    const { updateTaxReduction } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     const numericId = parseInt(id, 10);
@@ -4496,7 +4537,7 @@ taxreductions
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (id: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { deleteTaxReduction } = await import('./operations/taxreductions.js');
+    const { deleteTaxReduction } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete tax reduction ${id}`, opts))) return;
     await deleteTaxReduction(parseInt(id, 10));
     outputConfirmation(`Tax reduction ${id} deleted.`, json(), { Id: Number(id), deleted: true });
@@ -4512,7 +4553,7 @@ pricelists
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listPriceLists } = await import('./operations/pricelists.js');
+    const { listPriceLists } = defaultFortnoxOperations;
     const data = await listPriceLists({
       page: opts.page,
       limit: opts.limit,
@@ -4535,7 +4576,7 @@ pricelists
   .command('get <code>')
   .description('Get a single price list')
   .action(async (code: string) => {
-    const { getPriceList } = await import('./operations/pricelists.js');
+    const { getPriceList } = defaultFortnoxOperations;
     const data = await getPriceList(code);
     outputDetail(data as Record<string, unknown>, priceListDetailColumns, json(), 'PriceList');
   });
@@ -4549,7 +4590,7 @@ pricelists
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createPriceList } = await import('./operations/pricelists.js');
+    const { createPriceList } = defaultFortnoxOperations;
     let input: Record<string, unknown> = {};
     if (opts.input) {
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
@@ -4574,7 +4615,7 @@ pricelists
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (code: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
-    const { updatePriceList } = await import('./operations/pricelists.js');
+    const { updatePriceList } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation(`Update price list ${code}`, opts, { PriceList: fields }))) {
@@ -4595,7 +4636,7 @@ prices
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)
   .action(async (opts) => {
-    const { listPrices } = await import('./operations/pricelists.js');
+    const { listPrices } = defaultFortnoxOperations;
     const data = await listPrices({
       priceListCode: opts.pricelist,
       articleNumber: opts.article,
@@ -4616,7 +4657,7 @@ prices
   .requiredOption('--article <number>', 'Article number')
   .option('--from-quantity <number>', 'From quantity (default 0)', parseInt)
   .action(async (opts) => {
-    const { getPrice } = await import('./operations/pricelists.js');
+    const { getPrice } = defaultFortnoxOperations;
     const data = await getPrice(opts.pricelist, opts.article, opts.fromQuantity);
     outputDetail(data as Record<string, unknown>, priceDetailColumns, json(), 'Price');
   });
@@ -4630,7 +4671,7 @@ prices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createPrice } = await import('./operations/pricelists.js');
+    const { createPrice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const fields = { ...input, PriceList: opts.pricelist, ArticleNumber: opts.article };
@@ -4654,7 +4695,7 @@ prices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { updatePrice } = await import('./operations/pricelists.js');
+    const { updatePrice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (
@@ -4677,7 +4718,7 @@ prices
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (opts) => {
-    const { deletePrice } = await import('./operations/pricelists.js');
+    const { deletePrice } = defaultFortnoxOperations;
     const target = `${opts.pricelist}/${opts.article}/${opts.fromQuantity}`;
     if (!(await confirmMutation(`Delete price ${target}`, opts))) return;
     await deletePrice(opts.pricelist, opts.article, opts.fromQuantity);
@@ -4711,7 +4752,7 @@ contracts
   .option('--limit <number>', 'Results per page', parseInt)
   .option('-a, --all', 'Fetch all pages')
   .action(async (opts) => {
-    const { listContracts } = await import('./operations/contracts.js');
+    const { listContracts } = defaultFortnoxOperations;
     const data = await listContracts({
       filter: opts.filter,
       page: opts.page,
@@ -4725,7 +4766,7 @@ contracts
   .command('get <documentNumber>')
   .description('Get a single contract')
   .action(async (documentNumber: string) => {
-    const { getContract } = await import('./operations/contracts.js');
+    const { getContract } = defaultFortnoxOperations;
     const data = await getContract(documentNumber);
     outputDetail(data, contractDetailColumns, json(), 'Contract');
   });
@@ -4744,7 +4785,7 @@ Examples:
   echo '{"InvoiceRows":[{"Description":"Hosting","DeliveredQuantity":1,"Price":500,"AccountNumber":3001,"VAT":25}],"PeriodStart":"2026-07-01","PeriodEnd":"2027-06-30","InvoiceInterval":3,"ContractLength":12}' | noxctl contracts create --customer 25 --input - --dry-run`,
   )
   .action(async (opts) => {
-    const { createContract } = await import('./operations/contracts.js');
+    const { createContract } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     const params = { CustomerNumber: opts.customer, ...input };
@@ -4766,7 +4807,7 @@ contracts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (documentNumber: string, opts) => {
-    const { updateContract } = await import('./operations/contracts.js');
+    const { updateContract } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation(`Update contract ${documentNumber}`, opts, { Contract: fields }))) {
@@ -4782,7 +4823,7 @@ contracts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { finishContract } = await import('./operations/contracts.js');
+    const { finishContract } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Finish contract ${documentNumber}`, opts))) {
       return;
     }
@@ -4802,7 +4843,7 @@ contracts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { createInvoiceFromContract } = await import('./operations/contracts.js');
+    const { createInvoiceFromContract } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Create invoice from contract ${documentNumber}`, opts))) {
       return;
     }
@@ -4822,7 +4863,7 @@ contracts
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the action without sending it')
   .action(async (documentNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
-    const { increaseInvoiceCount } = await import('./operations/contracts.js');
+    const { increaseInvoiceCount } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Increase invoice count for contract ${documentNumber}`, opts))) {
       return;
     }
@@ -4881,7 +4922,7 @@ recurrings
   .option('--sort-by <field>', 'Field to sort by')
   .option('--order <direction>', 'Sort direction: ASC or DESC')
   .action(async (opts) => {
-    const { listRecurrings } = await import('./operations/recurrings.js');
+    const { listRecurrings } = defaultFortnoxOperations;
     const data = await listRecurrings({
       customerNumbers: opts.customerNumbers,
       statuses: opts.statuses,
@@ -4899,7 +4940,7 @@ recurrings
   .command('get <recurringId>')
   .description('Get a recurring billing contract and its ETag')
   .action(async (recurringId: string) => {
-    const { getRecurring } = await import('./operations/recurrings.js');
+    const { getRecurring } = defaultFortnoxOperations;
     const data = recurringResult(await getRecurring(recurringId));
     outputDetail(data, recurringDetailColumns, json(), 'Recurring');
   });
@@ -4911,7 +4952,7 @@ recurrings
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createRecurring } = await import('./operations/recurrings.js');
+    const { createRecurring } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation('Create recurring billing contract', opts, input))) return;
@@ -4928,7 +4969,7 @@ recurrings
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (recurringId: string, opts) => {
-    const { replaceRecurring } = await import('./operations/recurrings.js');
+    const { replaceRecurring } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation(`Replace recurring ${recurringId}`, opts, input))) return;
@@ -4947,7 +4988,7 @@ recurrings
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (recurringId: string, opts) => {
-    const { patchRecurring } = await import('./operations/recurrings.js');
+    const { patchRecurring } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const operations = JSON.parse(raw) as Record<string, unknown>[];
     if (!Array.isArray(operations)) throw new Error('Recurring patch input must be a JSON array.');
@@ -4962,7 +5003,7 @@ recurrings
   .command('list-deviations <recurringId>')
   .description('List deviations for a recurring billing contract')
   .action(async (recurringId: string) => {
-    const { listRecurringDeviations } = await import('./operations/recurrings.js');
+    const { listRecurringDeviations } = defaultFortnoxOperations;
     const data = await listRecurringDeviations(recurringId);
     outputList(data, recurringListColumns, json(), data);
   });
@@ -4971,7 +5012,7 @@ recurrings
   .command('get-deviation <recurringId> <deviationId>')
   .description('Get one recurring billing deviation')
   .action(async (recurringId: string, deviationId: string) => {
-    const { getRecurringDeviation } = await import('./operations/recurrings.js');
+    const { getRecurringDeviation } = defaultFortnoxOperations;
     const data = await getRecurringDeviation(recurringId, deviationId);
     outputDetail(data, recurringDetailColumns, json(), 'Recurring deviation');
   });
@@ -4982,7 +5023,7 @@ recurrings
   .requiredOption('--recurring-ids <ids>', 'Comma-separated recurring UUIDs', csvOption)
   .option('--statuses <statuses>', 'Comma-separated request statuses', csvOption)
   .action(async (opts) => {
-    const { listInvoiceRequests } = await import('./operations/recurrings.js');
+    const { listInvoiceRequests } = defaultFortnoxOperations;
     const data = await listInvoiceRequests(opts.recurringIds, opts.statuses);
     outputList(data, invoiceRequestListColumns, json(), data);
   });
@@ -4991,7 +5032,7 @@ recurrings
   .command('get-invoice-request <invoiceRequestId>')
   .description('Get a recurring invoice-generation request')
   .action(async (invoiceRequestId: string) => {
-    const { getInvoiceRequest } = await import('./operations/recurrings.js');
+    const { getInvoiceRequest } = defaultFortnoxOperations;
     const data = await getInvoiceRequest(invoiceRequestId);
     outputDetail(data, invoiceRequestDetailColumns, json(), 'Recurring invoice request');
   });
@@ -5004,7 +5045,7 @@ recurrings
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createInvoiceRequest } = await import('./operations/recurrings.js');
+    const { createInvoiceRequest } = defaultFortnoxOperations;
     const mode = String(opts.processingMode).toUpperCase();
     if (mode !== 'SYNC' && mode !== 'ASYNC')
       throw new Error('processing-mode must be SYNC or ASYNC.');
@@ -5030,7 +5071,7 @@ financialYears
   .description('List financial years (räkenskapsår)')
   .option('--date <date>', 'Find the financial year containing this date (YYYY-MM-DD)')
   .action(async (opts: { date?: string }) => {
-    const { listFinancialYears } = await import('./operations/financial-years.js');
+    const { listFinancialYears } = defaultFortnoxOperations;
     const data = await listFinancialYears({ date: opts.date });
     outputList(
       data.FinancialYears ?? [],
@@ -5045,7 +5086,7 @@ financialYears
   .command('get <id>')
   .description('Get a single financial year')
   .action(async (id: string) => {
-    const { getFinancialYear } = await import('./operations/financial-years.js');
+    const { getFinancialYear } = defaultFortnoxOperations;
     const data = await getFinancialYear(parseInt(id, 10));
     outputDetail(data, financialYearDetailColumns, json(), 'FinancialYear');
   });
@@ -5060,7 +5101,7 @@ financialYears
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .action(async (opts) => {
-    const { createFinancialYear } = await import('./operations/financial-years.js');
+    const { createFinancialYear } = defaultFortnoxOperations;
     const fields: Record<string, unknown> = { FromDate: opts.from, ToDate: opts.to };
     if (opts.accountingMethod) fields.AccountingMethod = opts.accountingMethod;
     if (opts.accountChart) fields.AccountChartType = opts.accountChart;
@@ -5073,7 +5114,7 @@ financialYears
   .command('locked-period')
   .description('Show the locked period (bokföring låst t.o.m.)')
   .action(async () => {
-    const { getLockedPeriod } = await import('./operations/financial-years.js');
+    const { getLockedPeriod } = defaultFortnoxOperations;
     const data = await getLockedPeriod();
     if (json()) {
       console.log(JSON.stringify({ LockedPeriod: data }, null, 2));
@@ -5109,7 +5150,7 @@ archive
   .option('--path <path>', 'Archive path')
   .option('--file-id <id>', 'File ID')
   .action(async (opts) => {
-    const { listArchive } = await import('./operations/files.js');
+    const { listArchive } = defaultFortnoxOperations;
     const raw = await listArchive({ path: opts.path, fileId: opts.fileId });
     const folder = (raw.Folder ?? {}) as Record<string, unknown>;
     const items = [
@@ -5126,7 +5167,7 @@ archive
   .option('-o, --output <file>', 'Output file (default: private temporary directory)')
   .option('--overwrite', 'Overwrite an existing regular file')
   .action(async (id: string, opts) => {
-    const { getArchiveEntry } = await import('./operations/files.js');
+    const { getArchiveEntry } = defaultFortnoxOperations;
     const { privateOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
     const file = await getArchiveEntry(id, { path: opts.path, fileId: opts.fileId });
     const target = writeBinaryFile(
@@ -5149,7 +5190,7 @@ archive
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without reading or uploading the file')
   .action(async (file: string, opts) => {
-    const { uploadArchiveFile } = await import('./operations/files.js');
+    const { uploadArchiveFile } = defaultFortnoxOperations;
     if (
       !(await confirmMutation(`Upload ${file} to archive`, opts, {
         folderId: opts.folderId,
@@ -5171,7 +5212,7 @@ archive
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without deleting')
   .action(async (path: string, opts) => {
-    const { deleteArchivePath } = await import('./operations/files.js');
+    const { deleteArchivePath } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete archive path ${JSON.stringify(path)}`, opts))) return;
     await deleteArchivePath(path);
     outputConfirmation(`Archive path ${JSON.stringify(path)} deleted.`, json(), {
@@ -5186,7 +5227,7 @@ archive
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without deleting')
   .action(async (id: string, opts) => {
-    const { deleteArchiveEntry } = await import('./operations/files.js');
+    const { deleteArchiveEntry } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete archive entry ${id}`, opts, { path: opts.path }))) return;
     await deleteArchiveEntry(id, opts.path);
     outputConfirmation(`Archive entry ${id} deleted.`, json(), { Id: id, deleted: true });
@@ -5210,7 +5251,7 @@ Examples:
 const inboxList = inbox.command('list');
 inboxList.description('List inbox folders and files');
 inboxList.action(async () => {
-  const { listInbox } = await import('./operations/files.js');
+  const { listInbox } = defaultFortnoxOperations;
   const raw = await listInbox();
   const folder = (raw.Folder ?? {}) as Record<string, unknown>;
   const items = [
@@ -5227,7 +5268,7 @@ inbox
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without reading or uploading the file')
   .action(async (file: string, opts) => {
-    const { uploadInboxEntry } = await import('./operations/files.js');
+    const { uploadInboxEntry } = defaultFortnoxOperations;
     if (
       !(await confirmMutation(`Upload ${file} to inbox`, opts, {
         folderId: opts.folderId,
@@ -5249,7 +5290,7 @@ inbox
   .option('-f, --file <path>', 'Write the file here')
   .option('--overwrite', 'Allow replacing an existing regular file')
   .action(async (id: string, opts) => {
-    const { getInboxFile } = await import('./operations/files.js');
+    const { getInboxFile } = defaultFortnoxOperations;
     const { privateOutputPath, writeBinaryFile } = await import('./safe-file-output.js');
     const file = await getInboxFile(id);
     const path = writeBinaryFile(
@@ -5268,7 +5309,7 @@ inbox
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview without deleting')
   .action(async (id: string, opts) => {
-    const { deleteInboxEntry } = await import('./operations/files.js');
+    const { deleteInboxEntry } = defaultFortnoxOperations;
     if (!(await confirmMutation(`Delete inbox entry ${id}`, opts))) return;
     await deleteInboxEntry(id);
     outputConfirmation(`Inbox entry ${id} deleted.`, json(), { Id: id, deleted: true });
@@ -5317,7 +5358,7 @@ attachments
       ))
     )
       return;
-    const { createDocumentAttachment } = await import('./operations/invoices.js');
+    const { createDocumentAttachment } = defaultFortnoxOperations;
     const result = await createDocumentAttachment(
       documentNumber,
       entityType as 'F' | 'OF' | 'O' | 'C',
@@ -5331,7 +5372,7 @@ attachments
   .description('List attachments for OF (offer), O (order), or C (contract)')
   .action(async (entityType: string, documentNumber: string) => {
     if (!['OF', 'O', 'C'].includes(entityType)) throw new Error('entityType must be OF, O, or C');
-    const { listDocumentAttachments } = await import('./operations/invoices.js');
+    const { listDocumentAttachments } = defaultFortnoxOperations;
     const rows = await listDocumentAttachments(documentNumber, entityType as 'OF' | 'O' | 'C');
     outputList(rows, invoiceAttachmentListColumns, json(), rows);
   });
@@ -5341,7 +5382,7 @@ attachments
   .action(async (entityType: string, entityIds: string[]) => {
     if (!['F', 'OF', 'O', 'C'].includes(entityType))
       throw new Error('entityType must be F, OF, O, or C');
-    const { getAttachmentCounts } = await import('./operations/invoices.js');
+    const { getAttachmentCounts } = defaultFortnoxOperations;
     const result = await getAttachmentCounts(
       entityIds.map(Number),
       entityType as 'F' | 'OF' | 'O' | 'C',
@@ -5359,7 +5400,7 @@ attachments
     const rows = JSON.parse(raw) as Record<string, unknown>[];
     if (!Array.isArray(rows)) throw new Error('Attachment input must be an array');
     if (!(await confirmMutation('Validate attachments included on send', opts, rows))) return;
-    const { validateAttachmentsOnSend } = await import('./operations/invoices.js');
+    const { validateAttachmentsOnSend } = defaultFortnoxOperations;
     await validateAttachmentsOnSend(rows);
     outputConfirmation('Attachment validation accepted.', json(), {});
   });
@@ -5373,7 +5414,7 @@ attachments
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const fields = JSON.parse(raw) as Record<string, unknown>;
     if (!(await confirmMutation(`Update attachment ${attachmentId}`, opts, fields))) return;
-    const { updateDocumentAttachment } = await import('./operations/invoices.js');
+    const { updateDocumentAttachment } = defaultFortnoxOperations;
     const result = await updateDocumentAttachment(attachmentId, fields);
     outputDetail(result, invoiceAttachmentListColumns, json(), 'Attachment');
   });
@@ -5384,7 +5425,7 @@ attachments
   .option('--dry-run', 'Preview without detaching')
   .action(async (attachmentId: string, opts) => {
     if (!(await confirmMutation(`Detach attachment ${attachmentId}`, opts))) return;
-    const { detachDocumentAttachment } = await import('./operations/invoices.js');
+    const { detachDocumentAttachment } = defaultFortnoxOperations;
     await detachDocumentAttachment(attachmentId);
     outputConfirmation(`Attachment ${attachmentId} detached.`, json(), {
       AttachmentId: attachmentId,
@@ -5427,7 +5468,7 @@ for (const definition of accrualResources) {
     .command(definition.command)
     .description('Fortnox-native accrual operations');
   resource.command('list').action(async () => {
-    const operations = await import('./operations/accruals.js');
+    const operations = defaultFortnoxOperations;
     const result = await operations[definition.list]();
     outputList(
       result.items,
@@ -5438,7 +5479,7 @@ for (const definition of accrualResources) {
     );
   });
   resource.command('get <documentNumber>').action(async (documentNumber: string) => {
-    const operations = await import('./operations/accruals.js');
+    const operations = defaultFortnoxOperations;
     const result = await operations[definition.get](documentNumber);
     outputDetail(result, referenceDataColumns, json(), definition.envelope);
   });
@@ -5448,9 +5489,9 @@ for (const definition of accrualResources) {
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the exact payload without sending it')
     .action(async (opts) => {
-      const operations = await import('./operations/accruals.js');
+      const operations = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
-      const fields = operations.prepareAccrualFields(
+      const fields = prepareAccrualFields(
         definition.envelope,
         JSON.parse(raw) as Record<string, unknown>,
       );
@@ -5469,9 +5510,9 @@ for (const definition of accrualResources) {
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the exact payload without sending it')
     .action(async (documentNumber: string, opts) => {
-      const operations = await import('./operations/accruals.js');
+      const operations = defaultFortnoxOperations;
       const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
-      const fields = operations.prepareAccrualFields(
+      const fields = prepareAccrualFields(
         definition.envelope,
         JSON.parse(raw) as Record<string, unknown>,
       );
@@ -5489,7 +5530,7 @@ for (const definition of accrualResources) {
     .option('-y, --yes', 'Skip confirmation prompt')
     .option('--dry-run', 'Preview the action without sending it')
     .action(async (documentNumber: string, opts) => {
-      const operations = await import('./operations/accruals.js');
+      const operations = defaultFortnoxOperations;
       if (!(await confirmMutation(`Delete ${definition.command} ${documentNumber}`, opts))) return;
       await operations[definition.delete](documentNumber);
       outputConfirmation(`${definition.envelope} ${documentNumber} deleted.`, json(), {
@@ -5570,7 +5611,7 @@ for (const definition of referenceResources) {
     .option('--limit <number>', 'Results per page', parseInt)
     .option('-a, --all', 'Fetch all pages')
     .action(async (opts) => {
-      const operations = await import('./operations/reference-data.js');
+      const operations = defaultFortnoxOperations;
       const list = operations[definition.list];
       const result = await list({ page: opts.page, limit: opts.limit, all: opts.all });
       outputList(
@@ -5586,7 +5627,7 @@ for (const definition of referenceResources) {
       .command('get <identifier>')
       .description(`Get one ${definition.command} entry`)
       .action(async (identifier: string) => {
-        const operations = await import('./operations/reference-data.js');
+        const operations = defaultFortnoxOperations;
         const get = operations[definition.get];
         const result = await get(identifier);
         outputDetail(result.item, referenceDataColumns, json(), definition.command);
@@ -5620,7 +5661,7 @@ analytics
   .command('overdue')
   .description('Summarize overdue counts and balances, with overdue invoice rows')
   .action(async () => {
-    const { getOverdueSummary } = await import('./operations/analytics.js');
+    const { getOverdueSummary } = defaultFortnoxOperations;
     const summary = await getOverdueSummary();
     if (json()) {
       console.log(JSON.stringify(summary, null, 2));
@@ -5640,7 +5681,7 @@ analytics
   .command('unpaid')
   .description('Summarize outstanding and overdue receivable totals')
   .action(async () => {
-    const { getUnpaidTotals } = await import('./operations/analytics.js');
+    const { getUnpaidTotals } = defaultFortnoxOperations;
     const s = await getUnpaidTotals();
     if (json()) {
       console.log(JSON.stringify(s, null, 2));
@@ -5661,7 +5702,7 @@ analytics
   )
   .option('--limit <number>', 'Number of customers (default 10)', parseInt)
   .action(async (opts) => {
-    const { getTopCustomers } = await import('./operations/analytics.js');
+    const { getTopCustomers } = defaultFortnoxOperations;
     const range = fromToParams(opts);
     const result = await getTopCustomers({
       fromDate: range.fromDate,
@@ -5701,7 +5742,7 @@ Example:
   noxctl analytics vat --period 2026-Q1`,
   )
   .action(async (opts) => {
-    const { getVatSummary } = await import('./operations/analytics.js');
+    const { getVatSummary } = defaultFortnoxOperations;
     const range = fromToParams(opts);
     if (!range.fromDate || !range.toDate) {
       fail('analytics vat requires a period: --from/--to or --period.', 2);
@@ -5743,7 +5784,7 @@ Examples:
   noxctl invoices list --filter unpaidoverdue`,
   )
   .action(async (opts: { months?: number }) => {
-    const { getDashboard } = await import('./operations/analytics.js');
+    const { getDashboard } = defaultFortnoxOperations;
     const dash = await getDashboard({ months: opts.months });
     if (json()) {
       console.log(JSON.stringify(dash, null, 2));

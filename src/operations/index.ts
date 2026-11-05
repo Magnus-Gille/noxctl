@@ -30,10 +30,11 @@ import { createSupplierOperations } from './suppliers.js';
 import { createTaxOperations } from './tax.js';
 import { createTaxReductionOperations } from './taxreductions.js';
 import { createVoucherOperations } from './vouchers.js';
+import { observeOperations, type OperationObserver } from '../shadow/operations.js';
 
 /** Bind every Fortnox API operation to one explicit transport instance. */
-export function createFortnoxOperations(transport: FortnoxTransport) {
-  return Object.freeze({
+export function createFortnoxOperations(transport: FortnoxTransport, observer?: OperationObserver) {
+  const operations = Object.freeze({
     ...createAbsenceTransactionOperations(transport),
     ...createAccrualOperations(transport),
     ...createAccountOperations(transport),
@@ -67,9 +68,35 @@ export function createFortnoxOperations(transport: FortnoxTransport) {
     ...createTaxReductionOperations(transport),
     ...createVoucherOperations(transport),
   });
+  return observeOperations(operations, observer);
 }
 
 export type FortnoxOperations = ReturnType<typeof createFortnoxOperations>;
 
 /** Backward-compatible operations bound to the local profile transport. */
-export const defaultFortnoxOperations = createFortnoxOperations(defaultFortnoxTransport);
+const baseDefaultFortnoxOperations = createFortnoxOperations(defaultFortnoxTransport);
+let currentDefaultFortnoxOperations = baseDefaultFortnoxOperations;
+
+/** Set a host-owned observer for subsequent calls through the default aggregate. */
+export function setDefaultOperationObserver(observer?: OperationObserver): void {
+  currentDefaultFortnoxOperations = observer
+    ? observeOperations(baseDefaultFortnoxOperations, observer)
+    : baseDefaultFortnoxOperations;
+}
+
+/** Stable forwarding functions resolve the selected set at each invocation. */
+const defaultOperationForwarders = Object.fromEntries(
+  Object.keys(baseDefaultFortnoxOperations).map((operation) => [
+    operation,
+    (...args: unknown[]) => {
+      const invoke = currentDefaultFortnoxOperations[operation as keyof FortnoxOperations] as (
+        ...args: unknown[]
+      ) => unknown;
+      return invoke(...args);
+    },
+  ]),
+);
+
+export const defaultFortnoxOperations = Object.freeze(
+  defaultOperationForwarders,
+) as FortnoxOperations;

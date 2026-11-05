@@ -826,3 +826,9 @@ metadata, not proof of account permissions, licences, or e-invoice readiness.
 ## License
 
 MIT
+
+### Local shadow evaluation (disabled by default)
+
+An opt-in durable Fortnox-first queue and a restricted Accounted customer adapter
+are available for local evaluation. See [scope, failure handling and host contract](docs/shadow-evaluation.md).
+No background worker or live integration is enabled automatically.

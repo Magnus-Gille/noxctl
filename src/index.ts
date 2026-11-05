@@ -39,19 +39,29 @@ import { registerAccrualTools } from './tools/accruals.js';
 import { registerFileTools } from './tools/files.js';
 import { createStrictMcpServer } from './strict-mcp-server.js';
 import { registerCapabilityResource } from './capability-resource.js';
+import type { OperationObserver } from './shadow/types.js';
+import { registerShadowStatusTool } from './tools/shadow.js';
+
+export { setDefaultOperationObserver } from './operations/index.js';
+export type { OperationObserver } from './shadow/types.js';
 
 export interface CreateServerOptions {
   /** Host-authorized transport for exactly one tenant context. */
   transport?: FortnoxTransport;
+  /** Host-owned observer, allowed only with an explicit tenant transport. */
+  observer?: OperationObserver;
 }
 
 export function createServer(options: CreateServerOptions = {}): McpServer {
+  if (options.observer && !options.transport) {
+    throw new Error('An operation observer requires an explicit tenant-bound transport.');
+  }
   const server = createStrictMcpServer({
     name: 'fortnox-mcp',
     version: VERSION,
   });
   const operations = options.transport
-    ? createFortnoxOperations(options.transport)
+    ? createFortnoxOperations(options.transport, options.observer)
     : defaultFortnoxOperations;
 
   registerCustomerTools(server, operations);
@@ -89,6 +99,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerAccrualTools(server, operations);
   registerFileTools(server, operations);
   registerCapabilityResource(server);
+  if (options.observer) registerShadowStatusTool(server, options.observer);
 
   return server;
 }
