@@ -62,6 +62,36 @@ const ALLOWED_INPUTS = new Set([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Stable refusal reason: a populated source customer field has no Accounted counterpart. */
+export const CUSTOMER_FIELD_UNSUPPORTED = 'CUSTOMER_FIELD_UNSUPPORTED';
+
+/**
+ * Populated source customer data that cannot be mirrored (Accounted has no delivery address,
+ * invoice/offer/order e-mail routing, second phone, fax, web address or comment). Fortnox
+ * defaults/derived fields (Currency, VATType, TermsOfPayment, PriceList, ...) stay neutral.
+ */
+const UNMAPPABLE_SOURCE_FIELDS = [
+  'DeliveryName',
+  'DeliveryAddress1',
+  'DeliveryAddress2',
+  'DeliveryZipCode',
+  'DeliveryCity',
+  'DeliveryCountry',
+  'EmailInvoice',
+  'EmailInvoiceCC',
+  'EmailInvoiceBCC',
+  'EmailOffer',
+  'EmailOfferCC',
+  'EmailOfferBCC',
+  'EmailOrder',
+  'EmailOrderCC',
+  'EmailOrderBCC',
+  'Phone2',
+  'Fax',
+  'WWW',
+  'Comments',
+] as const;
+
 /** Stable refusal reason: customer has no country and does not meet the SEVAT/SEK/COMPANY rule. */
 export const CUSTOMER_COUNTRY_UNVERIFIED = 'CUSTOMER_COUNTRY_UNVERIFIED';
 
@@ -274,8 +304,6 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       return { blocked: 'Confirmed source CustomerNumber is required.' };
     if (source.CustomerNumber.length > 32 || source.CustomerNumber.trim() !== source.CustomerNumber)
       return { blocked: 'Accounted customer number must be unpadded and at most 32 characters.' };
-    if (input.Email !== undefined && !z.string().email().safeParse(input.Email).success)
-      return { blocked: 'Email is not accepted by the Accounted customer schema.' };
     if (!nonemptyString(source.Name)) return { blocked: 'Confirmed source Name is required.' };
     if (source.Type !== 'COMPANY')
       return { blocked: 'Only confirmed COMPANY customers are supported.' };
@@ -297,6 +325,15 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
         };
     }
 
+    for (const field of UNMAPPABLE_SOURCE_FIELDS) {
+      const value = source[field];
+      if (value !== undefined && value !== null && value !== '') {
+        return {
+          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: populated source ${field} has no Accounted mapping.`,
+        };
+      }
+    }
+
     for (const key of Object.keys(input)) {
       if (source[key] !== input[key])
         return { blocked: `Confirmed source value is missing or inconsistent for ${key}.` };
@@ -308,10 +345,15 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       customer_number: source.CustomerNumber,
     };
     for (const [sourceKey, targetKey] of INPUT_TO_TARGET) {
-      if (input[sourceKey] === undefined) continue;
+      const requested = input[sourceKey] !== undefined;
       const value = source[sourceKey];
+      // Every supported field is mirrored from the confirmed source when populated, whether or
+      // not the input carried it; a requested field must be populated.
+      if (!requested && (value === undefined || value === null || value === '')) continue;
       if (!nonemptyString(value))
         return { blocked: `Confirmed source ${sourceKey} is required when requested.` };
+      if (sourceKey === 'Email' && !z.string().email().safeParse(value).success)
+        return { blocked: 'Email is not accepted by the Accounted customer schema.' };
       (body as Record<string, unknown>)[targetKey] = value;
     }
     return { request: body };
