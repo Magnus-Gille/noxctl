@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { inboxEntries } from '../operations/files.js';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
 import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
 import {
@@ -9,7 +10,7 @@ import {
   requireConfirmation,
   textResponse,
 } from '../tool-output.js';
-import { referenceDataColumns } from '../views.js';
+import { inboxColumns, referenceDataColumns } from '../views.js';
 
 function folderItems(raw: Record<string, unknown>): Record<string, unknown>[] {
   const folder = (raw.Folder ?? {}) as Record<string, unknown>;
@@ -132,11 +133,18 @@ export function registerFileTools(
 
   server.tool(
     'fortnox_list_inbox',
-    'Lista mappar och filer i Fortnox inkorg',
-    { includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox') },
-    async ({ includeRaw }) => {
-      const raw = await listInbox();
-      return listResponse(folderItems(raw), referenceDataColumns, raw, undefined, includeRaw);
+    'Lista mappar och filer i Fortnox inkorg. Utan folderId visas rotens mappar; med folderId visas innehållet i den mappen (t.ex. inbox_v för Verifikationer)',
+    {
+      folderId: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Mapp-ID från rotlistan, t.ex. inbox_v; utelämna för att lista roten'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ folderId, includeRaw }) => {
+      const raw = await listInbox({ folderId });
+      return listResponse(inboxEntries(raw), inboxColumns, raw, undefined, includeRaw);
     },
   );
 
@@ -158,7 +166,7 @@ export function registerFileTools(
       const raw = await uploadInboxEntry(filePath, { folderId, path });
       return detailResponse(
         (raw.File ?? raw) as Record<string, unknown>,
-        referenceDataColumns,
+        inboxColumns,
         raw,
         includeRaw,
       );

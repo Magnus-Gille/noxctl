@@ -1,6 +1,6 @@
 import { extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
-import { voucherSeriesSegment } from '../identifiers.js';
+import { pathSegment, voucherSeriesSegment } from '../identifiers.js';
 import {
   snapshotOperationFile,
   type OperationFile,
@@ -93,7 +93,7 @@ export function createVoucherOperations(transport: FortnoxTransport) {
     const params: Record<string, string | number | undefined> = {};
     if (financialYear) params.financialyear = financialYear;
     const data = await transport.request<VoucherResponse>(
-      `vouchers/${voucherSeriesSegment(series)}/${encodeURIComponent(voucherNumber)}`,
+      `vouchers/${voucherSeriesSegment(series)}/${pathSegment('voucher number', voucherNumber)}`,
       { params },
     );
     return data.Voucher;
@@ -201,13 +201,13 @@ export function createVoucherOperations(transport: FortnoxTransport) {
 
   async function getVoucherFileConnection(fileId: string): Promise<Record<string, unknown>> {
     const data = await transport.request<VoucherFileConnectionResponse>(
-      `voucherfileconnections/${encodeURIComponent(fileId)}`,
+      `voucherfileconnections/${pathSegment('file id', fileId)}`,
     );
     return data.VoucherFileConnection;
   }
 
   async function deleteVoucherFileConnection(fileId: string): Promise<void> {
-    await transport.request(`voucherfileconnections/${encodeURIComponent(fileId)}`, {
+    await transport.request(`voucherfileconnections/${pathSegment('file id', fileId)}`, {
       method: 'DELETE',
     });
   }
@@ -312,7 +312,7 @@ export function createVoucherOperations(transport: FortnoxTransport) {
   // uploadInboxFile/attachVoucherFiles call.
   async function getVoucherFile(fileId: string): Promise<VoucherFileContent> {
     const { buffer, contentType } = await transport.requestFile(
-      `inbox/${encodeURIComponent(fileId)}`,
+      `inbox/${pathSegment('file id', fileId)}`,
     );
     return { fileId, contentType, buffer };
   }

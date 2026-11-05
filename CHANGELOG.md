@@ -6,12 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **An id of `.` or `..`, or an empty id, is rejected instead of being sent.**
+  `encodeURIComponent` leaves dots alone and URL parsing collapses dot segments,
+  so `inbox delete .` would have sent `DELETE /3/inbox/` and `..` the API root.
+  Every operation that puts a user-supplied id in a request path (deletes, gets
+  and updates alike, including the inbox, archive, price, schedule and attachment
+  ones) now encodes it through one shared `pathSegment()` helper that refuses
+  these values before any request is made, and the HTTP client refuses any
+  endpoint containing a dot segment as a backstop, including backslash and
+  tab/newline forms that URL parsing normalises into one. Ordinary ids, including
+  ones with `/` or spaces, are encoded exactly as before. The optional price-list
+  and article-number filters of the price listing still treat an empty value as
+  "not given" and list more broadly (found in review of #212 and #213).
+
+## [0.13.0] - 2026-11-05
+
+### Added
+
+- **List the files in an inbox folder.** `noxctl inbox list --folder-id <id>` and
+  `fortnox_list_inbox` with `folderId` read `GET /3/inbox/{Id}`, so the contents of
+  a folder such as `inbox_v` (Verifikationer) can be inspected — for example to
+  confirm an upload arrived or to spot duplicates before the next batch. Folder
+  ids come from the root listing, which still lists only folders. Fortnox returns
+  no date for inbox files, so duplicate checks rest on name and size. Passing a
+  file Id (or `.` / `..`) as the folder gives a clear error instead of a JSON
+  parse failure or a silent root listing (#210).
+
 ### Changed
 
 - The weekly API drift workflow files its reports as tickets in the maintainer's
   Plane project instead of GitHub issues, through `scripts/file-plane-ticket.mjs`.
   It keeps the one-open-ticket-per-report deduplication, no longer needs
   `issues: write`, and fails the run when the gateway secrets are missing.
+
+### Fixed
+
+- Inbox listings and `inbox upload` output now show `Id`, `Name`, `Size` and
+  `Type` instead of the reference-data `Code`/`Name`/`Description` columns, which
+  left the `Id` blank; the id is what `inbox file`, `inbox delete` and
+  `--folder-id` take (#210).
 
 ## [0.12.0] - 2026-10-01
 
@@ -394,6 +429,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.13.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.9.0...v0.10.0

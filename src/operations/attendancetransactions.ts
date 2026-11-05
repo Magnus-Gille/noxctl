@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface AttendanceTransactionResponse {
   AttendanceTransaction: Record<string, unknown>;
@@ -50,7 +51,7 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
 
   async function getAttendanceTransaction(id: string): Promise<Record<string, unknown>> {
     const data = await transport.request<AttendanceTransactionResponse>(
-      `attendancetransactions/${encodeURIComponent(id)}`,
+      `attendancetransactions/${pathSegment('attendance transaction id', id)}`,
     );
     return data.AttendanceTransaction;
   }
@@ -61,7 +62,7 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
     code: string,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<AttendanceTransactionResponse>(
-      `attendancetransactions/${encodeURIComponent(id)}/${encodeURIComponent(date)}/${encodeURIComponent(code)}`,
+      `attendancetransactions/${pathSegment('attendance transaction id', id)}/${pathSegment('date', date)}/${pathSegment('attendance code', code)}`,
     );
     return data.AttendanceTransaction;
   }
@@ -77,9 +78,12 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
   }
 
   async function deleteAttendanceTransaction(id: string): Promise<void> {
-    await transport.request(`attendancetransactions/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-    });
+    await transport.request(
+      `attendancetransactions/${pathSegment('attendance transaction id', id)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   async function updateAttendanceTransaction(
@@ -87,7 +91,7 @@ export function createAttendanceTransactionOperations(transport: FortnoxTranspor
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<AttendanceTransactionResponse>(
-      `attendancetransactions/${encodeURIComponent(id)}`,
+      `attendancetransactions/${pathSegment('attendance transaction id', id)}`,
       { method: 'PUT', body: { AttendanceTransaction: params } },
     );
     return data.AttendanceTransaction;

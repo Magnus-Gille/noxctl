@@ -80,7 +80,10 @@ families and operations.
 
 Each Fortnox resource follows the same pattern — 5 files:
 
-1. `src/operations/<resource>.ts` — API calls (list, get, create, update, etc.)
+1. `src/operations/<resource>.ts` — API calls (list, get, create, update, etc.). Build every
+   id in a request path with `pathSegment()` from `src/identifiers.ts`, never a bare
+   `encodeURIComponent`: it rejects `.`, `..` and empty ids that URL parsing would collapse
+   (the HTTP client refuses such endpoints too).
 2. `src/tools/<resource>.ts` — MCP tool registrations with Zod schemas (Swedish descriptions)
 3. `src/views.ts` — add column definitions for list/detail/confirm views
 4. `src/cli.ts` — Commander subcommands mirroring the MCP tools 1:1

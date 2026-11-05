@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface SupplierResponse {
   Supplier: Record<string, unknown>;
@@ -41,7 +42,7 @@ export function createSupplierOperations(transport: FortnoxTransport) {
 
   async function getSupplier(supplierNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<SupplierResponse>(
-      `suppliers/${encodeURIComponent(supplierNumber)}`,
+      `suppliers/${pathSegment('supplier number', supplierNumber)}`,
     );
     return data.Supplier;
   }
@@ -60,7 +61,7 @@ export function createSupplierOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { SupplierNumber: _, ...body } = fields;
     const data = await transport.request<SupplierResponse>(
-      `suppliers/${encodeURIComponent(supplierNumber)}`,
+      `suppliers/${pathSegment('supplier number', supplierNumber)}`,
       {
         method: 'PUT',
         body: { Supplier: body },

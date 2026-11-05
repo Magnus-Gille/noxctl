@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface ScheduleTimeResponse {
   ScheduleTime: Record<string, unknown>;
@@ -10,7 +11,7 @@ export function createScheduleTimeOperations(transport: FortnoxTransport) {
     date: string,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<ScheduleTimeResponse>(
-      `scheduletimes/${encodeURIComponent(employeeId)}/${encodeURIComponent(date)}`,
+      `scheduletimes/${pathSegment('employee id', employeeId)}/${pathSegment('date', date)}`,
     );
     return data.ScheduleTime;
   }
@@ -23,7 +24,7 @@ export function createScheduleTimeOperations(transport: FortnoxTransport) {
     // EmployeeId and Date are the path keys — never send them in the PUT body.
     const { EmployeeId: _employeeId, Date: _date, ...body } = fields;
     const data = await transport.request<ScheduleTimeResponse>(
-      `scheduletimes/${encodeURIComponent(employeeId)}/${encodeURIComponent(date)}`,
+      `scheduletimes/${pathSegment('employee id', employeeId)}/${pathSegment('date', date)}`,
       {
         method: 'PUT',
         body: { ScheduleTime: body },
@@ -40,7 +41,7 @@ export function createScheduleTimeOperations(transport: FortnoxTransport) {
     // EmployeeId and Date are the path keys — never send them in the PUT body.
     const { EmployeeId: _employeeId, Date: _date, ...body } = fields;
     const data = await transport.request<ScheduleTimeResponse>(
-      `scheduletimes/${encodeURIComponent(employeeId)}/${encodeURIComponent(date)}/resetday`,
+      `scheduletimes/${pathSegment('employee id', employeeId)}/${pathSegment('date', date)}/resetday`,
       {
         method: 'PUT',
         body: { ScheduleTime: body },

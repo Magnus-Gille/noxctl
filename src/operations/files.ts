@@ -1,5 +1,6 @@
 import { extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 import { snapshotOperationFile, type OperationFile } from '../operation-file.js';
 
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -32,6 +33,18 @@ function uploadForm(filePath: OperationFile): FormData {
   return form;
 }
 
+/**
+ * Flattens an inbox response (root or single folder) into table rows: the
+ * subfolders first, then the files, each tagged with a `Type` so the two can be
+ * told apart in one list.
+ */
+export function inboxEntries(raw: Record<string, unknown>): Record<string, unknown>[] {
+  const folder = (raw.Folder ?? {}) as Record<string, unknown>;
+  const tag = (entries: unknown, Type: 'Folder' | 'File') =>
+    ((entries ?? []) as Record<string, unknown>[]).map((entry) => ({ ...entry, Type }));
+  return [...tag(folder.Folders, 'Folder'), ...tag(folder.Files, 'File')];
+}
+
 export function createFileOperations(transport: FortnoxTransport) {
   async function listArchive(params: { path?: string; fileId?: string } = {}) {
     return transport.request<Record<string, unknown>>('archive', {
@@ -41,7 +54,7 @@ export function createFileOperations(transport: FortnoxTransport) {
 
   async function getArchiveEntry(id: string, params: { path?: string; fileId?: string } = {}) {
     const { buffer, contentType } = await transport.requestFile(
-      `archive/${encodeURIComponent(id)}`,
+      `archive/${pathSegment('archive entry id', id)}`,
       {
         params: { path: params.path, fileid: params.fileId },
       },
@@ -65,14 +78,52 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function deleteArchiveEntry(id: string, path?: string): Promise<void> {
-    await transport.request(`archive/${encodeURIComponent(id)}`, {
+    await transport.request(`archive/${pathSegment('archive entry id', id)}`, {
       method: 'DELETE',
       params: { path },
     });
   }
 
-  async function listInbox() {
-    return transport.request<Record<string, unknown>>('inbox');
+  /**
+   * Lists the inbox root, or — with `folderId` — the contents of one folder
+   * (`GET /3/inbox/{Id}`, e.g. `inbox_v` for Verifikationer). The folder ids
+   * come from the root listing.
+   *
+   * The same endpoint returns raw file bytes for a file id, so a file id here
+   * would otherwise surface as a JSON parse error, or as an "empty" folder.
+   */
+  async function listInbox(params: { folderId?: string } = {}) {
+    if (params.folderId === undefined) {
+      return transport.request<Record<string, unknown>>('inbox');
+    }
+    const folderId = params.folderId.trim();
+    // Rejects an empty id, `.` and `..`, which would list the inbox root or the API root.
+    const folderSegment = pathSegment('folderId', folderId);
+
+    const notAFolder = (cause?: unknown) =>
+      new Error(
+        `Fortnox did not return an inbox folder for "${folderId}". ` +
+          `If it is a file Id, download it with \`noxctl inbox file ${folderId}\`; ` +
+          'folder Ids come from `noxctl inbox list`.',
+        cause === undefined ? undefined : { cause },
+      );
+
+    let raw: Record<string, unknown>;
+    try {
+      raw = await transport.request<Record<string, unknown>>(`inbox/${folderSegment}`);
+    } catch (error) {
+      // A file Id answers with file bytes, which the JSON transport cannot parse.
+      if (error instanceof SyntaxError) throw notAFolder(error);
+      throw error;
+    }
+    // A real folder answers with `Folder.Id` equal to the requested id (ids are
+    // case-sensitive: `INBOX_S` is a 404). Checking it also rejects a file whose
+    // bytes merely parse as a folder-shaped JSON document.
+    const folder = raw?.Folder as Record<string, unknown> | null | undefined;
+    if (typeof folder !== 'object' || folder === null || folder.Id !== folderId) {
+      throw notAFolder();
+    }
+    return raw;
   }
 
   async function uploadInboxEntry(
@@ -87,12 +138,14 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function getInboxFile(id: string) {
-    const { buffer, contentType } = await transport.requestFile(`inbox/${encodeURIComponent(id)}`);
+    const { buffer, contentType } = await transport.requestFile(
+      `inbox/${pathSegment('inbox entry id', id)}`,
+    );
     return { id, buffer, contentType };
   }
 
   async function deleteInboxEntry(id: string): Promise<void> {
-    await transport.request(`inbox/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await transport.request(`inbox/${pathSegment('inbox entry id', id)}`, { method: 'DELETE' });
   }
 
   return {

@@ -571,7 +571,7 @@ strict and validated before any request is sent.
 | CLI group | MCP surface | Purpose |
 |---|---|---|
 | `noxctl archive` | `fortnox_*_archive*` | List/download, multipart upload, delete path/entry |
-| `noxctl inbox` | `fortnox_*_inbox*` | List, multipart upload, safe download, delete |
+| `noxctl inbox` | `fortnox_*_inbox*` | List the root or one folder (`--folder-id` / `folderId`), multipart upload, safe download, delete |
 | `noxctl attachments` | `fortnox_*_document_attachment*` | Attach/list/count/validate/update/detach for invoices, offers, orders, and contracts |
 
 Voucher and supplier-invoice file connections additionally expose get/connect/detach

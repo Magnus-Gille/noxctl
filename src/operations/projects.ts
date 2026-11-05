@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface ProjectResponse {
   Project: Record<string, unknown>;
@@ -35,7 +36,7 @@ export function createProjectOperations(transport: FortnoxTransport) {
 
   async function getProject(projectNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<ProjectResponse>(
-      `projects/${encodeURIComponent(projectNumber)}`,
+      `projects/${pathSegment('project number', projectNumber)}`,
     );
     return data.Project;
   }
@@ -54,7 +55,7 @@ export function createProjectOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { ProjectNumber: _, ...body } = fields;
     const data = await transport.request<ProjectResponse>(
-      `projects/${encodeURIComponent(projectNumber)}`,
+      `projects/${pathSegment('project number', projectNumber)}`,
       {
         method: 'PUT',
         body: { Project: body },
@@ -64,7 +65,9 @@ export function createProjectOperations(transport: FortnoxTransport) {
   }
 
   async function deleteProject(projectNumber: string): Promise<void> {
-    await transport.request(`projects/${encodeURIComponent(projectNumber)}`, { method: 'DELETE' });
+    await transport.request(`projects/${pathSegment('project number', projectNumber)}`, {
+      method: 'DELETE',
+    });
   }
 
   return { listProjects, getProject, createProject, updateProject, deleteProject };

@@ -375,6 +375,70 @@ describe('fortnox-client', () => {
     expect(headers['Content-Type']).toBeUndefined();
     expect(headers.Authorization).toBe('Bearer mock-token');
   });
+
+  // WHATWG URL parsing collapses `.` / `..` path segments, and treats `%2e`
+  // (any case) as a dot, so `inbox/.` would silently become `/3/inbox/` and
+  // `inbox/..` the API root. Operations reject such ids themselves; the client
+  // refuses them too so a call site that forgets still cannot send the request.
+  describe('dot path segments', () => {
+    it.each([
+      'inbox/.',
+      'inbox/..',
+      'inbox/%2e',
+      'inbox/%2E',
+      'inbox/.%2e',
+      'inbox/%2E%2e',
+      'inbox/./x',
+      'archive/a/../b',
+      '/api/fileattachments/attachments-v1/..',
+      'inbox/..?path=x',
+      // WHATWG URL parsing treats a backslash as a separator and drops tabs and
+      // newlines, so these collapse to the same targets as the forms above.
+      'inbox\\..',
+      'inbox\\.',
+      'archive\\a\\..\\b',
+      'inbox/.\t',
+      'in\tbox/..',
+      'inbox/.\n.',
+      'inbox/..\r',
+      'inbox\\%2e%2e',
+    ])('refuses %j before sending anything', async (endpoint) => {
+      global.fetch = vi.fn();
+
+      await expect(fortnoxRequest(endpoint, { method: 'DELETE' })).rejects.toThrow(/dot segment/i);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('applies to every request flavour of the client', async () => {
+      global.fetch = vi.fn();
+      const client = createFortnoxClient({ getAccessToken: async () => 'tenant-token' });
+
+      await expect(client.requestWithMetadata('inbox/..')).rejects.toThrow(/dot segment/i);
+      await expect(client.requestPdf('inbox/..')).rejects.toThrow(/dot segment/i);
+      await expect(client.requestPdfFromMutation('inbox/..')).rejects.toThrow(/dot segment/i);
+      await expect(client.requestFile('inbox/..')).rejects.toThrow(/dot segment/i);
+      await expect(client.fetchAllPages('inbox/..', 'Files')).rejects.toThrow(/dot segment/i);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['inbox/a%2Fb%20c', 'https://api.fortnox.se/3/inbox/a%2Fb%20c'],
+      ['inbox/...', 'https://api.fortnox.se/3/inbox/...'],
+      ['inbox/%252e', 'https://api.fortnox.se/3/inbox/%252e'],
+      ['inbox/a%5Cb', 'https://api.fortnox.se/3/inbox/a%5Cb'],
+      ['archive/file.pdf', 'https://api.fortnox.se/3/archive/file.pdf'],
+      ['supplierinvoices?filter=..', 'https://api.fortnox.se/3/supplierinvoices?filter=..'],
+    ])('still sends %s', async (endpoint, expectedUrl) => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        text: () => Promise.resolve('{}'),
+      });
+
+      await fortnoxRequest(endpoint);
+
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toBe(expectedUrl);
+    });
+  });
 });
 
 describe('createFortnoxClient', () => {
