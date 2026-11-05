@@ -5219,7 +5219,8 @@ inboxList.addHelpText(
   `
 Without --folder-id this lists the inbox root, which only contains folders.
 Use a folder's Id to see the files inside it, for example to check that an
-upload arrived or to spot duplicates before the next batch.
+upload arrived or to spot duplicates before the next batch. Long names are cut
+off in the table; use --output json for the full names.
 
 Examples:
   noxctl inbox list

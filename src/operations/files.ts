@@ -86,6 +86,9 @@ export function createFileOperations(transport: FortnoxTransport) {
    * Lists the inbox root, or — with `folderId` — the contents of one folder
    * (`GET /3/inbox/{Id}`, e.g. `inbox_v` for Verifikationer). The folder ids
    * come from the root listing.
+   *
+   * The same endpoint returns raw file bytes for a file id, so a file id here
+   * would otherwise surface as a JSON parse error, or as an "empty" folder.
    */
   async function listInbox(params: { folderId?: string } = {}) {
     if (params.folderId === undefined) {
@@ -93,7 +96,32 @@ export function createFileOperations(transport: FortnoxTransport) {
     }
     const folderId = params.folderId.trim();
     if (!folderId) throw new Error('folderId must not be empty');
-    return transport.request<Record<string, unknown>>(`inbox/${encodeURIComponent(folderId)}`);
+    // encodeURIComponent leaves dots alone, and URL parsing then collapses
+    // `inbox/.` to the root and `inbox/..` to the API root.
+    if (folderId === '.' || folderId === '..') {
+      throw new Error(`folderId must be an inbox folder Id, not "${folderId}"`);
+    }
+
+    const notAFolder = (cause?: unknown) =>
+      new Error(
+        `Fortnox did not return an inbox folder for "${folderId}". ` +
+          `If it is a file Id, download it with \`noxctl inbox file ${folderId}\`; ` +
+          'folder Ids come from `noxctl inbox list`.',
+        cause === undefined ? undefined : { cause },
+      );
+
+    let raw: Record<string, unknown>;
+    try {
+      raw = await transport.request<Record<string, unknown>>(
+        `inbox/${encodeURIComponent(folderId)}`,
+      );
+    } catch (error) {
+      // A file Id answers with file bytes, which the JSON transport cannot parse.
+      if (error instanceof SyntaxError) throw notAFolder(error);
+      throw error;
+    }
+    if (typeof raw?.Folder !== 'object' || raw.Folder === null) throw notAFolder();
+    return raw;
   }
 
   async function uploadInboxEntry(

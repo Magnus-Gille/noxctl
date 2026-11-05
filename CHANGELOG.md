@@ -13,7 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a folder such as `inbox_v` (Verifikationer) can be inspected — for example to
   confirm an upload arrived or to spot duplicates before the next batch. Folder
   ids come from the root listing, which still lists only folders. Fortnox returns
-  no date for inbox files, so duplicate checks rest on name and size (#210).
+  no date for inbox files, so duplicate checks rest on name and size. Passing a
+  file Id (or `.` / `..`) as the folder gives a clear error instead of a JSON
+  parse failure or a silent root listing (#210).
 
 ### Changed
 

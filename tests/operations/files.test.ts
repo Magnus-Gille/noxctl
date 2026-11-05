@@ -60,6 +60,45 @@ describe('archive and inbox operations', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it.each(['.', '..'])(
+    'rejects the dot-segment folder id %s that URL parsing would collapse',
+    async (folderId) => {
+      const request = vi.fn();
+      const operations = createFileOperations({ request } as unknown as FortnoxTransport);
+
+      await expect(operations.listInbox({ folderId })).rejects.toThrow(/folderId/);
+      expect(request).not.toHaveBeenCalled();
+    },
+  );
+
+  it('explains that a file id is not a folder when Fortnox answers with file bytes', async () => {
+    const cause = new SyntaxError(`Unexpected token '%', "%PDF-1.4" is not valid JSON`);
+    const request = vi.fn().mockRejectedValue(cause);
+    const operations = createFileOperations({ request } as unknown as FortnoxTransport);
+
+    const error = await operations.listInbox({ folderId: 'file-uuid' }).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/file-uuid/);
+    expect((error as Error).message).toMatch(/inbox file file-uuid/);
+    expect((error as Error).cause).toBe(cause);
+  });
+
+  it('does not report an empty folder when the response is not a folder', async () => {
+    const request = vi.fn().mockResolvedValue({ Something: 'else' });
+    const operations = createFileOperations({ request } as unknown as FortnoxTransport);
+
+    await expect(operations.listInbox({ folderId: 'inbox_v' })).rejects.toThrow(/inbox_v/);
+  });
+
+  it('lets other transport failures through unchanged', async () => {
+    const failure = new Error('HTTP 404');
+    const request = vi.fn().mockRejectedValue(failure);
+    const operations = createFileOperations({ request } as unknown as FortnoxTransport);
+
+    await expect(operations.listInbox({ folderId: 'nope' })).rejects.toBe(failure);
+  });
+
   it('flattens an inbox response into tagged folder and file rows', () => {
     expect(
       inboxEntries({

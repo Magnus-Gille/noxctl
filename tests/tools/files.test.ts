@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { readFileSync } from 'node:fs';
 import { createServer } from '../../src/index.js';
-import { privateOutputPath } from '../../src/safe-file-output.js';
+import { privateOutputPath, writeBinaryFile } from '../../src/safe-file-output.js';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
@@ -135,6 +135,47 @@ describe('archive, inbox, and attachment tools', () => {
     const text = (result.content as { text: string }[])[0]!.text;
     expect(text).toContain('inbox_v');
     expect(text).toContain('Verifikationer');
+  });
+
+  it('rejects a whitespace-only inbox folderId at the tool boundary', async () => {
+    global.fetch = vi.fn();
+    const { client } = await setup();
+    const result = await client.callTool({
+      name: 'fortnox_list_inbox',
+      arguments: { folderId: '   ' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('shows the id and size of an uploaded inbox file without a blank Type row', async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json(
+          { File: { Id: 'new-file-id', Name: 'receipt.pdf', Size: 9 } },
+          { status: 201 },
+        ),
+      );
+    const filePath = privateOutputPath('noxctl-test-', 'receipt.pdf');
+    writeBinaryFile(filePath, Buffer.from('%PDF-test'));
+    const { client } = await setup();
+    const result = await client.callTool({
+      name: 'fortnox_upload_inbox_file',
+      arguments: { filePath, folderId: 'inbox_v', confirm: true },
+    });
+
+    expect(result.isError).toBeFalsy();
+    const text = (result.content as { text: string }[])[0]!.text;
+    expect(text).toContain('new-file-id');
+    expect(text).toContain('receipt.pdf');
+    expect(text).toMatch(/Size\s+9/);
+    expect(text).not.toContain('Type');
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/3/inbox?folderId=inbox_v'),
+      expect.objectContaining({ method: 'POST' }),
+    );
   });
 
   it('rejects a blank inbox folderId at the tool boundary', async () => {
