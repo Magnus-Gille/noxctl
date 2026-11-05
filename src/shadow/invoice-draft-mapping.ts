@@ -287,8 +287,14 @@ function isTextInputRow(row: Record<string, unknown>): boolean {
   );
 }
 
+/** Fortnox returns null for "no dimension"; null, absent and '' are all the empty dimension. */
 function optionalDimensionIsEmpty(value: unknown): boolean {
-  return value === undefined || value === '';
+  return value === undefined || value === null || value === '';
+}
+
+/** Fortnox returns null/'none' for "no house-work (ROT/RUT) type"; any other value is real. */
+function houseWorkTypeIsNone(value: unknown): boolean {
+  return value === undefined || value === null || value === '' || value === 'none';
 }
 
 function validateDraft(record: ShadowRecord, binding: ShadowBinding): ValidationResult {
@@ -504,16 +510,28 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
       blocked: `${INVOICE_REFUSAL.roundoffUnsupported}: Accounted ore_rounding is display-only and stores no rounding amount.`,
     };
   }
-  for (const field of [
-    'AdministrationFee',
-    'AdministrationFeeVAT',
-    'Freight',
-    'FreightVAT',
-    'TaxReduction',
-  ]) {
+  for (const field of ['AdministrationFee', 'AdministrationFeeVAT', 'Freight', 'FreightVAT']) {
     if (source[field] !== 0) return { blocked: `Confirmed source ${field} must be zero.` };
   }
   if (source.HouseWork !== false) return { blocked: 'HouseWork invoices are not supported.' };
+  // Fortnox returns TaxReduction null for an invoice without a tax reduction. Null is the neutral
+  // "none" only when the invoice and every row carry no house-work flag or type; otherwise (and for
+  // any nonzero amount) the invoice is refused.
+  if (source.TaxReduction !== 0) {
+    const rowsClean =
+      Array.isArray(source.InvoiceRows) &&
+      source.InvoiceRows.every(
+        (row) =>
+          isPlainObject(row) && row.HouseWork === false && houseWorkTypeIsNone(row.HouseWorkType),
+      );
+    if (
+      source.TaxReduction !== null ||
+      !houseWorkTypeIsNone(source.TaxReductionType) ||
+      !rowsClean
+    ) {
+      return { blocked: 'Confirmed source TaxReduction must be zero.' };
+    }
+  }
   if (!optionalDimensionIsEmpty(source.CostCenter) || !optionalDimensionIsEmpty(source.Project)) {
     return { blocked: 'Source CostCenter and Project must be empty.' };
   }
