@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface SupplierInvoiceResponse {
   SupplierInvoice: Record<string, unknown>;
@@ -62,7 +63,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
 
   async function getSupplierInvoice(givenNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<SupplierInvoiceResponse>(
-      `supplierinvoices/${encodeURIComponent(givenNumber)}`,
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}`,
     );
     return data.SupplierInvoice;
   }
@@ -82,7 +83,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<SupplierInvoiceResponse>(
-      `supplierinvoices/${encodeURIComponent(givenNumber)}`,
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}`,
       { method: 'PUT', body: { SupplierInvoice: params } },
     );
     return data.SupplierInvoice;
@@ -93,7 +94,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
     action: 'approvalbookkeep' | 'approvalpayment' | 'cancel' | 'credit',
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<SupplierInvoiceResponse>(
-      `supplierinvoices/${encodeURIComponent(givenNumber)}/${action}`,
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}/${action}`,
       { method: 'PUT' },
     );
     return data.SupplierInvoice;
@@ -110,7 +111,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
 
   async function bookkeepSupplierInvoice(givenNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<SupplierInvoiceResponse>(
-      `supplierinvoices/${encodeURIComponent(givenNumber)}/bookkeep`,
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}/bookkeep`,
       { method: 'PUT' },
     );
     return data.SupplierInvoice;
@@ -127,7 +128,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
     fileId: string,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<SupplierInvoiceFileConnectionResponse>(
-      `supplierinvoicefileconnections/${encodeURIComponent(fileId)}`,
+      `supplierinvoicefileconnections/${pathSegment('file id', fileId)}`,
     );
     return data.SupplierInvoiceFileConnection;
   }
@@ -152,7 +153,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
   }
 
   async function deleteSupplierInvoiceFileConnection(fileId: string): Promise<void> {
-    await transport.request(`supplierinvoicefileconnections/${encodeURIComponent(fileId)}`, {
+    await transport.request(`supplierinvoicefileconnections/${pathSegment('file id', fileId)}`, {
       method: 'DELETE',
     });
   }
@@ -185,7 +186,7 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
   // ARCHIVE_SCOPE comment in auth.ts).
   async function getSupplierInvoiceFile(fileId: string): Promise<SupplierInvoiceFileContent> {
     const { buffer, contentType } = await transport.requestFile(
-      `inbox/${encodeURIComponent(fileId)}`,
+      `inbox/${pathSegment('file id', fileId)}`,
     );
     return { fileId, contentType, buffer };
   }

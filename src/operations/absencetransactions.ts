@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 interface AbsenceTransactionResponse {
   AbsenceTransaction: Record<string, unknown>;
@@ -46,7 +47,7 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
 
   async function getAbsenceTransaction(id: string): Promise<Record<string, unknown>> {
     const data = await transport.request<AbsenceTransactionResponse>(
-      `absencetransactions/${encodeURIComponent(id)}`,
+      `absencetransactions/${pathSegment('absence transaction id', id)}`,
     );
     return data.AbsenceTransaction;
   }
@@ -57,7 +58,7 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
     code: string,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<AbsenceTransactionResponse>(
-      `absencetransactions/${encodeURIComponent(id)}/${encodeURIComponent(date)}/${encodeURIComponent(code)}`,
+      `absencetransactions/${pathSegment('absence transaction id', id)}/${pathSegment('date', date)}/${pathSegment('absence code', code)}`,
     );
     return data.AbsenceTransaction;
   }
@@ -73,7 +74,7 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
   }
 
   async function deleteAbsenceTransaction(id: string): Promise<void> {
-    await transport.request(`absencetransactions/${encodeURIComponent(id)}`, {
+    await transport.request(`absencetransactions/${pathSegment('absence transaction id', id)}`, {
       method: 'DELETE',
     });
   }
@@ -83,7 +84,7 @@ export function createAbsenceTransactionOperations(transport: FortnoxTransport) 
     params: Record<string, unknown>,
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<AbsenceTransactionResponse>(
-      `absencetransactions/${encodeURIComponent(id)}`,
+      `absencetransactions/${pathSegment('absence transaction id', id)}`,
       { method: 'PUT', body: { AbsenceTransaction: params } },
     );
     return data.AbsenceTransaction;

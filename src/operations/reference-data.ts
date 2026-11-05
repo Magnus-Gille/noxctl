@@ -1,4 +1,5 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
+import { pathSegment } from '../identifiers.js';
 
 export interface ListReferenceParams {
   page?: number;
@@ -41,7 +42,7 @@ function createReferenceReader(transport: FortnoxTransport, definition: Referenc
   async function get(identifier: string) {
     if (!definition.singleKey) throw new Error(`${definition.endpoint} has no get operation`);
     const raw = await transport.request<Record<string, unknown>>(
-      `${definition.endpoint}/${encodeURIComponent(identifier)}`,
+      `${definition.endpoint}/${pathSegment('identifier', identifier)}`,
     );
     return { item: (raw[definition.singleKey] ?? {}) as Record<string, unknown>, raw };
   }
