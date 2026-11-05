@@ -25,6 +25,15 @@ customer-field parity. TermsOfPayment is a Fortnox reference code, not a verifie
 number of days, and is deliberately blocked. Other input fields, customer types,
 countries and operations become visible blocked records.
 
+Customer country rule (owner decision 2026-11-05): a customer whose `Country` and
+`CountryCode` are both null/empty/missing is treated as a Swedish business customer
+(target `country: SE`, `customer_type: swedish_business`) only when `Type` is `COMPANY`,
+`VATType` is `SEVAT` and `Currency` is `SEK`. Any other combination of absent country
+is refused with the stable reason `CUSTOMER_COUNTRY_UNVERIFIED`. An explicit non-Swedish
+`Country` or `CountryCode` (including `CountryCode` empty with `Country` set) is still
+refused, and `CountryCode: SE` behaves as before. Payload and readback are identical to
+`CountryCode: SE` customers; the receipt records no separate basis.
+
 `AccountedMasterDataAdapter` adds a limited `createSupplier` translation and binds
 both source and target companies. The host must explicitly classify each confirmed
 Fortnox supplier number as `swedish_business`; country alone never establishes this.

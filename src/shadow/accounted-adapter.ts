@@ -62,6 +62,17 @@ const ALLOWED_INPUTS = new Set([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Stable refusal reason: customer has no country and does not meet the SEVAT/SEK/COMPANY rule. */
+export const CUSTOMER_COUNTRY_UNVERIFIED = 'CUSTOMER_COUNTRY_UNVERIFIED';
+
+function emptyCountry(value: unknown): boolean {
+  return value === undefined || value === null || value === '';
+}
+
+function countryAbsent(source: Record<string, unknown>): boolean {
+  return emptyCountry(source.Country) && emptyCountry(source.CountryCode);
+}
+
 function plainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -268,8 +279,16 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
     if (!nonemptyString(source.Name)) return { blocked: 'Confirmed source Name is required.' };
     if (source.Type !== 'COMPANY')
       return { blocked: 'Only confirmed COMPANY customers are supported.' };
-    if (source.CountryCode !== 'SE')
-      return { blocked: 'Only confirmed Swedish customers are supported.' };
+    if (source.CountryCode !== 'SE') {
+      if (!countryAbsent(source))
+        return { blocked: 'Only confirmed Swedish customers are supported.' };
+      // Owner decision 2026-11-05: no country information at all is accepted only for a SEK
+      // customer with Swedish VAT; anything else is unverifiable and refused.
+      if (source.Type !== 'COMPANY' || source.VATType !== 'SEVAT' || source.Currency !== 'SEK')
+        return {
+          blocked: `${CUSTOMER_COUNTRY_UNVERIFIED}: customer has no country and is not a SEK SEVAT company.`,
+        };
+    }
 
     for (const key of Object.keys(input)) {
       if (source[key] !== input[key])
