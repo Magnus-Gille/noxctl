@@ -98,9 +98,6 @@ describe('customer source-only fields', () => {
     'DeliveryZipCode',
     'DeliveryCity',
     'DeliveryCountry',
-    'EmailInvoice',
-    'EmailInvoiceCC',
-    'EmailInvoiceBCC',
     'EmailOffer',
     'EmailOfferCC',
     'EmailOfferBCC',
@@ -110,7 +107,6 @@ describe('customer source-only fields', () => {
     'Phone2',
     'Fax',
     'WWW',
-    'Comments',
   ])('refuses populated unmappable %s', (field) => {
     expect(prepare({ [field]: 'populated' })).toEqual({
       blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: populated source ${field}`),
@@ -124,7 +120,111 @@ describe('customer source-only fields', () => {
       DeliveryName: '',
       EmailInvoice: null,
       Comments: '',
+      EmailInvoiceCC: '',
     });
     expect(result).toHaveProperty('request');
+  });
+
+  it('treats EmailInvoice equal to Email as neutral (nothing extra mapped)', () => {
+    const result = prepare({ Email: 'a@example.test', EmailInvoice: 'a@example.test' });
+    expect(result.request).toEqual({
+      name: 'Exempel AB',
+      customer_type: 'swedish_business',
+      country: 'SE',
+      customer_number: 'C-100',
+      email: 'a@example.test',
+    });
+  });
+
+  it.each([
+    [{ Email: 'a@example.test', EmailInvoice: 'b@example.test' }],
+    [{ Email: '', EmailInvoice: 'b@example.test' }],
+    [{ EmailInvoice: 'b@example.test' }],
+  ])('refuses EmailInvoice differing from Email %j', (over) => {
+    expect(prepare(over)).toEqual({
+      blocked: expect.stringContaining(
+        `${CUSTOMER_FIELD_UNSUPPORTED}: source EmailInvoice differs`,
+      ),
+    });
+  });
+
+  it('maps EmailInvoiceCC/BCC to address arrays, split on commas and semicolons', () => {
+    const result = prepare({
+      EmailInvoiceCC: 'c1@example.test; c2@example.test',
+      EmailInvoiceBCC: 'b1@example.test,b2@example.test',
+    });
+    expect(result.request).toMatchObject({
+      invoice_email_cc_addresses: ['c1@example.test', 'c2@example.test'],
+      invoice_email_bcc_addresses: ['b1@example.test', 'b2@example.test'],
+    });
+  });
+
+  it.each(['not-an-email', 'a@example.test;', 'a@example.test;bad', ';'])(
+    'refuses invalid copy list %j',
+    (value) => {
+      expect(prepare({ EmailInvoiceCC: value })).toEqual({
+        blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source EmailInvoiceCC`),
+      });
+    },
+  );
+
+  it('refuses more than 19 copy recipients in total', () => {
+    const list = (n: number, p: string) =>
+      Array.from({ length: n }, (_, i) => `${p}${i}@example.test`).join(';');
+    expect(
+      'request' in prepare({ EmailInvoiceCC: list(10, 'c'), EmailInvoiceBCC: list(9, 'b') }),
+    ).toBe(true);
+    expect(prepare({ EmailInvoiceCC: list(10, 'c'), EmailInvoiceBCC: list(10, 'b') })).toEqual({
+      blocked: expect.stringContaining('more than 19'),
+    });
+  });
+
+  it('maps Comments verbatim to notes', () => {
+    expect(prepare({ Comments: ' Hello\nworld ' }).request).toMatchObject({
+      notes: ' Hello\nworld ',
+    });
+  });
+});
+
+describe('customer readback of array and notes fields', () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const body = {
+    name: 'Exempel AB',
+    customer_type: 'swedish_business',
+    country: 'SE',
+    customer_number: 'C-100',
+    invoice_email_cc_addresses: ['c1@example.test'],
+    notes: 'N',
+  };
+  function run(stored: Record<string, unknown>) {
+    const adapter = new AccountedShadowAdapter('company-123', async (req) =>
+      req.method === 'POST'
+        ? { status: 201, json: { data: { id, ...body } } }
+        : { status: 200, json: { data: { id, ...stored } } },
+    );
+    const record = {
+      id: 'i',
+      version: 1,
+      operation: 'createCustomer',
+      args: [{ Name: 'Exempel AB' }],
+      sourceCompany: 's',
+      targetCompany: 'company-123',
+      requestHash: 'h',
+      state: 'pending',
+      createdAt: 1,
+      updatedAt: 1,
+      sourceResult: { ...base, EmailInvoiceCC: 'c1@example.test', Comments: 'N' },
+    } as ShadowRecord;
+    return adapter.apply(record, body);
+  }
+  it('accepts equal arrays and notes', async () => {
+    await expect(run(body)).resolves.toMatchObject({ targetId: id });
+  });
+  it.each([
+    [{ ...body, invoice_email_cc_addresses: ['other@example.test'] }],
+    [{ ...body, invoice_email_cc_addresses: null }],
+    [{ ...body, notes: 'X' }],
+  ])('blocks a differing readback', async (stored) => {
+    await expect(run(stored)).rejects.toThrow();
   });
 });

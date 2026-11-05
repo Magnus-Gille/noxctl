@@ -32,6 +32,9 @@ type CustomerBody = {
   postal_code?: string;
   city?: string;
   vat_number?: string;
+  invoice_email_cc_addresses?: string[];
+  invoice_email_bcc_addresses?: string[];
+  notes?: string;
 };
 
 type NativeData = Record<string, unknown> & { id: string };
@@ -67,7 +70,8 @@ export const CUSTOMER_FIELD_UNSUPPORTED = 'CUSTOMER_FIELD_UNSUPPORTED';
 
 /**
  * Populated source customer data that cannot be mirrored (Accounted has no delivery address,
- * invoice/offer/order e-mail routing, second phone, fax, web address or comment). Fortnox
+ * offer/order e-mail routing, second phone, fax or web address). EmailInvoice is neutral only when
+ * equal to Email; EmailInvoiceCC/BCC map to invoice_email_{cc,bcc}_addresses; Comments to notes. Fortnox
  * defaults/derived fields (Currency, VATType, TermsOfPayment, PriceList, ...) stay neutral.
  */
 const UNMAPPABLE_SOURCE_FIELDS = [
@@ -77,9 +81,6 @@ const UNMAPPABLE_SOURCE_FIELDS = [
   'DeliveryZipCode',
   'DeliveryCity',
   'DeliveryCountry',
-  'EmailInvoice',
-  'EmailInvoiceCC',
-  'EmailInvoiceBCC',
   'EmailOffer',
   'EmailOfferCC',
   'EmailOfferBCC',
@@ -89,7 +90,6 @@ const UNMAPPABLE_SOURCE_FIELDS = [
   'Phone2',
   'Fax',
   'WWW',
-  'Comments',
 ] as const;
 
 /** Stable refusal reason: customer has no country and does not meet the SEVAT/SEK/COMPANY rule. */
@@ -97,6 +97,20 @@ export const CUSTOMER_COUNTRY_UNVERIFIED = 'CUSTOMER_COUNTRY_UNVERIFIED';
 
 function emptyCountry(value: unknown): boolean {
   return value === undefined || value === null || value === '';
+}
+
+const MAX_INVOICE_COPY_RECIPIENTS = 19;
+
+/** Split a Fortnox ';'/','-separated address string exactly; undefined when any part is invalid. */
+function parseAddressList(value: string): string[] | undefined {
+  const parts = value.split(/[;,]/).map((part) => part.trim());
+  if (
+    parts.length === 0 ||
+    parts.some((part) => part.length === 0 || part.length > 254) ||
+    parts.some((part) => !z.string().email().safeParse(part).success)
+  )
+    return undefined;
+  return parts;
 }
 
 function countryAbsent(source: Record<string, unknown>): boolean {
@@ -123,7 +137,9 @@ function matchesMappedValues(
   data: Record<string, unknown>,
   expected: Record<string, unknown>,
 ): boolean {
-  return Object.entries(expected).every(([key, value]) => data[key] === value);
+  return Object.entries(expected).every(([key, value]) =>
+    Array.isArray(value) ? isDeepStrictEqual(data[key], value) : data[key] === value,
+  );
 }
 
 function sameObject(left: unknown, right: unknown): boolean {
@@ -334,6 +350,12 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       }
     }
 
+    if (!emptyCountry(source.EmailInvoice) && source.EmailInvoice !== source.Email) {
+      return {
+        blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source EmailInvoice differs from Email (or Email is empty); the invoice e-mail has no Accounted mapping.`,
+      };
+    }
+
     for (const key of Object.keys(input)) {
       if (source[key] !== input[key])
         return { blocked: `Confirmed source value is missing or inconsistent for ${key}.` };
@@ -355,6 +377,34 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       if (sourceKey === 'Email' && !z.string().email().safeParse(value).success)
         return { blocked: 'Email is not accepted by the Accounted customer schema.' };
       (body as Record<string, unknown>)[targetKey] = value;
+    }
+    const lists: Array<[string, 'invoice_email_cc_addresses' | 'invoice_email_bcc_addresses']> = [
+      ['EmailInvoiceCC', 'invoice_email_cc_addresses'],
+      ['EmailInvoiceBCC', 'invoice_email_bcc_addresses'],
+    ];
+    let copyCount = 0;
+    for (const [sourceKey, targetKey] of lists) {
+      const value = source[sourceKey];
+      if (emptyCountry(value)) continue;
+      const parsed = typeof value === 'string' ? parseAddressList(value) : undefined;
+      if (!parsed) {
+        return {
+          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${sourceKey} is not a list of valid e-mail addresses.`,
+        };
+      }
+      copyCount += parsed.length;
+      body[targetKey] = parsed;
+    }
+    if (copyCount > MAX_INVOICE_COPY_RECIPIENTS) {
+      return {
+        blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: more than ${MAX_INVOICE_COPY_RECIPIENTS} invoice copy recipients.`,
+      };
+    }
+    if (!emptyCountry(source.Comments)) {
+      if (typeof source.Comments !== 'string') {
+        return { blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source Comments must be a string.` };
+      }
+      body.notes = source.Comments;
     }
     return { request: body };
   }

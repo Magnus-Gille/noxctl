@@ -124,13 +124,33 @@ describe('invoice text header fields', () => {
     }
   });
 
+  it('maps YourOrderNumber verbatim to invoice_marking', () => {
+    const result = map({ YourOrderNumber: ' PO-1 ' });
+    if ('blocked' in result) throw new Error(result.blocked);
+    expect(result.request).toMatchObject({ invoice_marking: ' PO-1 ' });
+    expect(result.expected).toMatchObject({ invoice_marking: ' PO-1 ' });
+  });
+
+  it('accepts a 200-character YourOrderNumber and refuses a longer one', () => {
+    expect('blocked' in map({ YourOrderNumber: 'x'.repeat(200) })).toBe(false);
+    expect(map({ YourOrderNumber: 'x'.repeat(201) })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.yourOrderNumberTooLong),
+    });
+  });
+
   it.each([[''], [null], [undefined]])('omits empty value %j', (value) => {
-    const result = map({ OurReference: value, YourReference: value, Remarks: value });
+    const result = map({
+      OurReference: value,
+      YourReference: value,
+      Remarks: value,
+      YourOrderNumber: value,
+    });
     if ('blocked' in result) throw new Error(result.blocked);
     for (const target of [result.request, result.expected]) {
       expect(target).not.toHaveProperty('our_reference');
       expect(target).not.toHaveProperty('your_reference');
       expect(target).not.toHaveProperty('notes');
+      expect(target).not.toHaveProperty('invoice_marking');
     }
   });
 
@@ -143,7 +163,6 @@ describe('invoice text header fields', () => {
 
 describe('unsupported invoice header fields', () => {
   it.each([
-    ['YourOrderNumber', INVOICE_REFUSAL.yourOrderNumberUnsupported],
     ['Comments', INVOICE_REFUSAL.commentsUnsupported],
     ['DeliveryName', INVOICE_REFUSAL.deliveryAddressUnsupported],
     ['DeliveryAddress1', INVOICE_REFUSAL.deliveryAddressUnsupported],
@@ -279,30 +298,48 @@ function expectedFor(headerPatch: Obj) {
 }
 
 describe('draft readback of text header fields', () => {
-  const patch = { OurReference: 'Anna', YourReference: 'Erik', Remarks: 'Note' };
-  const stored = { our_reference: 'Anna', your_reference: 'Erik', notes: 'Note' };
+  const patch = {
+    OurReference: 'Anna',
+    YourReference: 'Erik',
+    Remarks: 'Note',
+    YourOrderNumber: 'PO-1',
+  };
+  const stored = {
+    our_reference: 'Anna',
+    your_reference: 'Erik',
+    notes: 'Note',
+    invoice_marking: 'PO-1',
+  };
 
   it('accepts a draft that stores the mapped values', () => {
     expect(matchesDraft({ data: nativeDraft(stored) }, invoiceId, expectedFor(patch))).toBe(true);
   });
 
-  it.each(['our_reference', 'your_reference', 'notes'])('blocks a mismatching %s', (key) => {
-    expect(
-      matchesDraft(
-        { data: nativeDraft({ ...stored, [key]: 'other' }) },
-        invoiceId,
-        expectedFor(patch),
-      ),
-    ).toBe(false);
-  });
+  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking'])(
+    'blocks a mismatching %s',
+    (key) => {
+      expect(
+        matchesDraft(
+          { data: nativeDraft({ ...stored, [key]: 'other' }) },
+          invoiceId,
+          expectedFor(patch),
+        ),
+      ).toBe(false);
+    },
+  );
 
-  it.each(['our_reference', 'your_reference', 'notes'])('blocks a missing %s', (key) => {
-    const partial: Obj = { ...stored };
-    delete partial[key];
-    expect(matchesDraft({ data: nativeDraft(partial) }, invoiceId, expectedFor(patch))).toBe(false);
-  });
+  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking'])(
+    'blocks a missing %s',
+    (key) => {
+      const partial: Obj = { ...stored };
+      delete partial[key];
+      expect(matchesDraft({ data: nativeDraft(partial) }, invoiceId, expectedFor(patch))).toBe(
+        false,
+      );
+    },
+  );
 
-  it.each(['our_reference', 'your_reference', 'notes'])(
+  it.each(['our_reference', 'your_reference', 'notes', 'invoice_marking'])(
     'blocks a stored %s when none was requested',
     (key) => {
       expect(
@@ -312,7 +349,7 @@ describe('draft readback of text header fields', () => {
   );
 
   it('accepts null or empty stored values when none was requested', () => {
-    const empty = { our_reference: null, your_reference: '', notes: null };
+    const empty = { our_reference: null, your_reference: '', notes: null, invoice_marking: '' };
     expect(matchesDraft({ data: nativeDraft(empty) }, invoiceId, expectedFor({}))).toBe(true);
   });
 });

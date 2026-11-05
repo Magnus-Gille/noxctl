@@ -77,14 +77,14 @@ Invoice header fields that Fortnox fills from customer/company defaults are clas
 not ignored:
 
 - Mapped and verified on draft/issue/stage readback: `OurReference` -> `our_reference`,
-  `YourReference` -> `your_reference`, `Remarks` -> `notes`, verbatim (no trimming);
-  empty/null/absent is omitted, and readback must then store none. A mismatch blocks.
+  `YourReference` -> `your_reference`, `Remarks` -> `notes`, `YourOrderNumber` ->
+  `invoice_marking` (max 200 characters, else `INVOICE_YOUR_ORDER_NUMBER_TOO_LONG`), verbatim
+  (no trimming); empty/null/absent is omitted, and readback must then store none. A mismatch blocks.
 - Invoice address (`Address1`, `Address2`, `ZipCode`, `City`): Accounted invoices have no
   address and use the customer's. An empty invoice address is accepted; a populated one must
   equal the mirrored customer's confirmed source address (carried as `sourceAddress` on the
   customer identity resolution) or the invoice is refused with `INVOICE_ADDRESS_MISMATCH`.
-- Refused when non-empty: `YourOrderNumber` (`INVOICE_YOUR_ORDER_NUMBER_UNSUPPORTED`),
-  `Comments` (`INVOICE_COMMENTS_UNSUPPORTED`), any `Delivery*` address field
+- Refused when non-empty: `Comments` (`INVOICE_COMMENTS_UNSUPPORTED`), any `Delivery*` address field
   (`INVOICE_DELIVERY_ADDRESS_UNSUPPORTED`), and `InvoiceReference` / `OrderReference` /
   `ContractReference` unless absent, null, `''`, `0` or `'0'`
   (`INVOICE_LINKED_DOCUMENT_UNSUPPORTED`).
@@ -93,8 +93,12 @@ not ignored:
 
 The customer mapper likewise mirrors every populated supported source field (not only those in
 the call's input; input/source equality is still required for keys the input carries) and
-refuses populated source `Delivery*`, `Email{Invoice,Offer,Order}[CC|BCC]`, `Phone2`, `Fax`,
-`WWW` and `Comments` with `CUSTOMER_FIELD_UNSUPPORTED`.
+refuses populated source `Delivery*`, `EmailOffer*`, `EmailOrder*` (with CC/BCC), `Phone2`,
+`Fax` and `WWW` with `CUSTOMER_FIELD_UNSUPPORTED`. `EmailInvoice` is neutral only when exactly
+equal to `Email`, otherwise refused. `EmailInvoiceCC`/`EmailInvoiceBCC` are split on `,`/`;`
+(each part trimmed, must be a valid address, at most 19 in total) and mapped to
+`invoice_email_cc_addresses`/`invoice_email_bcc_addresses`; `Comments` maps verbatim to
+`notes`. All are verified on customer readback (arrays by deep equality).
 
 Experimental strict invoice draft and issue adapters are described below and remain
 unwired. There are no voucher, document, article or payment replay adapters yet.

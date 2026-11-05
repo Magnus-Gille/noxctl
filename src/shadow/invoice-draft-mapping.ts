@@ -40,6 +40,8 @@ export interface InvoiceDraftBody {
   our_reference?: string;
   your_reference?: string;
   notes?: string;
+  /** Fortnox YourOrderNumber, verbatim (at most 200 characters); omitted when empty. */
+  invoice_marking?: string;
   items: Array<InvoiceDraftItem | InvoiceDraftTextItem>;
 }
 
@@ -94,7 +96,12 @@ type ValidatedDraft = {
   invoiceDate: string;
   dueDate: string;
   sourceInvoiceId: string;
-  texts: { our_reference?: string; your_reference?: string; notes?: string };
+  texts: {
+    our_reference?: string;
+    your_reference?: string;
+    notes?: string;
+    invoice_marking?: string;
+  };
   /** Populated invoice address that must equal the mirrored customer's address. */
   address?: ShadowSourceAddress;
   rows: ValidatedRow[];
@@ -242,8 +249,8 @@ export const ROW_REFUSAL = {
 export const INVOICE_REFUSAL = {
   /** Fortnox RoundOff is nonzero; Accounted's ore_rounding is display-only and stores no amount. */
   roundoffUnsupported: 'ROUNDOFF_UNSUPPORTED',
-  /** Fortnox YourOrderNumber has no Accounted counterpart (invoice_marking is a different field). */
-  yourOrderNumberUnsupported: 'INVOICE_YOUR_ORDER_NUMBER_UNSUPPORTED',
+  /** Fortnox YourOrderNumber exceeds Accounted's 200-character invoice_marking limit. */
+  yourOrderNumberTooLong: 'INVOICE_YOUR_ORDER_NUMBER_TOO_LONG',
   /** Fortnox internal Comments have no Accounted counterpart. */
   commentsUnsupported: 'INVOICE_COMMENTS_UNSUPPORTED',
   /** A delivery address field is populated; Accounted invoices carry no delivery address. */
@@ -252,17 +259,18 @@ export const INVOICE_REFUSAL = {
   addressMismatch: 'INVOICE_ADDRESS_MISMATCH',
   /** InvoiceReference / OrderReference / ContractReference links the invoice to another document. */
   linkedDocumentUnsupported: 'INVOICE_LINKED_DOCUMENT_UNSUPPORTED',
-  /** A mapped text header field (OurReference, YourReference, Remarks) is not a string/null. */
+  /** A mapped text header field (OurReference, YourReference, Remarks, YourOrderNumber) is not a string/null. */
   headerTextInvalid: 'INVOICE_HEADER_TEXT_INVALID',
 } as const;
 
 /**
  * Classification of Fortnox invoice header fields beyond the confirmed-source amounts:
  *  - mapped and verified on readback: OurReference -> our_reference, YourReference ->
- *    your_reference, Remarks -> notes (verbatim; empty/null/absent -> omitted);
+ *    your_reference, Remarks -> notes, YourOrderNumber -> invoice_marking (max 200; verbatim;
+ *    empty/null/absent -> omitted);
  *  - address (Address1, Address2, ZipCode, City): Accounted uses the customer's address, so a
  *    populated invoice address must equal the mirrored customer's address, else refused;
- *  - refused when non-empty: YourOrderNumber, Comments, every Delivery* address field, and the
+ *  - refused when non-empty: Comments, every Delivery* address field, and the
  *    InvoiceReference / OrderReference / ContractReference links (neutral: absent, null, '', 0, '0');
  *  - derived/neutral Fortnox defaults, not inspected: OCR, TermsOfPayment, PriceList, Language,
  *    EmailInformation, CustomerName, plus labels and delivery terms not listed above.
@@ -290,11 +298,6 @@ function emptyLink(value: unknown): boolean {
 function validateHeaderFields(
   source: Record<string, unknown>,
 ): { blocked: string } | { texts: ValidatedDraft['texts']; address?: ShadowSourceAddress } {
-  if (!emptyHeaderValue(source.YourOrderNumber)) {
-    return {
-      blocked: `${INVOICE_REFUSAL.yourOrderNumberUnsupported}: YourOrderNumber has no Accounted mapping.`,
-    };
-  }
   if (!emptyHeaderValue(source.Comments)) {
     return {
       blocked: `${INVOICE_REFUSAL.commentsUnsupported}: Comments has no Accounted mapping.`,
@@ -319,11 +322,17 @@ function validateHeaderFields(
     ['OurReference', 'our_reference'],
     ['YourReference', 'your_reference'],
     ['Remarks', 'notes'],
+    ['YourOrderNumber', 'invoice_marking'],
   ] as const) {
     const value = source[field];
     if (emptyHeaderValue(value)) continue;
     if (typeof value !== 'string') {
       return { blocked: `${INVOICE_REFUSAL.headerTextInvalid}: ${field} must be a string.` };
+    }
+    if (key === 'invoice_marking' && value.length > 200) {
+      return {
+        blocked: `${INVOICE_REFUSAL.yourOrderNumberTooLong}: YourOrderNumber exceeds 200 characters.`,
+      };
     }
     texts[key] = value;
   }

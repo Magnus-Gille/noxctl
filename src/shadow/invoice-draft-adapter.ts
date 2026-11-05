@@ -42,7 +42,7 @@ export function matchesInvoiceExpected(
       return false;
   }
   // Optional text fields are verified exactly; when not requested the target must hold none.
-  for (const key of ['our_reference', 'your_reference', 'notes'] as const) {
+  for (const key of ['our_reference', 'your_reference', 'notes', 'invoice_marking'] as const) {
     if (!Object.hasOwn(expected, key)) {
       const stored = invoice[key];
       if (stored !== undefined && stored !== null && stored !== '') return false;
