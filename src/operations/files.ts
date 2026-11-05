@@ -120,7 +120,13 @@ export function createFileOperations(transport: FortnoxTransport) {
       if (error instanceof SyntaxError) throw notAFolder(error);
       throw error;
     }
-    if (typeof raw?.Folder !== 'object' || raw.Folder === null) throw notAFolder();
+    // A real folder answers with `Folder.Id` equal to the requested id (ids are
+    // case-sensitive: `INBOX_S` is a 404). Checking it also rejects a file whose
+    // bytes merely parse as a folder-shaped JSON document.
+    const folder = raw?.Folder as Record<string, unknown> | null | undefined;
+    if (typeof folder !== 'object' || folder === null || folder.Id !== folderId) {
+      throw notAFolder();
+    }
     return raw;
   }
 

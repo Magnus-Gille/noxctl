@@ -14,7 +14,8 @@ export const referenceDataColumns: Column[] = [
 export const inboxColumns: Column[] = [
   { key: 'Id', header: 'Id', width: 36 },
   { key: 'Name', header: 'Name', width: 40 },
-  { key: 'Size', header: 'Size', width: 9, align: 'right' },
+  // Fortnox types Size as int32: up to 10 digits (2147483647).
+  { key: 'Size', header: 'Size', width: 10, align: 'right' },
   { key: 'Type', header: 'Type', width: 6 },
 ];
 

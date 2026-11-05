@@ -119,6 +119,24 @@ describe('archive, inbox, and attachment tools', () => {
     expect(text).toContain('file-12346');
   });
 
+  it('shows the largest possible int32 file size without truncating it', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        Folder: {
+          Id: 'inbox_b',
+          Files: [{ Id: 'big-file', Name: 'big.zip', Size: 2147483647 }],
+        },
+      }),
+    );
+    const { client } = await setup();
+    const result = await client.callTool({
+      name: 'fortnox_list_inbox',
+      arguments: { folderId: 'inbox_b' },
+    });
+
+    expect((result.content as { text: string }[])[0]!.text).toContain('2147483647');
+  });
+
   it('shows folder ids in the root inbox listing so they can be passed back as folderId', async () => {
     global.fetch = vi.fn().mockResolvedValue(
       Response.json({

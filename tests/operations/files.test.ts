@@ -42,7 +42,11 @@ describe('archive and inbox operations', () => {
   });
 
   it('lists the contents of an inbox folder by id', async () => {
-    const request = vi.fn().mockResolvedValue({ Folder: { Id: 'inbox_v', Files: [] } });
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ Folder: { Id: 'inbox_v', Files: [] } })
+      .mockResolvedValueOnce({ Folder: { Id: 'a/b', Files: [] } })
+      .mockResolvedValueOnce({ Folder: { Id: 'root', Files: [] } });
     const operations = createFileOperations({ request } as unknown as FortnoxTransport);
 
     await operations.listInbox({ folderId: 'inbox_v' });
@@ -84,8 +88,16 @@ describe('archive and inbox operations', () => {
     expect((error as Error).cause).toBe(cause);
   });
 
-  it('does not report an empty folder when the response is not a folder', async () => {
-    const request = vi.fn().mockResolvedValue({ Something: 'else' });
+  it.each([
+    ['a JSON body without Folder', { Something: 'else' }],
+    ['an empty Folder object', { Folder: {} }],
+    [
+      'a file whose bytes happen to be a folder-shaped JSON document',
+      { Folder: { Files: [{ Id: 'fake', Name: 'fake.pdf' }] } },
+    ],
+    ['a folder with a different Id than the one requested', { Folder: { Id: 'inbox_s' } }],
+  ])('does not report %s as the requested folder', async (_label, response) => {
+    const request = vi.fn().mockResolvedValue(response);
     const operations = createFileOperations({ request } as unknown as FortnoxTransport);
 
     await expect(operations.listInbox({ folderId: 'inbox_v' })).rejects.toThrow(/inbox_v/);
