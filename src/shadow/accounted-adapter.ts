@@ -279,6 +279,13 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
     if (!nonemptyString(source.Name)) return { blocked: 'Confirmed source Name is required.' };
     if (source.Type !== 'COMPANY')
       return { blocked: 'Only confirmed COMPANY customers are supported.' };
+    if (
+      source.CountryCode === 'SE' &&
+      !emptyCountry(source.Country) &&
+      source.Country !== 'Sverige'
+    ) {
+      return { blocked: 'Only confirmed Swedish customers are supported.' };
+    }
     if (source.CountryCode !== 'SE') {
       if (!countryAbsent(source))
         return { blocked: 'Only confirmed Swedish customers are supported.' };

@@ -296,6 +296,27 @@ describe('article-linked invoice rows: mapping', () => {
     expect(result).toMatchObject({ blocked: expect.stringContaining('ARTICLE_NUMBER_INVALID') });
   });
 
+  it('treats a null source ArticleNumber as an unlinked row', () => {
+    for (const inputArticle of [undefined, null, '']) {
+      const record = creator([{ description: 'a', price: 100, inputArticle }]);
+      (
+        record.sourceResult as { InvoiceRows: Array<Record<string, unknown>> }
+      ).InvoiceRows[0]!.ArticleNumber = null;
+      const result = mapInvoiceDraft(record, binding, lookupWith(articles()).lookup);
+      expect(result, String(inputArticle)).toHaveProperty('request');
+      const items = (result as { request: { items: Array<Record<string, unknown>> } }).request
+        .items;
+      expect(items[0]).not.toHaveProperty('article_id');
+    }
+    const record = creator([{ description: 'a', price: 100, inputArticle: 'X-9' }]);
+    (
+      record.sourceResult as { InvoiceRows: Array<Record<string, unknown>> }
+    ).InvoiceRows[0]!.ArticleNumber = null;
+    expect(mapInvoiceDraft(record, binding, lookupWith(articles()).lookup)).toMatchObject({
+      blocked: expect.stringContaining('ARTICLE_NUMBER_INPUT_MISMATCH'),
+    });
+  });
+
   it('changes the bound expected content when article_id changes', () => {
     const one = mappedOk([{ description: 'a', price: 100, article: 'X-9' }]);
     const two = mappedOk([{ description: 'a', price: 100, article: 'X-9' }], {

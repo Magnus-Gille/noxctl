@@ -79,6 +79,22 @@ describe('customer without country (owner decision 2026-11-05)', () => {
     expect(r.request).toBeUndefined();
     expect(String(r.blocked)).toBe('Only confirmed Swedish customers are supported.');
   });
+  it.each([
+    ['foreign Country with SE code', { Country: 'Norge', CountryCode: 'SE' }],
+    ['English Sweden with SE code', { Country: 'Sweden', CountryCode: 'SE' }],
+  ])('refuses SE code with a conflicting Country: %s', (_n, over) => {
+    const r = prepare(over);
+    expect(r.request).toBeUndefined();
+    expect(String(r.blocked)).toBe('Only confirmed Swedish customers are supported.');
+  });
+  it.each([
+    ['Sverige', { Country: 'Sverige' }],
+    ['empty', { Country: '' }],
+    ['null', { Country: null }],
+    ['undefined', { Country: undefined }],
+  ])('accepts SE code with Country %s', (_n, over) => {
+    expect(prepare({ CountryCode: 'SE', ...over })).toEqual(accepted);
+  });
   it('refuses PRIVATE type (existing COMPANY gate)', () => {
     const r = prepare({ Type: 'PRIVATE' });
     expect(r.request).toBeUndefined();

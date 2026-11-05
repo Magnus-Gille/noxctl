@@ -251,7 +251,7 @@ function isValidUnit(value: unknown): value is string {
 
 /** ArticleNumber is an opaque string; never coerced, trimmed, or parsed as a number. */
 function sourceArticleNumber(value: unknown): string | null | undefined {
-  if (value === undefined || value === '') return null;
+  if (value === undefined || value === null || value === '') return null;
   if (
     typeof value === 'string' &&
     value.length <= MAX_CUSTOMER_ID_LENGTH &&
@@ -355,9 +355,13 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
 
     if (isTextInputRow(row)) {
       const text = row.Description;
-      if (typeof text !== 'string' || text.length > MAX_DESCRIPTION_LENGTH) {
+      if (
+        typeof text !== 'string' ||
+        text.trim().length === 0 ||
+        text.length > MAX_DESCRIPTION_LENGTH
+      ) {
         return {
-          blocked: `${ROW_REFUSAL.textRowInvalid}: Text row Description must be a string of at most 2000 characters.`,
+          blocked: `${ROW_REFUSAL.textRowInvalid}: Text row Description must be nonempty and at most 2000 characters.`,
         };
       }
       rows.push({

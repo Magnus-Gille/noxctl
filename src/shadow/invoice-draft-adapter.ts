@@ -98,11 +98,27 @@ export function matchesInvoiceExpected(
       Object.entries(wanted).every(([key, value]) => row[key] === value) &&
       row.line_type === ('line_type' in wanted ? wanted.line_type : 'product') &&
       row.article_id === (('article_id' in wanted ? wanted.article_id : undefined) ?? null) &&
+      (!('line_type' in wanted) || wanted.line_type !== 'text' || textRowStoredAsZeros(row)) &&
       row.deduction_type === null &&
       row.deduction_amount === 0 &&
       emptyDimensions(row.dimensions)
     );
   });
+}
+
+/** Text rows are stored by the target as zeros with no VAT, account, article or discount. */
+function textRowStoredAsZeros(row: Record<string, unknown>): boolean {
+  return (
+    row.article_id === null &&
+    row.vat_rate === 0 &&
+    row.line_total === 0 &&
+    row.vat_amount === 0 &&
+    row.quantity === 0 &&
+    row.unit === '' &&
+    row.unit_price === 0 &&
+    (row.discount_percent === 0 || row.discount_percent === null) &&
+    (row.revenue_account === null || row.revenue_account === undefined)
+  );
 }
 
 export function matchesDraft(

@@ -151,6 +151,7 @@ function targetInvoice(
     sort_order: index,
     line_type: 'line_type' in item ? 'text' : 'product',
     article_id: null,
+    ...('line_type' in item ? { vat_rate: 0, discount_percent: 0, revenue_account: null } : {}),
     deduction_type: null,
     deduction_amount: 0,
     dimensions: {},
@@ -213,14 +214,16 @@ describe('text invoice rows: mapping', () => {
     expect(result.expected).toMatchObject({ subtotal: 200, vat_amount: 50, total: 250 });
   });
 
-  it('keeps an empty text description and refuses an overlong one', () => {
+  it.each([[''], ['   ']])('refuses a blank text description %j like the product path', (blank) => {
     const empty = creator(['text', 'product']);
-    (empty.args[0] as { InvoiceRows: Row[] }).InvoiceRows[0]!.Description = '';
-    (empty.sourceResult as { InvoiceRows: Row[] }).InvoiceRows[0]!.Description = '';
-    const mapped = mapInvoiceDraft(empty, binding, lookup);
-    if (!('request' in mapped)) throw new Error(mapped.blocked);
-    expect(mapped.request.items[0]!.description).toBe('');
+    (empty.args[0] as { InvoiceRows: Row[] }).InvoiceRows[0]!.Description = blank;
+    (empty.sourceResult as { InvoiceRows: Row[] }).InvoiceRows[0]!.Description = blank;
+    expect(mapInvoiceDraft(empty, binding, lookup)).toMatchObject({
+      blocked: expect.stringContaining(ROW_REFUSAL.textRowInvalid),
+    });
+  });
 
+  it('refuses an overlong text description', () => {
     const long = creator(['text', 'product']);
     (long.args[0] as { InvoiceRows: Row[] }).InvoiceRows[0]!.Description = 'x'.repeat(2001);
     expect(mapInvoiceDraft(long, binding, lookup)).toMatchObject({
@@ -323,6 +326,10 @@ describe('text invoice rows: readback', () => {
       ['vat 1', (rows) => (rows[0]!.vat_amount = 1)],
       ['description', (rows) => (rows[0]!.description = 'Other')],
       ['article linked', (rows) => (rows[0]!.article_id = invoiceId)],
+      ['vat_rate 25', (rows) => (rows[0]!.vat_rate = 25)],
+      ['vat_rate missing', (rows) => delete rows[0]!.vat_rate],
+      ['discount 10', (rows) => (rows[0]!.discount_percent = 10)],
+      ['revenue account', (rows) => (rows[0]!.revenue_account = '3001')],
       ['product returned as text', (rows) => (rows[1]!.line_type = 'text')],
       [
         'swapped order',
