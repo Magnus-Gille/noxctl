@@ -376,12 +376,6 @@ const draftMutations: Array<{
     },
   },
   {
-    name: 'second row has article link',
-    mutate: (_record, specs) => {
-      specs[1]!.sourceExtra = { ArticleNumber: 'A-2' };
-    },
-  },
-  {
     name: 'second row has dimension',
     mutate: (_record, specs) => {
       specs[1]!.sourceExtra = { Project: 'P1' };

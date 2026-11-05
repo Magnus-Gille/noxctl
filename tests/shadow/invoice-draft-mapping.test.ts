@@ -527,7 +527,6 @@ describe('mapInvoiceDraft', () => {
     ['house work', {}, { HouseWork: true }],
     ['cost center', {}, { CostCenter: 'CC-1' }],
     ['project', {}, { Project: 'P-1' }],
-    ['article catalog link', {}, { ArticleNumber: 'ART-1' }],
     ['header cost center', { CostCenter: 'CC-1' }, {}],
     ['header project', { Project: 'P-1' }, {}],
   ])('rejects unsupported source semantics: %s', (_label, headerOverrides, rowOverrides) => {

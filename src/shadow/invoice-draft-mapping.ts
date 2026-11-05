@@ -8,6 +8,8 @@ export interface InvoiceDraftItem {
   unit_price: number;
   vat_rate: 25;
   revenue_account: string;
+  /** Target catalog article UUID; present only for article-linked source rows. */
+  article_id?: string;
 }
 
 export interface InvoiceDraftBody {
@@ -56,6 +58,7 @@ type ValidatedRow = {
   unit: string;
   priceCents: number;
   accountNumber: string;
+  articleNumber: string | null;
   netCents: number;
   vatCents: number;
 };
@@ -87,6 +90,7 @@ const ROW_FIELDS = new Set([
   'VAT',
   'Unit',
   'AccountNumber',
+  'ArticleNumber',
 ]);
 const MAX_CUSTOMER_ID_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 2000;
@@ -183,6 +187,30 @@ function amountMatches(value: unknown, expectedCents: number): boolean {
   return toCents(value) === expectedCents;
 }
 
+/** Stable refusal-reason prefixes for article-linked rows. */
+export const ARTICLE_REFUSAL = {
+  invalid: 'ARTICLE_NUMBER_INVALID',
+  inputMismatch: 'ARTICLE_NUMBER_INPUT_MISMATCH',
+  unmapped: 'ARTICLE_UNMAPPED',
+  unresolved: 'ARTICLE_IDENTITY_UNRESOLVED',
+  conflict: 'ARTICLE_IDENTITY_CONFLICT',
+  malformed: 'ARTICLE_IDENTITY_MALFORMED',
+} as const;
+
+/** ArticleNumber is an opaque string; never coerced, trimmed, or parsed as a number. */
+function sourceArticleNumber(value: unknown): string | null | undefined {
+  if (value === undefined || value === '') return null;
+  if (
+    typeof value === 'string' &&
+    value.length <= MAX_CUSTOMER_ID_LENGTH &&
+    value === value.trim() &&
+    !/\p{Cc}/u.test(value)
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
 function optionalDimensionIsEmpty(value: unknown): boolean {
   return value === undefined || value === '';
 }
@@ -233,7 +261,7 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
   if (!Array.isArray(input.InvoiceRows) || input.InvoiceRows.length === 0) {
     return { blocked: 'Invoice draft requires a nonempty ordered row array.' };
   }
-  const rows: Array<ValidatedRow & { inputAccount?: string }> = [];
+  const rows: Array<ValidatedRow & { inputAccount?: string; inputArticle?: unknown }> = [];
   let netCents = 0;
   let vatCents = 0;
   let targetNet = 0;
@@ -301,11 +329,13 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     targetNet += actualNet;
     targetVat += actualVat;
     rows.push({
+      articleNumber: null,
       description,
       quantity,
       unit,
       priceCents,
       inputAccount,
+      inputArticle: Object.hasOwn(row, 'ArticleNumber') ? row.ArticleNumber : undefined,
       accountNumber: '',
       netCents: rowNet,
       vatCents: rowVat,
@@ -387,7 +417,15 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
   }
   for (let index = 0; index < rows.length; index++) {
     const validated = rows[index]!;
-    const { description, unit, quantity, priceCents, inputAccount, netCents: rowNet } = validated;
+    const {
+      description,
+      unit,
+      quantity,
+      priceCents,
+      inputAccount,
+      inputArticle,
+      netCents: rowNet,
+    } = validated;
     const sourceRow = source.InvoiceRows[index];
     if (!isPlainObject(sourceRow)) return { blocked: 'Confirmed source invoice row is malformed.' };
     if (sourceRow.Description !== description || sourceRow.Unit !== unit || sourceRow.VAT !== 25) {
@@ -414,9 +452,21 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     ) {
       return { blocked: 'Source row CostCenter and Project must be empty.' };
     }
-    if (!optionalDimensionIsEmpty(sourceRow.ArticleNumber)) {
-      return { blocked: 'Source ArticleNumber catalog links are not supported.' };
+    const articleNumber = sourceArticleNumber(sourceRow.ArticleNumber);
+    if (articleNumber === undefined) {
+      return {
+        blocked: `${ARTICLE_REFUSAL.invalid}: Source ArticleNumber must be an opaque nonblank string.`,
+      };
     }
+    if (inputArticle !== undefined) {
+      const wanted = sourceArticleNumber(inputArticle);
+      if (wanted === undefined || wanted !== articleNumber) {
+        return {
+          blocked: `${ARTICLE_REFUSAL.inputMismatch}: Input ArticleNumber does not match the confirmed source row.`,
+        };
+      }
+    }
+    validated.articleNumber = articleNumber;
     const accountNumber = sourceAccountNumber(sourceRow.AccountNumber);
     if (!accountNumber) {
       return { blocked: 'Confirmed source AccountNumber must be a four-digit class-3 account.' };
@@ -457,6 +507,58 @@ function isMatchingCustomerIdentity(
   );
 }
 
+function isMatchingArticleIdentity(
+  value: unknown,
+  binding: ShadowBinding,
+  sourceId: string,
+): value is Extract<ShadowIdentityResolution, { state: 'ready' }> {
+  return (
+    isPlainObject(value) &&
+    value.state === 'ready' &&
+    value.resource === 'article' &&
+    value.sourceId === sourceId &&
+    value.sourceCompany === binding.sourceCompany &&
+    value.targetCompany === binding.targetCompany &&
+    typeof value.targetId === 'string' &&
+    UUID_PATTERN.test(value.targetId)
+  );
+}
+
+function resolveArticle(
+  lookup: CustomerIdentityLookup,
+  binding: ShadowBinding,
+  articleNumber: string,
+): { blocked: string } | { targetId: string } {
+  let resolution: ShadowIdentityResolution;
+  try {
+    resolution = lookup('article', articleNumber);
+  } catch (cause) {
+    return {
+      blocked: `${ARTICLE_REFUSAL.unresolved}: Article identity lookup failed (${
+        cause instanceof Error ? cause.name : 'error'
+      }).`,
+    };
+  }
+  const state = isPlainObject(resolution) ? resolution.state : undefined;
+  if (state === 'missing') {
+    return { blocked: `${ARTICLE_REFUSAL.unmapped}: Source article has no createArticle receipt.` };
+  }
+  if (state === 'unresolved') {
+    return {
+      blocked: `${ARTICLE_REFUSAL.unresolved}: Article creator receipt is incomplete or has an unknown outcome.`,
+    };
+  }
+  if (state === 'conflict') {
+    return {
+      blocked: `${ARTICLE_REFUSAL.conflict}: Article identity is ambiguous or conflicting.`,
+    };
+  }
+  if (!isMatchingArticleIdentity(resolution, binding, articleNumber)) {
+    return { blocked: `${ARTICLE_REFUSAL.malformed}: Article identity evidence is malformed.` };
+  }
+  return { targetId: resolution.targetId };
+}
+
 /**
  * Purely map one confirmed standard invoice into a native draft request shape.
  * This does not call the target API or claim legal, accounting, or native behavior parity.
@@ -477,6 +579,13 @@ export function mapInvoiceDraft(
   const subtotal = validated.netCents / 100;
   const vatAmount = validated.vatCents / 100;
   const total = validated.totalCents / 100;
+  const articleIds = new Map<string, string>();
+  for (const row of validated.rows) {
+    if (row.articleNumber === null || articleIds.has(row.articleNumber)) continue;
+    const article = resolveArticle(lookup, binding, row.articleNumber);
+    if ('blocked' in article) return article;
+    articleIds.set(row.articleNumber, article.targetId.toLowerCase());
+  }
   const items: InvoiceDraftItem[] = validated.rows.map((row) => ({
     description: row.description,
     quantity: row.quantity,
@@ -484,6 +593,7 @@ export function mapInvoiceDraft(
     unit_price: row.priceCents / 100,
     vat_rate: 25,
     revenue_account: row.accountNumber,
+    ...(row.articleNumber === null ? {} : { article_id: articleIds.get(row.articleNumber)! }),
   }));
   const request: InvoiceDraftBody = {
     customer_id: customer.targetId,

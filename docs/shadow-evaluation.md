@@ -48,6 +48,16 @@ These routes do not directly send invoices, pay, submit tax returns or post payr
 However, native customer/supplier events can invoke configured outbound webhooks.
 A live host must independently verify disabled hooks/egress and evaluate event
 subscribers before enabling even this narrow pilot.
+Invoice rows that carry an `ArticleNumber` are mapped only when the opaque number
+(never parsed; leading zeros and case preserved) resolves through an applied
+`createArticle` receipt to a target UUID. The draft body then sends that UUID as
+`items[].article_id` while keeping the source row's own description, quantity, unit
+and price, because the target does not fill those from the article. Unlinked rows
+omit `article_id` and must read back as null; the UUID is part of the receipt
+`expected` content that the draft, issue and stage verifiers compare. An unmapped,
+unresolved/unknown-outcome, conflicting or malformed article identity refuses the
+row with an `ARTICLE_*` reason and nothing is dispatched. Empty units and
+non-positive quantities remain refused.
 Experimental strict invoice draft and issue adapters are described below and remain
 unwired. There are no voucher, document, article or payment replay adapters yet.
 The reviewed native v1 article surface is read-only; an MCP create tool does not
