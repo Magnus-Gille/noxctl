@@ -352,9 +352,10 @@ async function shadowStatus(session: FixtureSession): Promise<Record<string, unk
   return jsonOf<Record<string, unknown>>(result as CallToolResult);
 }
 
+// Compiling the fixture can exceed the default 10 s hook timeout on a loaded machine or CI runner.
 beforeAll(() => {
   compileFixture();
-});
+}, 120_000);
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
