@@ -329,6 +329,25 @@ describe('read-only invoice stage verifier', () => {
     }
   });
 
+  it('reports a mismatch when the live target customer drifted from the mirrored customer', async () => {
+    const runtime = await seedRuntime();
+    try {
+      const drifted = targetInvoice('draft') as Record<string, unknown>;
+      drifted.customer = { ...(drifted.customer as object), name: 'Renamed Customer' };
+      const request = vi.fn(async (): Promise<AccountedResponse> => ({
+        status: 200,
+        json: { data: drifted },
+      }));
+      await expect(
+        new AccountedInvoiceStageVerifier(binding, () => runtime.queue.snapshot(), request).verify(
+          '10',
+        ),
+      ).resolves.toMatchObject({ state: 'mismatch' });
+    } finally {
+      await dispose(runtime);
+    }
+  });
+
   it('reports a target read failure as unresolved with a safe diagnostic', async () => {
     const runtime = await seedRuntime({ issue: true });
     try {

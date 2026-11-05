@@ -83,11 +83,12 @@ export function matchesInvoiceExpected(
   )
     return false;
   // Live target customer drift: the customer's current fields must still equal the mirrored ones.
-  if (expected.mirrored_customer) {
-    for (const [key, wanted] of Object.entries(expected.mirrored_customer)) {
-      const stored = invoice.customer[key];
-      if ((stored === undefined || stored === null ? '' : stored) !== wanted) return false;
-    }
+  const mirrored: unknown = expected.mirrored_customer;
+  if (!plain(mirrored) || Object.keys(mirrored).length === 0) return false;
+  for (const [key, wanted] of Object.entries(mirrored)) {
+    if (typeof wanted !== 'string') return false;
+    const stored = invoice.customer[key];
+    if ((stored === undefined || stored === null ? '' : stored) !== wanted) return false;
   }
   if (
     !Array.isArray(expected.items) ||

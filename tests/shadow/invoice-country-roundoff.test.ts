@@ -90,6 +90,16 @@ const ready = (kind: ShadowResourceKind, id: string): ShadowIdentityResolution =
     intentId: `${kind}-intent`,
     requestHash: 'customer-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   }) as ShadowIdentityResolution;
 const missing = (kind: ShadowResourceKind, id: string): ShadowIdentityResolution =>
   ({ state: 'missing', resource: kind, sourceId: id }) as unknown as ShadowIdentityResolution;

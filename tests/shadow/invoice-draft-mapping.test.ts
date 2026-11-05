@@ -140,6 +140,16 @@ function readyIdentity(
     requestHash: 'customer-request-hash',
     sourceCompany: binding.sourceCompany,
     targetCompany: binding.targetCompany,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
     ...overrides,
   };
 }
@@ -210,6 +220,15 @@ describe('mapInvoiceDraft', () => {
         vat_amount: 500,
         total: 2500,
         remaining_amount: 2500,
+        mirrored_customer: {
+          name: '',
+          org_number: '',
+          phone: '',
+          address_line1: '',
+          address_line2: '',
+          postal_code: '',
+          city: '',
+        },
         items: [
           {
             description: 'Consulting service',

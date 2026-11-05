@@ -89,6 +89,16 @@ function lookup(): ShadowIdentityResolution {
     intentId: 'customer-intent',
     requestHash: 'customer-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   };
 }
 function nativeInvoice() {

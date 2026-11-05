@@ -3,7 +3,11 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AccountedInvoiceIssueAdapter } from '../../src/shadow/invoice-issue-adapter.js';
-import { AccountedInvoiceDraftAdapter } from '../../src/shadow/invoice-draft-adapter.js';
+import {
+  AccountedInvoiceDraftAdapter,
+  matchesInvoiceExpected,
+} from '../../src/shadow/invoice-draft-adapter.js';
+import { INVOICE_REFUSAL } from '../../src/shadow/invoice-draft-mapping.js';
 import { openShadowQueue } from '../../src/shadow/queue.js';
 import type { FortnoxTransport } from '../../src/fortnox-client.js';
 import { createFortnoxOperations } from '../../src/operations/index.js';
@@ -117,6 +121,15 @@ function creator(): ShadowRecord {
         vat_amount: 25,
         total: 125,
         remaining_amount: 125,
+        mirrored_customer: {
+          name: '',
+          org_number: '',
+          phone: '',
+          address_line1: '',
+          address_line2: '',
+          postal_code: '',
+          city: '',
+        },
         items: [
           {
             description: 'Synthetic service',
@@ -162,6 +175,16 @@ function customerIdentity(): ShadowIdentityResolution {
     intentId: 'customer-intent',
     requestHash: 'customer-request-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   };
 }
 
@@ -174,6 +197,16 @@ function invoiceIdentity(): ShadowIdentityResolution {
     intentId: creatorId,
     requestHash: 'creator-request-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   };
 }
 
@@ -228,6 +261,40 @@ function targetInvoice(status: 'draft' | 'sent', invoiceNumber: string | null = 
     ],
   };
 }
+
+describe('customer evidence is mandatory for issue verification', () => {
+  it('blocks prepare when the ready customer identity lacks mirrored customer evidence', () => {
+    for (const evidence of [undefined, {}, { Name: 'only name' }]) {
+      const adapter = new AccountedInvoiceIssueAdapter(
+        binding,
+        (kind) =>
+          kind === 'invoice'
+            ? invoiceIdentity()
+            : ({ ...customerIdentity(), sourceCustomer: evidence } as ShadowIdentityResolution),
+        (id) => (id === creatorId ? creator() : undefined),
+        vi.fn(async () => ({ status: 200, json: {} })),
+      );
+      const prepared = adapter.prepare(issue());
+      expect(prepared).toEqual({
+        blocked: expect.stringContaining(INVOICE_REFUSAL.customerEvidenceMissing),
+      });
+    }
+  });
+
+  it('fails the sent-state readback check when the expectation has no mirrored customer', () => {
+    const { mirrored_customer: _omitted, ...rest } = (
+      creator().targetReceipt as {
+        expected: Record<string, unknown>;
+      }
+    ).expected;
+    expect(
+      matchesInvoiceExpected({ data: targetInvoice('sent', 'A-10') }, invoiceId, rest as never, {
+        status: 'sent',
+        invoiceNumber: 'A-10',
+      }),
+    ).toBe(false);
+  });
+});
 
 function issueResponse(invoiceNumber = 'A-10', overrides: Record<string, unknown> = {}) {
   return {

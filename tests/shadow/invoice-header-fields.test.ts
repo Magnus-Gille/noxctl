@@ -103,7 +103,17 @@ function lookupFor(sourceCustomer?: Obj) {
     intentId: 'customer-intent',
     requestHash: 'customer-hash',
     ...binding,
-    ...(sourceCustomer ? { sourceCustomer: sourceCustomer as never } : {}),
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+      ...sourceCustomer,
+    } as never,
   });
 }
 
@@ -520,6 +530,119 @@ describe('invoice copies of customer data', () => {
   });
 });
 
+describe('mandatory customer evidence', () => {
+  const lookupWith = (evidence: unknown) => (kind: ShadowResourceKind) =>
+    ({ ...lookupFor()(kind), sourceCustomer: evidence }) as ShadowIdentityResolution;
+  const complete = {
+    Name: '',
+    OrganisationNumber: '',
+    Phone1: '',
+    Phone2: '',
+    Address1: '',
+    Address2: '',
+    ZipCode: '',
+    City: '',
+  };
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['empty object', {}],
+    ['missing key', { ...complete, City: undefined }],
+    ['non-string value', { ...complete, Phone1: 5 }],
+    ['array', []],
+  ])('refuses %s evidence even when every invoice copy field is empty', (_label, evidence) => {
+    expect(mapInvoiceDraft(record(), binding, lookupWith(evidence))).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.customerEvidenceMissing),
+    });
+  });
+
+  it('accepts complete evidence and always puts mirrored_customer in the expectation', () => {
+    const result = mapInvoiceDraft(record(), binding, lookupWith(complete));
+    if ('blocked' in result) throw new Error(result.blocked);
+    expect(result.expected.mirrored_customer).toEqual({
+      name: '',
+      org_number: '',
+      phone: '',
+      address_line1: '',
+      address_line2: '',
+      postal_code: '',
+      city: '',
+    });
+  });
+
+  it('fails draft readback when the expectation carries no mirrored customer', () => {
+    const { mirrored_customer: _omitted, ...rest } = expectedFor({});
+    expect(matchesDraft({ data: nativeDraft() }, invoiceId, rest as never)).toBe(false);
+    expect(
+      matchesDraft({ data: nativeDraft() }, invoiceId, { ...rest, mirrored_customer: {} } as never),
+    ).toBe(false);
+  });
+});
+
+describe('EmailInformation and EDIInformation', () => {
+  it('treats EmailInformation as neutral when absent, null or any plain object', () => {
+    for (const value of [
+      undefined,
+      null,
+      {},
+      {
+        EmailAddressTo: 'a@example.test',
+        EmailSubject: 'S',
+        EmailBody: 'B',
+        EmailAddressFrom: '',
+        EmailAddressCC: 'c@example.test',
+        EmailAddressBCC: 'b@example.test',
+      },
+    ]) {
+      expect('blocked' in map({ EmailInformation: value })).toBe(false);
+    }
+  });
+
+  it.each(['text', 5, true, ['x']])('refuses non-object EmailInformation %j', (value) => {
+    expect(map({ EmailInformation: value })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.informationMalformed),
+    });
+  });
+
+  it.each(['text', 5, true, ['x']])('refuses non-object EDIInformation %j', (value) => {
+    expect(map({ EDIInformation: value })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.informationMalformed),
+    });
+  });
+
+  it('accepts EDIInformation that is absent, null, empty, or only holds EDIStatus', () => {
+    for (const value of [undefined, null, {}, { EDIStatus: 'SENT' }, { EDIStatus: '' }]) {
+      expect('blocked' in map({ EDIInformation: value })).toBe(false);
+    }
+  });
+
+  it.each([
+    'EDIGlobalLocationNumber',
+    'EDIGlobalLocationNumberDelivery',
+    'EDIInvoiceExtra1',
+    'EDIInvoiceExtra2',
+    'EDIOurElectronicReference',
+    'EDIYourElectronicReference',
+  ])('refuses populated EDIInformation.%s and accepts it empty', (key) => {
+    expect(map({ EDIInformation: { EDIStatus: 'X', [key]: 'v' } })).toEqual({
+      blocked: expect.stringContaining(`${INVOICE_REFUSAL.ediUnsupported}: EDIInformation.${key}`),
+    });
+    for (const none of ['', null, undefined]) {
+      expect('blocked' in map({ EDIInformation: { [key]: none } })).toBe(false);
+    }
+  });
+
+  it('refuses a populated unknown nested EDI key and ignores an empty one', () => {
+    expect(map({ EDIInformation: { EDINewField: 'v' } })).toEqual({
+      blocked: expect.stringContaining(
+        `${INVOICE_REFUSAL.fieldUnclassified}: populated source key EDIInformation.EDINewField`,
+      ),
+    });
+    expect('blocked' in map({ EDIInformation: { EDINewField: '' } })).toBe(false);
+  });
+});
+
 describe('live target customer drift on invoice readback', () => {
   const mirrored = {
     ...ADDRESS,
@@ -544,7 +667,7 @@ describe('live target customer drift on invoice readback', () => {
 
   it('carries the mirrored customer into the expectation', () => {
     expect(expectedFor({}, mirrored)).toMatchObject({ mirrored_customer: live });
-    expect(expectedFor({})).not.toHaveProperty('mirrored_customer');
+    expect(expectedFor({})).toHaveProperty('mirrored_customer');
   });
 
   it('accepts a target customer that still matches', () => {

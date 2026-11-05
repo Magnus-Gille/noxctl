@@ -136,6 +136,16 @@ function mappedDraft(specs: RowSpec[] = twoRows, overrides?: Parameters<typeof d
     intentId: 'customer-create',
     requestHash: 'synthetic-customer-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   }));
   if ('blocked' in result)
     throw new Error(`Expected synthetic draft mapping, got: ${result.blocked}`);
@@ -560,6 +570,16 @@ describe('ordered multi-item invoice draft mapping', () => {
         intentId: 'customer-create',
         requestHash: 'synthetic-customer-hash',
         ...binding,
+        sourceCustomer: {
+          Name: '',
+          OrganisationNumber: '',
+          Phone1: '',
+          Phone2: '',
+          Address1: '',
+          Address2: '',
+          ZipCode: '',
+          City: '',
+        },
       }));
       expect(result).toHaveProperty('blocked');
     },
@@ -596,6 +616,16 @@ describe('ordered multi-item invoice draft mapping', () => {
       intentId: 'customer-create',
       requestHash: 'synthetic-customer-hash',
       ...binding,
+      sourceCustomer: {
+        Name: '',
+        OrganisationNumber: '',
+        Phone1: '',
+        Phone2: '',
+        Address1: '',
+        Address2: '',
+        ZipCode: '',
+        City: '',
+      },
     }));
     expect(Math.round(((0.58 * 25) / 100) * 100) / 100).toBe(0.14);
     expect(result).toHaveProperty('blocked');

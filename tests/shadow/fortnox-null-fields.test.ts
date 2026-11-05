@@ -94,6 +94,16 @@ function lookup(kind: ShadowResourceKind, id: string): ShadowIdentityResolution 
     intentId: `${kind}-intent`,
     requestHash: 'creator-request-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   } as ShadowIdentityResolution;
 }
 

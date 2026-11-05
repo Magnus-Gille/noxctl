@@ -64,6 +64,23 @@ export type MirroredCustomer = Record<
   string
 >;
 
+const CUSTOMER_EVIDENCE_KEYS = [
+  'Name',
+  'OrganisationNumber',
+  'Phone1',
+  'Phone2',
+  'Address1',
+  'Address2',
+  'ZipCode',
+  'City',
+] as const;
+
+function isCompleteCustomerEvidence(value: unknown): value is ShadowSourceCustomer {
+  return (
+    isPlainObject(value) && CUSTOMER_EVIDENCE_KEYS.every((key) => typeof value[key] === 'string')
+  );
+}
+
 function mirroredCustomerKeys(source: ShadowSourceCustomer): MirroredCustomer {
   return {
     name: source.Name,
@@ -77,7 +94,7 @@ function mirroredCustomerKeys(source: ShadowSourceCustomer): MirroredCustomer {
 }
 
 export interface InvoiceDraftExpected extends Omit<InvoiceDraftBody, 'items'> {
-  mirrored_customer?: MirroredCustomer;
+  mirrored_customer: MirroredCustomer;
   status: 'draft';
   invoice_number: null;
   subtotal: number;
@@ -282,6 +299,12 @@ export const INVOICE_REFUSAL = {
   addressMismatch: 'INVOICE_ADDRESS_MISMATCH',
   /** InvoiceReference / OrderReference / ContractReference links the invoice to another document. */
   linkedDocumentUnsupported: 'INVOICE_LINKED_DOCUMENT_UNSUPPORTED',
+  /** The ready customer identity carries no complete, correctly typed mirrored customer evidence. */
+  customerEvidenceMissing: 'INVOICE_CUSTOMER_EVIDENCE_MISSING',
+  /** EDIInformation holds a populated field with no Accounted mapping. */
+  ediUnsupported: 'INVOICE_EDI_UNSUPPORTED',
+  /** EmailInformation / EDIInformation is not a plain object. */
+  informationMalformed: 'INVOICE_INFORMATION_MALFORMED',
   /** A populated header field with no Accounted mapping (references, period, labels, vouchers ...). */
   fieldUnsupported: 'INVOICE_FIELD_UNSUPPORTED',
   /** A populated source key that no allowlist group covers. */
@@ -360,8 +383,6 @@ const HEADER_DERIVED = new Set([
   'ContributionPercent',
   'ContributionValue',
   'Gross',
-  'EDIInformation',
-  'EmailInformation',
   'FinalPayDate',
   'OutboundDate',
   'PrintTemplate',
@@ -407,6 +428,8 @@ const OTHER_REFUSED_FIELDS = [
   'WayOfDelivery',
 ] as const;
 const HEADER_CLASSIFIED = new Set<string>([
+  'EDIInformation',
+  'EmailInformation',
   ...HEADER_VALIDATED,
   ...HEADER_MAPPED.map(([field]) => field),
   ...HEADER_CUSTOMER_COPIED,
@@ -452,6 +475,22 @@ const ROW_CLASSIFIED = new Set([
   'OrderedQuantity',
 ]);
 
+/**
+ * EDIInformation nested keys: EDIStatus is neutral (transmission status); the others are refused
+ * when populated; any other populated nested key is unclassified.
+ * EmailInformation (EmailAddressFrom/To/CC/BCC, EmailSubject, EmailBody) is NEUTRAL by explicit
+ * owner decision: e-mail delivery settings are not bookkeeping data and the shadow lane never
+ * sends e-mail. Only its shape (plain object or absent) is validated.
+ */
+const EDI_REFUSED_KEYS = new Set([
+  'EDIGlobalLocationNumber',
+  'EDIGlobalLocationNumberDelivery',
+  'EDIInvoiceExtra1',
+  'EDIInvoiceExtra2',
+  'EDIOurElectronicReference',
+  'EDIYourElectronicReference',
+]);
+
 function emptyHeaderValue(value: unknown): boolean {
   return (
     value === undefined ||
@@ -494,6 +533,31 @@ function validateHeaderFields(
       return {
         blocked: `${INVOICE_REFUSAL.fieldUnsupported}: ${field} is populated and has no Accounted mapping.`,
       };
+    }
+  }
+  for (const field of ['EmailInformation', 'EDIInformation'] as const) {
+    const value = source[field];
+    if (value === undefined || value === null) continue;
+    if (!isPlainObject(value)) {
+      return {
+        blocked: `${INVOICE_REFUSAL.informationMalformed}: ${field} must be an object.`,
+      };
+    }
+    if (field === 'EDIInformation') {
+      for (const [key, nested] of Object.entries(value)) {
+        if (key === 'EDIStatus') continue;
+        if (!EDI_REFUSED_KEYS.has(key)) {
+          if (!emptyHeaderValue(nested)) {
+            return {
+              blocked: `${INVOICE_REFUSAL.fieldUnclassified}: populated source key EDIInformation.${key} is not classified.`,
+            };
+          }
+        } else if (!emptyHeaderValue(nested)) {
+          return {
+            blocked: `${INVOICE_REFUSAL.ediUnsupported}: EDIInformation.${key} is populated and has no Accounted mapping.`,
+          };
+        }
+      }
     }
   }
   for (const [field, value] of Object.entries(source)) {
@@ -1061,9 +1125,14 @@ export function mapInvoiceDraft(
     return { blocked: 'Confirmed customer identity is missing, unresolved, or conflicting.' };
   }
   const mirrored = customer.sourceCustomer;
+  if (!isCompleteCustomerEvidence(mirrored)) {
+    return {
+      blocked: `${INVOICE_REFUSAL.customerEvidenceMissing}: Customer identity lacks complete mirrored customer evidence.`,
+    };
+  }
   const copied = Object.entries(validated.copies);
   if (copied.length > 0) {
-    const evidence: Record<string, unknown> = isPlainObject(mirrored) ? mirrored : {};
+    const evidence = mirrored as unknown as Record<string, unknown>;
     for (const [field, value] of copied) {
       if (evidence[field === 'CustomerName' ? 'Name' : field] !== value) {
         return {
@@ -1072,7 +1141,7 @@ export function mapInvoiceDraft(
       }
     }
   }
-  const mirroredCustomer = isPlainObject(mirrored) ? mirroredCustomerKeys(mirrored) : undefined;
+  const mirroredCustomer = mirroredCustomerKeys(mirrored);
 
   const subtotal = validated.netCents / 100;
   const vatAmount = validated.vatCents / 100;
@@ -1126,7 +1195,7 @@ export function mapInvoiceDraft(
     payment_link_auto: false,
     ore_rounding: false,
     ...validated.texts,
-    ...(mirroredCustomer ? { mirrored_customer: mirroredCustomer } : {}),
+    mirrored_customer: mirroredCustomer,
     status: 'draft',
     invoice_number: null,
     subtotal,

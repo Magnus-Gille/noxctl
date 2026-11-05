@@ -129,6 +129,16 @@ function lookup(kind: ShadowResourceKind, id: string): ShadowIdentityResolution 
     intentId: `${kind}-intent`,
     requestHash: kind === 'invoice' ? 'creator-request-hash' : 'customer-hash',
     ...binding,
+    sourceCustomer: {
+      Name: '',
+      OrganisationNumber: '',
+      Phone1: '',
+      Phone2: '',
+      Address1: '',
+      Address2: '',
+      ZipCode: '',
+      City: '',
+    },
   } as ShadowIdentityResolution;
 }
 
