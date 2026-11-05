@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **An id of `.` or `..`, or an empty id, is rejected instead of being sent.**
+  `encodeURIComponent` leaves dots alone and URL parsing collapses dot segments,
+  so `inbox delete .` would have sent `DELETE /3/inbox/` and `..` the API root.
+  Every operation that puts a user-supplied id in a request path (deletes, gets
+  and updates alike, including the inbox, archive, price, schedule and attachment
+  ones) now encodes it through one shared `pathSegment()` helper that refuses
+  these values before any request is made, and the HTTP client refuses any
+  endpoint containing a dot segment as a backstop. Ordinary ids, including ones
+  with `/` or spaces, are encoded exactly as before (found in review of #212).
+
+## [0.13.0] - 2026-11-05
+
 ### Added
 
 - **List the files in an inbox folder.** `noxctl inbox list --folder-id <id>` and
@@ -30,15 +44,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `Type` instead of the reference-data `Code`/`Name`/`Description` columns, which
   left the `Id` blank; the id is what `inbox file`, `inbox delete` and
   `--folder-id` take (#210).
-- **An id of `.` or `..`, or an empty id, is rejected instead of being sent.**
-  `encodeURIComponent` leaves dots alone and URL parsing collapses dot segments,
-  so `inbox delete .` would have sent `DELETE /3/inbox/` and `..` the API root.
-  Every operation that puts a user-supplied id in a request path (deletes, gets
-  and updates alike, including the inbox, archive, price, schedule and attachment
-  ones) now encodes it through one shared `pathSegment()` helper that refuses
-  these values before any request is made, and the HTTP client refuses any
-  endpoint containing a dot segment as a backstop. Ordinary ids, including ones
-  with `/` or spaces, are encoded exactly as before (found in review of #212).
 
 ## [0.12.0] - 2026-10-01
 
@@ -421,6 +426,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.13.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.9.0...v0.10.0
