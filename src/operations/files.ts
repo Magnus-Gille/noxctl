@@ -31,6 +31,18 @@ function uploadForm(filePath: string): FormData {
   return form;
 }
 
+/**
+ * Flattens an inbox response (root or single folder) into table rows: the
+ * subfolders first, then the files, each tagged with a `Type` so the two can be
+ * told apart in one list.
+ */
+export function inboxEntries(raw: Record<string, unknown>): Record<string, unknown>[] {
+  const folder = (raw.Folder ?? {}) as Record<string, unknown>;
+  const tag = (entries: unknown, Type: 'Folder' | 'File') =>
+    ((entries ?? []) as Record<string, unknown>[]).map((entry) => ({ ...entry, Type }));
+  return [...tag(folder.Folders, 'Folder'), ...tag(folder.Files, 'File')];
+}
+
 export function createFileOperations(transport: FortnoxTransport) {
   async function listArchive(params: { path?: string; fileId?: string } = {}) {
     return transport.request<Record<string, unknown>>('archive', {
@@ -70,8 +82,18 @@ export function createFileOperations(transport: FortnoxTransport) {
     });
   }
 
-  async function listInbox() {
-    return transport.request<Record<string, unknown>>('inbox');
+  /**
+   * Lists the inbox root, or — with `folderId` — the contents of one folder
+   * (`GET /3/inbox/{Id}`, e.g. `inbox_v` for Verifikationer). The folder ids
+   * come from the root listing.
+   */
+  async function listInbox(params: { folderId?: string } = {}) {
+    if (params.folderId === undefined) {
+      return transport.request<Record<string, unknown>>('inbox');
+    }
+    const folderId = params.folderId.trim();
+    if (!folderId) throw new Error('folderId must not be empty');
+    return transport.request<Record<string, unknown>>(`inbox/${encodeURIComponent(folderId)}`);
   }
 
   async function uploadInboxEntry(

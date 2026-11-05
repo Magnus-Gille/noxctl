@@ -8,6 +8,16 @@ export const referenceDataColumns: Column[] = [
   { key: 'Description', header: 'Description', width: 36 },
 ];
 
+// Inbox folders and files. Id gets 36 columns (UUID length) because it is what
+// `inbox file`, `inbox delete` and `--folder-id` take, so a cut-off value would
+// be unusable. Name stays wide enough for duplicate checks.
+export const inboxColumns: Column[] = [
+  { key: 'Id', header: 'Id', width: 36 },
+  { key: 'Name', header: 'Name', width: 40 },
+  { key: 'Size', header: 'Size', width: 9, align: 'right' },
+  { key: 'Type', header: 'Type', width: 6 },
+];
+
 // --- Invoice views (target ≤80 cols) ---
 
 // 7 + 2 + 20 + 2 + 10 + 2 + 10 + 2 + 10 + 2 + 10 = 77

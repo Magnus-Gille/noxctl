@@ -87,6 +87,68 @@ describe('archive, inbox, and attachment tools', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it('lists the files in an inbox folder so duplicates can be spotted before uploading', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        Folder: {
+          Id: 'inbox_v',
+          Name: 'Verifikationer',
+          Files: [
+            { Id: 'file-12345', Name: '2026-08-04 Booking V.pdf', Size: 37240 },
+            { Id: 'file-12346', Name: '2026-08-04 Booking J.pdf', Size: 29393 },
+          ],
+        },
+      }),
+    );
+    const { client } = await setup();
+    const result = await client.callTool({
+      name: 'fortnox_list_inbox',
+      arguments: { folderId: 'inbox_v' },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/3\/inbox\/inbox_v$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    const text = (result.content as { text: string }[])[0]!.text;
+    expect(text).toMatch(/Id\s+Name\s+Size/);
+    expect(text).toContain('file-12345');
+    expect(text).toContain('2026-08-04 Booking V.pdf');
+    expect(text).toContain('37240');
+    expect(text).toContain('file-12346');
+  });
+
+  it('shows folder ids in the root inbox listing so they can be passed back as folderId', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      Response.json({
+        Folder: { Folders: [{ Id: 'inbox_v', Name: 'Verifikationer' }] },
+      }),
+    );
+    const { client } = await setup();
+    const result = await client.callTool({ name: 'fortnox_list_inbox', arguments: {} });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/3\/inbox$/),
+      expect.objectContaining({ method: 'GET' }),
+    );
+    const text = (result.content as { text: string }[])[0]!.text;
+    expect(text).toContain('inbox_v');
+    expect(text).toContain('Verifikationer');
+  });
+
+  it('rejects a blank inbox folderId at the tool boundary', async () => {
+    global.fetch = vi.fn();
+    const { client } = await setup();
+    const result = await client.callTool({
+      name: 'fortnox_list_inbox',
+      arguments: { folderId: '' },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('downloads archive responses as binary data to an exclusive destination', async () => {
     global.fetch = vi.fn().mockResolvedValue(
       new Response(Buffer.from('archive-bytes'), {

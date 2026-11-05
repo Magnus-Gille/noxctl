@@ -122,6 +122,11 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('archive');
   });
 
+  it('noxctl inbox list --help documents listing a folder with --folder-id', () => {
+    const output = execFileSync('node', [CLI_PATH, 'inbox', 'list', '--help'], execOpts) as string;
+    expect(output).toContain('--folder-id');
+  });
+
   it('noxctl init --help shows the --with-archive flag', () => {
     const output = execFileSync('node', [CLI_PATH, 'init', '--help'], execOpts) as string;
     expect(output).toContain('--with-archive');

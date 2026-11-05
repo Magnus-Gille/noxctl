@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FortnoxTransport } from '../../src/fortnox-client.js';
-import { createFileOperations } from '../../src/operations/files.js';
+import { createFileOperations, inboxEntries } from '../../src/operations/files.js';
 import { privateOutputPath, writeBinaryFile } from '../../src/safe-file-output.js';
 
 describe('archive and inbox operations', () => {
@@ -39,6 +39,40 @@ describe('archive and inbox operations', () => {
     ]);
     expect(archiveFile.buffer.toString()).toBe('file');
     expect(file.buffer.toString()).toBe('file');
+  });
+
+  it('lists the contents of an inbox folder by id', async () => {
+    const request = vi.fn().mockResolvedValue({ Folder: { Id: 'inbox_v', Files: [] } });
+    const operations = createFileOperations({ request } as unknown as FortnoxTransport);
+
+    await operations.listInbox({ folderId: 'inbox_v' });
+    await operations.listInbox({ folderId: 'a/b' });
+    await operations.listInbox({});
+
+    expect(request.mock.calls).toEqual([['inbox/inbox_v'], ['inbox/a%2Fb'], ['inbox']]);
+  });
+
+  it('rejects a blank inbox folder id instead of silently listing the root', async () => {
+    const request = vi.fn();
+    const operations = createFileOperations({ request } as unknown as FortnoxTransport);
+
+    await expect(operations.listInbox({ folderId: '  ' })).rejects.toThrow(/folderId/);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('flattens an inbox response into tagged folder and file rows', () => {
+    expect(
+      inboxEntries({
+        Folder: {
+          Folders: [{ Id: 'inbox_v', Name: 'Verifikationer' }],
+          Files: [{ Id: 'f1', Name: 'a.pdf', Size: 12 }],
+        },
+      }),
+    ).toEqual([
+      { Id: 'inbox_v', Name: 'Verifikationer', Type: 'Folder' },
+      { Id: 'f1', Name: 'a.pdf', Size: 12, Type: 'File' },
+    ]);
+    expect(inboxEntries({})).toEqual([]);
   });
 
   it('uploads exact local bytes through multipart requests', async () => {
