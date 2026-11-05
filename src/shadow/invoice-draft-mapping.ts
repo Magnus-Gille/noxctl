@@ -12,6 +12,18 @@ export interface InvoiceDraftItem {
   article_id?: string;
 }
 
+/**
+ * Purely descriptive row. The target requires quantity, unit and unit_price to be present;
+ * it stores 0, '' and 0 and excludes the row from totals and VAT.
+ */
+export interface InvoiceDraftTextItem {
+  line_type: 'text';
+  description: string;
+  quantity: 0;
+  unit: '';
+  unit_price: 0;
+}
+
 export interface InvoiceDraftBody {
   customer_id: string;
   invoice_date: string;
@@ -20,13 +32,18 @@ export interface InvoiceDraftBody {
   document_type: 'invoice';
   payment_link_auto: false;
   ore_rounding: false;
-  items: InvoiceDraftItem[];
+  items: Array<InvoiceDraftItem | InvoiceDraftTextItem>;
 }
 
 export interface InvoiceDraftExpectedItem extends InvoiceDraftItem {
   line_total: number;
   vat_amount: number;
   discount_percent: 0;
+}
+
+export interface InvoiceDraftExpectedTextItem extends InvoiceDraftTextItem {
+  line_total: 0;
+  vat_amount: 0;
 }
 
 export interface InvoiceDraftExpected extends Omit<InvoiceDraftBody, 'items'> {
@@ -36,7 +53,7 @@ export interface InvoiceDraftExpected extends Omit<InvoiceDraftBody, 'items'> {
   vat_amount: number;
   total: number;
   remaining_amount: number;
-  items: InvoiceDraftExpectedItem[];
+  items: Array<InvoiceDraftExpectedItem | InvoiceDraftExpectedTextItem>;
 }
 
 export type InvoiceDraftMappingResult =
@@ -53,6 +70,8 @@ export type CustomerIdentityLookup = (
 ) => ShadowIdentityResolution;
 
 type ValidatedRow = {
+  /** 'text' rows are purely descriptive and carry no amount, VAT, account or article. */
+  kind: 'product' | 'text';
   description: string;
   quantity: number;
   unit: string;
@@ -198,6 +217,16 @@ export const ARTICLE_REFUSAL = {
   malformed: 'ARTICLE_IDENTITY_MALFORMED',
 } as const;
 
+/** Stable refusal-reason prefixes for row shapes that are not mapped. */
+export const ROW_REFUSAL = {
+  /** Quantity 0 or negative on a row that is not purely descriptive. */
+  nonpositiveQuantity: 'ROW_NONPOSITIVE_QUANTITY',
+  /** An invoice made only of text rows has no amount to reconcile. */
+  noProductRow: 'ROW_NO_PRODUCT_ROW',
+  /** A text row (or its source) carries fields a purely descriptive row must not have. */
+  textRowInvalid: 'ROW_TEXT_INVALID',
+} as const;
+
 /** Stable refusal-reason prefix for invoice-row units. */
 export const UNIT_REFUSAL = {
   invalid: 'UNIT_INVALID',
@@ -226,6 +255,30 @@ function sourceArticleNumber(value: unknown): string | null | undefined {
     return value;
   }
   return undefined;
+}
+
+function absentOrZero(value: unknown): boolean {
+  return value === undefined || value === 0;
+}
+
+/** Source numeric strings such as "0" are accepted for zero only. */
+function sourceZero(value: unknown): boolean {
+  return value === 0 || value === '0';
+}
+
+/**
+ * A purely descriptive input row: no quantity, price, VAT, unit, account or article
+ * (absent or the neutral zero/empty value). Anything priced or quantified is not text.
+ */
+function isTextInputRow(row: Record<string, unknown>): boolean {
+  return (
+    absentOrZero(row.DeliveredQuantity) &&
+    absentOrZero(row.Price) &&
+    absentOrZero(row.VAT) &&
+    (row.Unit === undefined || row.Unit === '') &&
+    (row.AccountNumber === undefined || row.AccountNumber === '') &&
+    (row.ArticleNumber === undefined || row.ArticleNumber === '')
+  );
 }
 
 function optionalDimensionIsEmpty(value: unknown): boolean {
@@ -288,6 +341,27 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     const unsupportedRow = inputFieldsBlock(row, ROW_FIELDS, 'row');
     if (unsupportedRow) return { blocked: unsupportedRow };
 
+    if (isTextInputRow(row)) {
+      const text = row.Description;
+      if (typeof text !== 'string' || text.length > MAX_DESCRIPTION_LENGTH) {
+        return {
+          blocked: `${ROW_REFUSAL.textRowInvalid}: Text row Description must be a string of at most 2000 characters.`,
+        };
+      }
+      rows.push({
+        kind: 'text',
+        articleNumber: null,
+        description: text,
+        quantity: 0,
+        unit: '',
+        priceCents: 0,
+        accountNumber: '',
+        netCents: 0,
+        vatCents: 0,
+      });
+      continue;
+    }
+
     const description = row.Description;
     if (
       typeof description !== 'string' ||
@@ -303,7 +377,13 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
       quantity < 1 ||
       quantity > MAX_QUANTITY
     ) {
-      return { blocked: 'DeliveredQuantity must be an integer from 1 through 10000.' };
+      const reason = 'DeliveredQuantity must be an integer from 1 through 10000.';
+      return {
+        blocked:
+          typeof quantity === 'number' && Number.isSafeInteger(quantity) && quantity < 1
+            ? `${ROW_REFUSAL.nonpositiveQuantity}: ${reason}`
+            : reason,
+      };
     }
     const price = row.Price;
     if (
@@ -349,6 +429,7 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     targetNet += actualNet;
     targetVat += actualVat;
     rows.push({
+      kind: 'product',
       articleNumber: null,
       description,
       quantity,
@@ -360,6 +441,9 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
       netCents: rowNet,
       vatCents: rowVat,
     });
+  }
+  if (!rows.some((row) => row.kind === 'product')) {
+    return { blocked: `${ROW_REFUSAL.noProductRow}: Invoice needs at least one non-text row.` };
   }
   const totalCents = netCents + vatCents;
   if (!Number.isSafeInteger(totalCents))
@@ -448,6 +532,31 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     } = validated;
     const sourceRow = source.InvoiceRows[index];
     if (!isPlainObject(sourceRow)) return { blocked: 'Confirmed source invoice row is malformed.' };
+    if (validated.kind === 'text') {
+      if (
+        sourceRow.Description !== description ||
+        sourceRow.Unit !== '' ||
+        sourceRow.VAT !== 0 ||
+        !sourceZero(sourceRow.DeliveredQuantity) ||
+        !amountMatches(sourceRow.Price, 0) ||
+        !amountMatches(sourceRow.PriceExcludingVAT, 0) ||
+        !amountMatches(sourceRow.TotalExcludingVAT, 0) ||
+        !amountMatches(sourceRow.Total, 0) ||
+        sourceRow.Discount !== 0 ||
+        sourceRow.HouseWork !== false ||
+        !optionalDimensionIsEmpty(sourceRow.CostCenter) ||
+        !optionalDimensionIsEmpty(sourceRow.Project) ||
+        (sourceRow.ArticleNumber !== undefined && sourceRow.ArticleNumber !== '') ||
+        (sourceRow.AccountNumber !== undefined &&
+          sourceRow.AccountNumber !== '' &&
+          !sourceZero(sourceRow.AccountNumber))
+      ) {
+        return {
+          blocked: `${ROW_REFUSAL.textRowInvalid}: Confirmed source row is not a purely descriptive text row.`,
+        };
+      }
+      continue;
+    }
     if (sourceRow.Description !== description || sourceRow.Unit !== unit || sourceRow.VAT !== 25) {
       return {
         blocked: 'Confirmed source row description, unit, or VAT does not match the input.',
@@ -606,15 +715,28 @@ export function mapInvoiceDraft(
     if ('blocked' in article) return article;
     articleIds.set(row.articleNumber, article.targetId.toLowerCase());
   }
-  const items: InvoiceDraftItem[] = validated.rows.map((row) => ({
-    description: row.description,
-    quantity: row.quantity,
-    unit: row.unit,
-    unit_price: row.priceCents / 100,
-    vat_rate: 25,
-    revenue_account: row.accountNumber,
-    ...(row.articleNumber === null ? {} : { article_id: articleIds.get(row.articleNumber)! }),
-  }));
+  const items: Array<InvoiceDraftItem | InvoiceDraftTextItem> = validated.rows.map((row) =>
+    row.kind === 'text'
+      ? ({
+          line_type: 'text',
+          description: row.description,
+          quantity: 0,
+          unit: '',
+          unit_price: 0,
+        } as const)
+      : productItem(row, articleIds),
+  );
+  function productItem(row: ValidatedRow, ids: Map<string, string>): InvoiceDraftItem {
+    return {
+      description: row.description,
+      quantity: row.quantity,
+      unit: row.unit,
+      unit_price: row.priceCents / 100,
+      vat_rate: 25,
+      revenue_account: row.accountNumber,
+      ...(row.articleNumber === null ? {} : { article_id: ids.get(row.articleNumber)! }),
+    };
+  }
   const request: InvoiceDraftBody = {
     customer_id: customer.targetId,
     invoice_date: validated.invoiceDate,
@@ -639,12 +761,17 @@ export function mapInvoiceDraft(
     vat_amount: vatAmount,
     total,
     remaining_amount: total,
-    items: validated.rows.map((row, index) => ({
-      ...items[index]!,
-      line_total: row.netCents / 100,
-      vat_amount: row.vatCents / 100,
-      discount_percent: 0,
-    })),
+    items: validated.rows.map((row, index) => {
+      const item = items[index]!;
+      return 'line_type' in item
+        ? ({ ...item, line_total: 0, vat_amount: 0 } as const)
+        : ({
+            ...item,
+            line_total: row.netCents / 100,
+            vat_amount: row.vatCents / 100,
+            discount_percent: 0,
+          } as const);
+    }),
   };
 
   return { request, expected, sourceInvoiceId: validated.sourceInvoiceId };

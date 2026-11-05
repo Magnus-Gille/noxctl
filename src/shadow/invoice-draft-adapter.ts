@@ -96,8 +96,8 @@ export function matchesInvoiceExpected(
     return (
       !!row &&
       Object.entries(wanted).every(([key, value]) => row[key] === value) &&
-      row.line_type === 'product' &&
-      row.article_id === (wanted.article_id ?? null) &&
+      row.line_type === ('line_type' in wanted ? wanted.line_type : 'product') &&
+      row.article_id === (('article_id' in wanted ? wanted.article_id : undefined) ?? null) &&
       row.deduction_type === null &&
       row.deduction_amount === 0 &&
       emptyDimensions(row.dimensions)

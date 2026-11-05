@@ -124,13 +124,21 @@ const expectedSchema = z.object({
   remaining_amount: money,
   items: z
     .array(
-      z.object({
-        revenue_account: z.string().regex(/^3\d{3}$/),
-        vat_rate: z.literal(25),
-        line_total: money.refine((n) => n > 0),
-        vat_amount: money,
-        discount_percent: z.literal(0),
-      }),
+      z.union([
+        z.object({
+          revenue_account: z.string().regex(/^3\d{3}$/),
+          vat_rate: z.literal(25),
+          line_total: money.refine((n) => n > 0),
+          vat_amount: money,
+          discount_percent: z.literal(0),
+        }),
+        // Purely descriptive rows carry no amount and are excluded from every total.
+        z.object({
+          line_type: z.literal('text'),
+          line_total: z.literal(0),
+          vat_amount: z.literal(0),
+        }),
+      ]),
     )
     .min(1),
 });
@@ -237,6 +245,7 @@ export function mapBookedInvoicePayment(
   let itemNet = 0;
   let itemVat = 0;
   for (const item of invoice.items) {
+    if ('line_type' in item) continue;
     const rowNet = Math.round(item.line_total * 100);
     const rowVat = Math.round(item.vat_amount * 100);
     if (Math.round(rowNet / 4) !== rowVat)

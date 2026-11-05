@@ -235,6 +235,25 @@ describe('mapBookedInvoicePayment', () => {
     expect(JSON.stringify(result.request)).not.toContain('"unit"');
   });
 
+  it('excludes purely descriptive text rows from payment parity', () => {
+    const input = fixture();
+    const base = map(input);
+    const item = expectedInvoice().items[0]!;
+    const text = {
+      line_type: 'text',
+      description: 'Note',
+      quantity: 0,
+      unit: '',
+      unit_price: 0,
+      line_total: 0,
+      vat_amount: 0,
+    };
+    input.expectedInvoice = expectedInvoice({ items: [text, item, text] });
+    const result = map(input);
+    if (!('request' in result) || !('request' in base)) throw new Error('expected a plan');
+    expect(result.request).toEqual(base.request);
+  });
+
   it('does not silently ignore an unrecognized financial field', () => {
     const input = fixture();
     const changed = paymentResult({ NewSettlementAdjustment: 1 });
