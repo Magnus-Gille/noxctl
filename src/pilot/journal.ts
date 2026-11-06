@@ -20,6 +20,7 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmSync,
   writeSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
@@ -75,7 +76,7 @@ function writeHeadDirFile(ctx: JournalContext, path: string, content: string): v
   const fsync = ctx.fsync ?? fsyncSync;
   mkdirSync(ctx.headDir, { recursive: true, mode: 0o700 });
   chmodSync(ctx.headDir, 0o700);
-  const temp = `${path}.tmp`;
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`;
   const fd = openSync(temp, 'w', 0o600);
   try {
     writeSync(fd, content);
@@ -139,6 +140,36 @@ export function initializeJournal(ctx: JournalContext, now: number, binding: Pil
   if (existsSync(pilotIdPath(directory)) || existsSync(journalPath(directory)))
     throw new Error('pilot directory is already initialized');
   const real = realpathSync(directory);
+  // Serialize registry read-check-write across processes; never wait, never steal (fail closed).
+  mkdirSync(ctx.headDir, { recursive: true, mode: 0o700 });
+  chmodSync(ctx.headDir, 0o700);
+  const lockPath = join(ctx.headDir, 'registry.lock');
+  let lockFd: number;
+  try {
+    lockFd = openSync(lockPath, 'wx', 0o600);
+  } catch {
+    throw new PilotRegistryError(
+      'the pilot registry is locked by another initialization; if no pilot process is running, remove registry.lock by hand after checking',
+    );
+  }
+  try {
+    writeSync(lockFd, JSON.stringify({ pid: process.pid, startedAt: now }));
+    fsync(lockFd);
+    closeSync(lockFd);
+    return initializeLocked(ctx, now, binding, real);
+  } finally {
+    rmSync(lockPath, { force: true });
+  }
+}
+
+function initializeLocked(
+  ctx: JournalContext,
+  now: number,
+  binding: PilotBinding,
+  real: string,
+): string {
+  const fsync = ctx.fsync ?? fsyncSync;
+  const { directory } = ctx;
   const entries = readRegistry(ctx.headDir);
   if (
     entries.some(

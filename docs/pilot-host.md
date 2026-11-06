@@ -199,3 +199,7 @@ do not match the files, storage is unhealthy and writes are refused until a new 
   read-only reconciliation against the real systems.
 - Abandoning the pilot Accounted company and starting a fresh one (new binding, new directory) is
   preferred over repairing an unresolved pilot state.
+
+### Registry lock
+
+Initialization takes `<headDir>/registry.lock` (exclusive create, never waited on, never stolen) across the registry read, conflict check and update, so two concurrent initializations cannot lose a registration. If it exists and no pilot process is running, the operator removes it by hand after checking. Head-directory files are written through unique temporary names.
