@@ -93,14 +93,8 @@ describe('customer source-only fields', () => {
   });
 
   it.each([
-    'OurReference',
     'GLN',
     'GLNDelivery',
-    'VisitingAddress',
-    'VisitingCity',
-    'VisitingCountry',
-    'VisitingCountryCode',
-    'VisitingZipCode',
     'DeliveryCountryCode',
     'DeliveryFax',
     'DeliveryPhone1',
@@ -128,7 +122,6 @@ describe('customer source-only fields', () => {
     'EmailOrderBCC',
     'Phone2',
     'Fax',
-    'WWW',
   ])('refuses populated unmappable %s', (field) => {
     expect(prepare({ [field]: 'populated' })).toEqual({
       blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: populated source ${field}`),
@@ -222,6 +215,104 @@ describe('customer source-only fields', () => {
   });
 });
 
+describe('customer notes composed from source-only fields (NOX-210)', () => {
+  const notesOf = (over: Record<string, unknown>) =>
+    (prepare(over).request as Record<string, unknown> | undefined)?.notes;
+
+  it('maps OurReference alone', () => {
+    expect(notesOf({ OurReference: 'Anna' })).toBe('Vår referens: Anna');
+  });
+  it('maps WWW alone', () => {
+    expect(notesOf({ WWW: 'https://example.test' })).toBe('Webb: https://example.test');
+  });
+  it('maps a visiting address alone', () => {
+    expect(
+      notesOf({
+        VisitingAddress: 'Besöksgatan 2',
+        VisitingZipCode: '11144',
+        VisitingCity: 'Uppsala',
+        VisitingCountry: 'Sverige',
+      }),
+    ).toBe('Besöksadress: Besöksgatan 2, 11144 Uppsala, Sverige');
+  });
+  it('composes everything in fixed order after multi-line Comments', () => {
+    expect(
+      notesOf({
+        VisitingCity: 'Uppsala',
+        WWW: 'https://example.test',
+        VisitingZipCode: '11144',
+        OurReference: 'Anna',
+        Comments: 'Rad 1\nRad 2 ',
+        VisitingAddress: 'Besöksgatan 2',
+        VisitingCountryCode: 'SE',
+      }),
+    ).toBe(
+      'Rad 1\nRad 2 \nVår referens: Anna\nWebb: https://example.test\nBesöksadress: Besöksgatan 2, 11144 Uppsala, SE',
+    );
+  });
+  it('prefers VisitingCountry over VisitingCountryCode without duplicating', () => {
+    expect(notesOf({ VisitingCountry: 'Norge', VisitingCountryCode: 'NO' })).toBe(
+      'Besöksadress: Norge',
+    );
+    expect(notesOf({ VisitingCountryCode: 'NO' })).toBe('Besöksadress: NO');
+  });
+  it('handles partial zip/city', () => {
+    expect(notesOf({ VisitingZipCode: '11144' })).toBe('Besöksadress: 11144');
+    expect(notesOf({ VisitingCity: 'Uppsala' })).toBe('Besöksadress: Uppsala');
+  });
+  it('omits notes when nothing is populated', () => {
+    expect(notesOf({ OurReference: '', WWW: null, VisitingAddress: undefined })).toBeUndefined();
+  });
+  it.each([
+    'OurReference',
+    'WWW',
+    'VisitingAddress',
+    'VisitingZipCode',
+    'VisitingCity',
+    'VisitingCountry',
+    'VisitingCountryCode',
+  ])('blocks non-string %s', (key) => {
+    expect(prepare({ [key]: 5 })).toEqual({
+      blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a string.`,
+    });
+  });
+  it.each([
+    'a\nb',
+    'a\rb',
+    ' padded',
+    'padded ',
+    '\tx',
+    'a\u2028b',
+    'a\u2029b',
+    'a\u0085b',
+    'a\u000bb',
+    'a\u000cb',
+    'a\tb',
+    'a\u0000b',
+    'a\u007fb',
+  ])('blocks multi-line, control-character or padded labelled value %j', (value) => {
+    for (const key of [
+      'OurReference',
+      'WWW',
+      'VisitingAddress',
+      'VisitingZipCode',
+      'VisitingCity',
+      'VisitingCountry',
+      'VisitingCountryCode',
+    ]) {
+      expect(prepare({ [key]: value })).toEqual({
+        blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source ${key}`),
+      });
+    }
+  });
+  it('still refuses GLN and GLNDelivery', () => {
+    for (const f of ['GLN', 'GLNDelivery'])
+      expect(prepare({ [f]: '123', OurReference: 'A' })).toEqual({
+        blocked: expect.stringContaining(`populated source ${f}`),
+      });
+  });
+});
+
 describe('customer readback of array and notes fields', () => {
   const id = '11111111-1111-4111-8111-111111111111';
   const body = {
@@ -255,6 +346,35 @@ describe('customer readback of array and notes fields', () => {
   }
   it('accepts equal arrays and notes', async () => {
     await expect(run(body)).resolves.toMatchObject({ targetId: id });
+  });
+  it('verifies composed notes exactly', async () => {
+    const composed = 'N\nVår referens: Anna\nWebb: https://example.test';
+    const b = { ...body, notes: composed };
+    const adapter = new AccountedShadowAdapter('company-123', async (req) =>
+      req.method === 'POST'
+        ? { status: 201, json: { data: { id, ...b } } }
+        : { status: 200, json: { data: { id, ...b, notes: 'N\nVår referens: Anna' } } },
+    );
+    const record = {
+      id: 'i',
+      version: 1,
+      operation: 'createCustomer',
+      args: [{ Name: 'Exempel AB' }],
+      sourceCompany: 's',
+      targetCompany: 'company-123',
+      requestHash: 'h',
+      state: 'pending',
+      createdAt: 1,
+      updatedAt: 1,
+      sourceResult: {
+        ...base,
+        EmailInvoiceCC: 'c1@example.test',
+        Comments: 'N',
+        OurReference: 'Anna',
+        WWW: 'https://example.test',
+      },
+    } as ShadowRecord;
+    await expect(adapter.apply(record, b)).rejects.toThrow();
   });
   it.each([
     [{ ...body, invoice_email_cc_addresses: ['other@example.test'] }],

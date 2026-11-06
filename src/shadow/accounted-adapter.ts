@@ -77,13 +77,32 @@ export const CUSTOMER_FIELD_UNCLASSIFIED = 'CUSTOMER_FIELD_UNCLASSIFIED';
  * means not undefined/null/''/[]. Unlisted populated keys are refused as unclassified.
  *  - mapped and verified: CustomerNumber, Name, OrganisationNumber, Email, Phone1, Address1/2,
  *    ZipCode, City, VATNumber, EmailInvoiceCC/BCC, Comments (notes), YourReference (contact_person);
+ *  - mapped into `notes` (owner decision 2026-11-06, NOX-210; supersedes the earlier refusal):
+ *    OurReference, WWW, Visiting* as labelled single-line entries after Comments (see the notes
+ *    composition in the mapper); a non-string, padded value or one with control characters or line/paragraph separators is refused;
  *  - validated: Type, Country, CountryCode, Currency, VATType, Active (false refused), and
  *    EmailInvoice/EmailOffer/EmailOrder (neutral only when equal to Email);
  *  - derived/neutral: @url, DefaultDeliveryTypes, DefaultTemplates, PriceList, TermsOfPayment;
  *  - refused when populated (CUSTOMER_FIELD_UNSUPPORTED): the rest below. For the numeric and
  *    boolean ones 0 and false mean "none" and are neutral.
  */
-const CUSTOMER_MAPPED = new Set([
+/**
+ * Owner decision 2026-11-06 (NOX-210), superseding the earlier refusal: Accounted has no fields
+ * for these, so they are appended to `notes` as labelled single-line entries.
+ */
+const NOTES_LABELLED_FIELDS = [
+  'OurReference',
+  'WWW',
+  'VisitingAddress',
+  'VisitingZipCode',
+  'VisitingCity',
+  'VisitingCountry',
+  'VisitingCountryCode',
+] as const;
+/** C0/C1 controls (incl. tab, CR, LF, VT, FF, NEL) and Unicode line/paragraph separators. */
+// eslint-disable-next-line no-control-regex
+const NOTES_LINE_BREAK_OR_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+const CUSTOMER_MAPPED = new Set<string>([
   'CustomerNumber',
   'Name',
   'OrganisationNumber',
@@ -98,6 +117,7 @@ const CUSTOMER_MAPPED = new Set([
   'EmailInvoiceBCC',
   'Comments',
   'YourReference',
+  ...NOTES_LABELLED_FIELDS,
 ]);
 const CUSTOMER_VALIDATED = new Set([
   'Type',
@@ -118,14 +138,8 @@ const CUSTOMER_DERIVED = new Set([
   'TermsOfPayment',
 ]);
 const UNMAPPABLE_SOURCE_FIELDS = [
-  'OurReference',
   'GLN',
   'GLNDelivery',
-  'VisitingAddress',
-  'VisitingCity',
-  'VisitingCountry',
-  'VisitingCountryCode',
-  'VisitingZipCode',
   'DeliveryName',
   'DeliveryAddress1',
   'DeliveryAddress2',
@@ -144,7 +158,6 @@ const UNMAPPABLE_SOURCE_FIELDS = [
   'Fax',
   'InvoiceRemark',
   'Phone2',
-  'WWW',
   'TermsOfDelivery',
   'WayOfDelivery',
   'CostCenter',
@@ -549,12 +562,37 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       }
       body.contact_person = reference;
     }
+    const noteParts: string[] = [];
     if (!emptyCountry(source.Comments)) {
       if (typeof source.Comments !== 'string') {
         return { blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source Comments must be a string.` };
       }
-      body.notes = source.Comments;
+      noteParts.push(source.Comments);
     }
+    const labelled: Partial<Record<(typeof NOTES_LABELLED_FIELDS)[number], string>> = {};
+    for (const key of NOTES_LABELLED_FIELDS) {
+      const value = source[key];
+      if (emptyCountry(value)) continue;
+      if (typeof value !== 'string') {
+        return { blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a string.` };
+      }
+      if (NOTES_LINE_BREAK_OR_CONTROL.test(value) || value !== value.trim()) {
+        return {
+          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a single line without control characters or surrounding whitespace to be mirrored into notes.`,
+        };
+      }
+      labelled[key] = value;
+    }
+    if (labelled.OurReference) noteParts.push(`Vår referens: ${labelled.OurReference}`);
+    if (labelled.WWW) noteParts.push(`Webb: ${labelled.WWW}`);
+    const zipCity = [labelled.VisitingZipCode, labelled.VisitingCity].filter(Boolean).join(' ');
+    const visiting = [
+      labelled.VisitingAddress,
+      zipCity,
+      labelled.VisitingCountry || labelled.VisitingCountryCode,
+    ].filter((part): part is string => Boolean(part));
+    if (visiting.length > 0) noteParts.push(`Besöksadress: ${visiting.join(', ')}`);
+    if (noteParts.length > 0) body.notes = noteParts.join('\n');
     return { request: body };
   }
 }
