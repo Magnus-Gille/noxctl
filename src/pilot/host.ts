@@ -3,6 +3,7 @@
  * staged server, and owns the write gate, backups and restore acknowledgement. Nothing here runs
  * automatically: every Accounted write is an explicit operator command.
  */
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
@@ -28,9 +29,12 @@ import {
 import { AccountedArticleLinkAdapter } from '../shadow/article-link-adapter.js';
 import { AccountedInvoiceDraftAdapter } from '../shadow/invoice-draft-adapter.js';
 import type { ShadowQueue } from '../shadow/queue.js';
-import type { ShadowAdapter } from '../shadow/types.js';
+import type { ShadowAdapter, ShadowRecord } from '../shadow/types.js';
 import { createStagedServer, type StagedServer } from '../staged-server.js';
+import { PilotNotDispatchedError } from './accounted-client.js';
 import { checkFortnoxCompany, checkWriteGate, type GateResult } from './gate.js';
+import { appendJournal, ensureJournal, readJournal } from './journal.js';
+import { acquirePilotLock, PilotLockError } from './lock.js';
 
 export interface PilotConfig {
   version: 1;
@@ -120,11 +124,16 @@ export interface PilotHost {
   /** Queue/storage/restore gate plus the Fortnox company identity read. */
   checkGate(exceptId?: string): Promise<GateResult>;
   isStorageOk(): boolean;
-  /** Written before any mutation; removed only by a successful backup. */
+  /** Written (under the pilot lock) before any mutation; removed only by a successful backup. */
   beginMutation(): void;
-  /** Records the queue state and takes a backup. Never throws; failure flips the storage flag. */
+  /** Records the queue state and takes a backup. Caller MUST hold the pilot lock. Never throws. */
   afterMutation(): Promise<BackupResult>;
+  /** Takes the pilot lock itself; refused (not queued) while another operation holds it. */
   backup(): Promise<BackupResult>;
+  /** Cross-process exclusive section. Throws PilotLockError when the lock exists; never waits. */
+  withLock<T>(command: string, fn: () => Promise<T>): Promise<T>;
+  /** Dispatch-journal hook: durable record BEFORE a target request; failure means nothing is sent. */
+  journalTarget(record: ShadowRecord): void;
   /** Operator has looked at the real state (`status`); lifts the restore/outside-change refusal. */
   acknowledge(): void;
   wrapTransport(transport: Transport): Transport;
@@ -147,18 +156,23 @@ export async function createPilotHost(
   const stagedPath = join(directory, 'staged.sqlite');
   const queuePath = join(directory, 'queue', 'shadow.sqlite');
   const backupsRoot = join(directory, 'backups');
-  let storageOk = true;
   let needsAck = false;
+  /** Lock held by this process: a command (`kind: 'command'`) or one staged MCP request. */
+  let held: { owner: string; release: () => void; mutating: boolean } | undefined;
+  const requestScope = new AsyncLocalStorage<{ requestId: string }>();
   let closed = false;
   let stagedDb: DatabaseSync | undefined;
 
-  async function stagedCounts(excludeId?: string): Promise<{ executing: number; unknown: number }> {
+  async function stagedDatabase(): Promise<DatabaseSync> {
     if (!stagedDb) {
       const { DatabaseSync } = await import('node:sqlite');
       stagedDb = new DatabaseSync(stagedPath);
       stagedDb.exec('PRAGMA busy_timeout=5000');
     }
-    const rows = stagedDb
+    return stagedDb;
+  }
+  async function stagedCounts(excludeId?: string): Promise<{ executing: number; unknown: number }> {
+    const rows = (await stagedDatabase())
       .prepare(
         "SELECT state, COUNT(*) AS n FROM staged_calls WHERE state IN ('executing','unknown') AND id != ? GROUP BY state",
       )
@@ -190,33 +204,136 @@ export async function createPilotHost(
     writePrivate(ackPath, JSON.stringify({ version: 1, fingerprint: fingerprint(), at: now() }));
   }
 
+  function releaseHeld(): void {
+    const current = held;
+    held = undefined;
+    current?.release();
+  }
+  async function withLock<T>(command: string, fn: () => Promise<T>): Promise<T> {
+    if (held) throw new PilotLockError('another pilot operation is running in this process');
+    const release = acquirePilotLock(directory, command, now());
+    held = { owner: `command:${command}`, release, mutating: false };
+    try {
+      return await fn();
+    } finally {
+      releaseHeld();
+    }
+  }
+
   async function authorize(context: { action: string; intentId?: string }): Promise<boolean> {
     // Reads of local durable state stay available while writes are refused.
     if (context.action === 'get' || context.action === 'list' || context.action === 'status')
       return true;
-    const result = await gateWith(undefined, context.intentId);
-    if (!result.ok) {
-      log(`pilot: write refused: ${result.reason}`);
+    // Mutating staged actions hold the pilot lock from here until the response is sent
+    // (released by wrapTransport), so a concurrent CLI command or backup is refused.
+    const requestId = requestScope.getStore()?.requestId;
+    if (requestId === undefined) {
+      log('pilot: write refused: staged mutations are only served through the pilot transport');
       return false;
     }
-    if (context.action === 'execute') host.beginMutation();
+    const owner = `request:${requestId}`;
+    let acquired = false;
+    if (!held) {
+      try {
+        held = {
+          owner,
+          release: acquirePilotLock(directory, `mcp:${context.action}`, now()),
+          mutating: false,
+        };
+        acquired = true;
+      } catch (error) {
+        log(`pilot: write refused: ${error instanceof Error ? error.message : 'lock failed'}`);
+        return false;
+      }
+    } else if (held.owner !== owner) {
+      log('pilot: write refused: another pilot operation is running in this process');
+      return false;
+    }
+    const result = await gateWith(undefined, context.intentId, held.mutating);
+    if (!result.ok) {
+      log(`pilot: write refused: ${result.reason}`);
+      if (acquired) releaseHeld();
+      return false;
+    }
+    if (context.action === 'execute') {
+      if (!held.mutating) {
+        host.beginMutation();
+        held.mutating = true;
+      } else if (context.intentId) {
+        // Second authorization of the same execute, immediately before the Fortnox write.
+        try {
+          const row = (await stagedDatabase())
+            .prepare('SELECT state FROM staged_calls WHERE id=?')
+            .get(context.intentId);
+          if (row?.state === 'executing')
+            appendJournal(directory, { kind: 'source', stagedId: context.intentId, at: now() });
+        } catch {
+          log('pilot: write refused: dispatch journal could not be written');
+          return false;
+        }
+      }
+    }
     return true;
   }
 
-  async function gateWith(exceptId?: string, stagedExclude?: string): Promise<GateResult> {
+  const RECONCILE =
+    'read-only reconciliation against Fortnox and Accounted is required before any write ' +
+    '(see docs/pilot-host.md, "Restore and the dispatch journal"); there is no automatic override';
+  /** Fail closed when the journal shows a dispatch that the databases do not (or no longer) show. */
+  async function journalProblem(): Promise<string | undefined> {
+    let entries: ReturnType<typeof readJournal>;
+    try {
+      entries = readJournal(directory);
+    } catch {
+      return `dispatch journal is unreadable; ${RECONCILE}`;
+    }
+    const rows = (await stagedDatabase()).prepare('SELECT id,state FROM staged_calls').all();
+    if (entries === undefined)
+      return host.queue.snapshot().length > 0 || rows.length > 0
+        ? `dispatch journal is missing while the queue or staged database is not empty; ${RECONCILE}`
+        : undefined;
+    const states = new Map(rows.map((row) => [String(row.id), String(row.state)]));
+    for (const entry of entries) {
+      if (entry.kind === 'source') {
+        const state = states.get(entry.stagedId);
+        if (state !== 'executing' && state !== 'unknown' && state !== 'completed')
+          return `journaled Fortnox write ${entry.stagedId} is ${state ?? 'absent'} in the staged database (rollback?); ${RECONCILE}`;
+        continue;
+      }
+      const record = host.queue.get(entry.intentId);
+      if (!record || record.requestHash !== entry.requestHash)
+        return `journaled Accounted dispatch ${entry.intentId} is absent from the queue (rollback?); ${RECONCILE}`;
+      // retry_wait is legitimate only if that very attempt was recorded as not dispatched.
+      if (
+        record.state === 'pending' ||
+        (record.state === 'retry_wait' && (record.targetAttempts ?? 0) < entry.attempt)
+      )
+        return `journaled Accounted dispatch ${entry.intentId} is ${record.state} in the queue (rollback?); ${RECONCILE}`;
+    }
+    return undefined;
+  }
+
+  async function gateWith(
+    exceptId?: string,
+    stagedExclude?: string,
+    ownMarker = false,
+  ): Promise<GateResult> {
     const failures: string[] = [];
     let oldest: Extract<GateResult, { ok: false }>['oldest'];
     const queueGate = checkWriteGate({
       queue: host.queue,
       stagedStatus: await stagedCounts(stagedExclude),
       now,
-      storageOk,
+      // Re-read from disk on every check: another process may have begun a mutation.
+      storageOk: ownMarker || !existsSync(markerPath),
       exceptId,
     });
     if (!queueGate.ok) {
       failures.push(queueGate.reason);
       oldest = queueGate.oldest;
     }
+    const journal = await journalProblem();
+    if (journal) failures.push(journal);
     if (needsAck)
       failures.push(
         'queue differs from the last acknowledged state (restore or outside change); run `status` to acknowledge',
@@ -248,7 +365,7 @@ export async function createPilotHost(
     deps.accounted,
   );
 
-  async function backup(): Promise<BackupResult> {
+  async function backupLocked(): Promise<BackupResult> {
     let dir: string | undefined;
     try {
       mkdirSync(backupsRoot, { recursive: true, mode: 0o700 });
@@ -297,10 +414,13 @@ export async function createPilotHost(
       });
       chmodSync(manifest, 0o600);
       rmSync(markerPath, { force: true });
-      storageOk = true;
       return { ok: true, directory: dir };
     } catch (error) {
-      storageOk = false;
+      try {
+        writeFileSync(markerPath, String(now()), { mode: 0o600 });
+      } catch {
+        // marker may already exist; the gate keeps refusing until a backup succeeds
+      }
       if (dir) rmSync(dir, { recursive: true, force: true });
       const code = (error as NodeJS.ErrnoException).code;
       const reason = `backup failed (${code ?? (error instanceof Error ? error.name : 'Error')})`;
@@ -325,7 +445,21 @@ export async function createPilotHost(
       return undefined;
     },
     checkGate: (exceptId) => gateWith(exceptId),
-    isStorageOk: () => storageOk,
+    isStorageOk: () => !existsSync(markerPath),
+    withLock,
+    journalTarget(record) {
+      try {
+        appendJournal(directory, {
+          kind: 'target',
+          intentId: record.id,
+          requestHash: record.requestHash,
+          attempt: record.targetAttempts ?? 0,
+          at: now(),
+        });
+      } catch {
+        throw new PilotNotDispatchedError('dispatch journal could not be written');
+      }
+    },
     beginMutation() {
       writeFileSync(markerPath, String(now()), { mode: 0o600 });
       chmodSync(markerPath, 0o600);
@@ -334,26 +468,41 @@ export async function createPilotHost(
       try {
         recordState();
       } catch {
-        storageOk = false;
         log('pilot: could not record the queue state; further writes are refused');
         return { ok: false, reason: 'queue state could not be recorded' };
       }
-      return backup();
+      return backupLocked();
     },
-    backup,
+    async backup() {
+      try {
+        return await withLock('backup', backupLocked);
+      } catch (error) {
+        if (error instanceof PilotLockError) return { ok: false, reason: error.message };
+        throw error;
+      }
+    },
     acknowledge() {
       needsAck = false;
       recordState();
     },
     wrapTransport(inner) {
-      const executing = new Set<string | number>();
+      const tracked = new Map<string | number, 'staged_execute' | 'staged_prepare'>();
       const wrapped: Transport = {
         start: () => inner.start(),
         close: () => inner.close(),
         async send(message: JSONRPCMessage, options) {
           const response = message as { id?: string | number; result?: unknown; error?: unknown };
           if (response.id !== undefined && ('result' in response || 'error' in response)) {
-            if (executing.delete(response.id)) await host.afterMutation();
+            const tool = tracked.get(response.id);
+            tracked.delete(response.id);
+            if (tool && held?.owner === `request:${String(response.id)}`) {
+              // Only the request that took the lock (and began the mutation) backs up, under it.
+              try {
+                if (tool === 'staged_execute' && held.mutating) await host.afterMutation();
+              } finally {
+                releaseHeld();
+              }
+            }
           }
           return inner.send(message, options);
         },
@@ -365,12 +514,18 @@ export async function createPilotHost(
                   method?: string;
                   params?: { name?: string };
                 };
+                const tool = request.params?.name;
                 if (
                   request.id !== undefined &&
                   request.method === 'tools/call' &&
-                  request.params?.name === 'staged_execute'
-                )
-                  executing.add(request.id);
+                  (tool === 'staged_execute' || tool === 'staged_prepare')
+                ) {
+                  tracked.set(request.id, tool);
+                  requestScope.run({ requestId: String(request.id) }, () =>
+                    handler(message, extra),
+                  );
+                  return;
+                }
                 handler(message, extra);
               }
             : undefined;
@@ -409,8 +564,8 @@ export async function createPilotHost(
   };
 
   // Startup state: a leftover marker means a mutation began and no backup completed after it.
-  storageOk = !existsSync(markerPath);
-  if (!storageOk) log('pilot: a previous mutation has no completed backup; run `backup`');
+  if (existsSync(markerPath))
+    log('pilot: a previous mutation has no completed backup; run `backup`');
   let acknowledged: string | undefined;
   try {
     acknowledged = (JSON.parse(readFileSync(ackPath, 'utf8')) as { fingerprint?: string })
@@ -420,6 +575,12 @@ export async function createPilotHost(
   }
   const current = fingerprint();
   const empty = host.queue.snapshot().length === 0;
+  // A fresh pilot starts with an empty journal; a missing one beside existing state stays missing.
+  if (
+    empty &&
+    (await stagedDatabase()).prepare('SELECT id FROM staged_calls LIMIT 1').all().length === 0
+  )
+    ensureJournal(directory);
   needsAck = acknowledged === undefined ? !empty : acknowledged !== current;
   if (needsAck) log('pilot: queue differs from the last acknowledged state; run `status`');
   return host;

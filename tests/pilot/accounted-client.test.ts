@@ -107,7 +107,7 @@ describe('transport behaviour', () => {
     }
     expect(fake.calls[0]!.headers['Idempotency-Key']).toBeUndefined();
     expect(fake.calls[1]!.headers['Idempotency-Key']).toBe('shadow_abc');
-    expect(apiKey).toHaveBeenCalledTimes(2);
+    expect(apiKey).toHaveBeenCalledTimes(1);
   });
 
   it('treats any 3xx as an error', async () => {
@@ -214,5 +214,31 @@ describe('transport behaviour', () => {
     expect(queue.get('baseline-c')!.state).toBe('retry_wait');
     expect(fake.calls.some((c) => c.method === 'POST')).toBe(false);
     queue.close();
+  });
+});
+
+describe('one key per POST operation', () => {
+  it('uses the first key for the company check and the POST, retrieving it once', async () => {
+    let n = 0;
+    const apiKey = vi.fn(async () => `key-${++n}`);
+    const { fake, request } = client(fakeAccounted(), { apiKey });
+    const response = await request({
+      method: 'POST',
+      path: `${base}/customers`,
+      body: { name: 'X' },
+    });
+    expect(response.status).toBe(201);
+    expect(apiKey).toHaveBeenCalledTimes(1);
+    expect(fake.calls.map((c) => c.headers.Authorization)).toEqual([
+      'Bearer key-1',
+      'Bearer key-1',
+    ]);
+  });
+  it('still retrieves a key per GET', async () => {
+    let n = 0;
+    const apiKey = vi.fn(async () => `key-${++n}`);
+    const { request } = client(fakeAccounted(), { apiKey });
+    await request({ method: 'GET', path: '/api/v1/companies' });
+    expect(apiKey).toHaveBeenCalledTimes(1);
   });
 });

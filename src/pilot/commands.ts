@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { canonicalEncode, decode } from '../shadow/codec.js';
 import type { ShadowRecord, ShadowState } from '../shadow/types.js';
 import type { PilotHost } from './host.js';
+import { PilotLockError } from './lock.js';
 
 export interface CommandResult {
   ok: boolean;
@@ -20,6 +21,20 @@ export interface CommandResult {
   warnings?: string[];
 }
 const refuse = (message: string): CommandResult => ({ ok: false, message: `Refused: ${message}` });
+
+/** Whole-command exclusion across processes; a held lock is a refusal, never a wait or a takeover. */
+async function locked(
+  host: PilotHost,
+  command: string,
+  fn: () => Promise<CommandResult>,
+): Promise<CommandResult> {
+  try {
+    return await host.withLock(command, fn);
+  } catch (error) {
+    if (error instanceof PilotLockError) return refuse(error.message);
+    throw error;
+  }
+}
 
 const PREVIEW_MAX_AGE_MS = 15 * 60_000;
 const DRAINABLE_OPERATIONS = new Set([
@@ -41,7 +56,7 @@ const isDrainable = (record: ShadowRecord) =>
   record.state === 'pending' || record.state === 'retry_wait';
 
 /** Hash binds the exact request to the intent, the two companies and the reviewed host revision. */
-function previewHash(host: PilotHost, record: ShadowRecord, request: unknown): string {
+export function previewHash(host: PilotHost, record: ShadowRecord, request: unknown): string {
   return createHash('sha256')
     .update(
       canonicalEncode({
@@ -184,6 +199,10 @@ export async function drainOneCommand(
   hash: string,
 ): Promise<CommandResult> {
   if (!/^[0-9a-f]{64}$/.test(hash)) return refuse('hash must be 64 lowercase hex characters');
+  return locked(host, 'drain-one', () => drainOneLocked(host, id, hash));
+}
+
+async function drainOneLocked(host: PilotHost, id: string, hash: string): Promise<CommandResult> {
   const first = prepareOldest(host, id);
   if ('error' in first) return refuse(first.error);
   const gate = await host.checkGate(id);
@@ -223,13 +242,23 @@ export async function drainOneCommand(
   const adapter = host.adapterFor(first.record.operation)!;
   const warnings: string[] = [];
   host.beginMutation();
+  let refusal: string | undefined;
   try {
-    await host.queue.drainOne(adapter);
+    // Claims only the previewed record AND request, decided inside the claim transaction.
+    const outcome = await host.queue.drainExpected(adapter, {
+      id,
+      expectedDigest: hash,
+      digestOf: (record, request) => previewHash(host, record, request),
+      beforeApply: (record) => host.journalTarget(record),
+    });
+    if (!outcome.claimed) refusal = outcome.reason;
   } finally {
     const backup = await host.afterMutation();
     if (!backup.ok) warnings.push(`backup failed: ${backup.reason}`);
     rmSync(join(host.directory, 'previews', `${id}.json`), { force: true });
   }
+  if (refusal !== undefined)
+    return refuse(`nothing was dispatched: ${refusal}${warnings.map((w) => `; ${w}`).join('')}`);
   const after = host.queue.get(id)!;
   if (isInvoice && after.state === 'applied') {
     try {
@@ -264,21 +293,30 @@ const sha12 = (value: string) => createHash('sha256').update(value).digest('hex'
 async function stagedBaseline(
   host: PilotHost,
   operation: 'baselineCustomer' | 'baselineArticle',
+  identityKind: 'customer' | 'article',
+  sourceNumber: string,
   id: string,
   args: unknown[],
   read: () => Promise<Record<string, unknown>>,
 ): Promise<CommandResult> {
-  host.beginMutation();
-  try {
-    await host.queue.execute({ id, operation, args }, read);
-  } finally {
-    const backup = await host.afterMutation();
-    if (!backup.ok) host.log(`pilot: ${backup.reason}`);
-  }
-  return {
-    ok: true,
-    message: `recorded ${id} (pending); no Accounted request was made\n${nextStep(host, id)}`,
-  };
+  return locked(host, operation, async () => {
+    // The gate is evaluated under the lock so it sees every completed mutation and its backup.
+    const gate = await host.checkGate();
+    if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
+    if (host.queue.resolveIdentity(identityKind, sourceNumber).state !== 'missing')
+      return refuse(`${identityKind} ${sourceNumber} already has a queue record`);
+    host.beginMutation();
+    try {
+      await host.queue.execute({ id, operation, args }, read);
+    } finally {
+      const backup = await host.afterMutation();
+      if (!backup.ok) host.log(`pilot: ${backup.reason}`);
+    }
+    return {
+      ok: true,
+      message: `recorded ${id} (pending); no Accounted request was made\n${nextStep(host, id)}`,
+    };
+  });
 }
 
 export async function baselineCustomerCommand(
@@ -286,13 +324,11 @@ export async function baselineCustomerCommand(
   customerNumber: string,
 ): Promise<CommandResult> {
   if (!/^[A-Za-z0-9_-]{1,40}$/.test(customerNumber)) return refuse('invalid CustomerNumber');
-  const gate = await host.checkGate();
-  if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
-  if (host.queue.resolveIdentity('customer', customerNumber).state !== 'missing')
-    return refuse(`customer ${customerNumber} already has a queue record`);
   return stagedBaseline(
     host,
     'baselineCustomer',
+    'customer',
+    customerNumber,
     `baseline-c-${customerNumber}-${host.now()}`,
     [{ CustomerNumber: customerNumber }],
     () => host.operations.getCustomer(customerNumber),
@@ -312,13 +348,11 @@ export async function linkArticleCommand(
   )
     return refuse('invalid ArticleNumber');
   if (!UUID.test(targetArticleId)) return refuse('target article id must be a lowercase UUID');
-  const gate = await host.checkGate();
-  if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
-  if (host.queue.resolveIdentity('article', articleNumber).state !== 'missing')
-    return refuse(`article ${articleNumber} already has a queue record`);
   return stagedBaseline(
     host,
     'baselineArticle',
+    'article',
+    articleNumber,
     `link-a-${sha12(articleNumber)}-${host.now()}`,
     [{ ArticleNumber: articleNumber, targetArticleId }],
     () => host.operations.getArticle(articleNumber),

@@ -76,6 +76,18 @@ export class SourceReceiptPersistenceError extends Error {
 }
 
 /** SQLite supplies crash-safe commits and cross-process claims, without stale lock reclamation. */
+/** What an operator previewed: the single record and the digest of the exact request. */
+export interface DrainExpectation {
+  id: string;
+  expectedDigest: string;
+  /** Digest of the freshly prepared (canonical) request; computed inside the claim transaction. */
+  digestOf: (record: ShadowRecord, request: unknown) => string;
+  /** Runs after the claim, before any target request. Throw TargetNotDispatchedError to abort safely. */
+  beforeApply?: (record: ShadowRecord, request: unknown) => void | Promise<void>;
+}
+export type DrainExpectedResult =
+  { claimed: true; applied: boolean } | { claimed: false; reason: string };
+
 export class ShadowQueue {
   constructor(
     private readonly db: DatabaseSync,
@@ -201,11 +213,35 @@ export class ShadowQueue {
     return this.drainSingle(adapter);
   }
 
+  /**
+   * Drains exactly the record and request the operator previewed. Inside the claim transaction the
+   * oldest unresolved non-payment record must be `id` (pending/retry_wait) and the digest of the
+   * freshly prepared request must equal `expectedDigest`; otherwise nothing is claimed.
+   * `beforeApply` runs after the claim and before any target request; if it throws a
+   * TargetNotDispatchedError the record goes to retry_wait and nothing is sent.
+   */
+  async drainExpected(
+    adapter: ShadowAdapter,
+    expect: DrainExpectation,
+  ): Promise<DrainExpectedResult> {
+    const outcome: { reason?: string } = {};
+    const applied = await this.drainSingle(adapter, false, undefined, expect, outcome);
+    return outcome.reason === undefined
+      ? { claimed: true, applied }
+      : { claimed: false, reason: outcome.reason };
+  }
+
   private async drainSingle(
     adapter: ShadowAdapter,
     paymentAware = false,
     expectedId?: string,
+    expect?: DrainExpectation,
+    outcome: { reason?: string } = {},
   ): Promise<boolean> {
+    const refuse = (reason: string): undefined => {
+      if (expect) outcome.reason = reason;
+      return undefined;
+    };
     const claimed = this.transaction(() => {
       let record: ShadowRecord | undefined;
       if (paymentAware) {
@@ -227,9 +263,13 @@ export class ShadowQueue {
         record.paymentManaged !== undefined ||
         record.paymentGroup !== undefined
       )
-        return undefined;
-      if (record.state !== 'pending' && record.state !== 'retry_wait') return undefined;
-      if (record.nextAttemptAt !== undefined && record.nextAttemptAt > this.now()) return undefined;
+        return refuse('the oldest unresolved record is not an ordinary drainable record');
+      if (expect && record.id !== expect.id)
+        return refuse(`the oldest unresolved record is ${record.id}, not ${expect.id}`);
+      if (record.state !== 'pending' && record.state !== 'retry_wait')
+        return refuse(`record is ${record.state}, not pending`);
+      if (record.nextAttemptAt !== undefined && record.nextAttemptAt > this.now())
+        return refuse('retry is not due yet');
       let prepared: ReturnType<ShadowAdapter['prepare']>;
       try {
         prepared = adapter.prepare(record);
@@ -240,7 +280,12 @@ export class ShadowQueue {
         record.state = 'blocked';
         record.reason = prepared.blocked.slice(0, 500);
         this.save(record);
-        return undefined;
+        return refuse('mapping refuses this record');
+      }
+      if (expect) {
+        const digest = expect.digestOf(record, decode(canonicalEncode(prepared.request)));
+        if (digest !== expect.expectedDigest)
+          return refuse('the prepared request differs from the previewed one');
       }
       // Never dispatch an identity source while another intent claims the same source object:
       // a second create or baseline could produce a duplicate target object (NOX-213).
@@ -267,6 +312,7 @@ export class ShadowQueue {
     });
     if (!claimed) return false;
     try {
+      await expect?.beforeApply?.(claimed.record, claimed.request);
       const result = await adapter.apply(claimed.record, claimed.request);
       identity(result.targetId);
       claimed.record.targetId = result.targetId;

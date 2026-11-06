@@ -37,7 +37,7 @@ export interface AccountedClientOptions {
   /** Exactly `https://host[:port]`. */
   origin: string;
   companyId: string;
-  /** Called for every HTTP request; the key is never stored, logged or put in errors. */
+  /** Called once per GET and once per POST operation (check + POST share it); the key is never stored, logged or put in errors. */
   apiKey: () => Promise<string>;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
@@ -94,22 +94,26 @@ export function createAccountedClient(options: AccountedClientOptions): Accounte
       throw new PilotPolicyError('GET requests carry no body');
   }
 
-  async function send(
-    method: 'GET' | 'POST',
-    path: string,
-    body: unknown,
-    idempotencyKey: string | undefined,
-    notDispatchedOnKeyFailure: boolean,
-  ): Promise<AccountedResponse> {
-    let key: string;
+  /** Retrieved and validated once per operation; callers drop the reference when done. */
+  async function obtainKey(notDispatchedOnKeyFailure: boolean): Promise<string> {
     try {
-      key = await apiKey();
+      const key = await apiKey();
       if (typeof key !== 'string' || !key || /[\u0000- \u007f]/.test(key))
         throw new Error('invalid key');
+      return key;
     } catch {
       if (notDispatchedOnKeyFailure) throw new PilotNotDispatchedError('API key unavailable');
       throw new Error('Accounted API key unavailable');
     }
+  }
+
+  async function send(
+    key: string,
+    method: 'GET' | 'POST',
+    path: string,
+    body: unknown,
+    idempotencyKey: string | undefined,
+  ): Promise<AccountedResponse> {
     const headers: Record<string, string> = {
       Authorization: `Bearer ${key}`,
       Accept: 'application/json',
@@ -153,10 +157,10 @@ export function createAccountedClient(options: AccountedClientOptions): Accounte
   }
 
   /** Exactly one company, exactly the configured one, and no further pages. */
-  async function checkCompany(): Promise<void> {
+  async function checkCompany(key: string): Promise<void> {
     let response: AccountedResponse;
     try {
-      response = await send('GET', '/api/v1/companies', undefined, undefined, true);
+      response = await send(key, 'GET', '/api/v1/companies', undefined, undefined);
     } catch (error) {
       if (error instanceof PilotNotDispatchedError) throw error;
       throw new PilotNotDispatchedError('company check request failed');
@@ -177,9 +181,15 @@ export function createAccountedClient(options: AccountedClientOptions): Accounte
   return async (request) => {
     assertAllowed(request);
     if (request.method === 'POST') {
-      await checkCompany();
-      return send('POST', request.path, request.body, request.idempotencyKey, true);
+      // One key for the whole POST operation: the company check and the POST must be the same identity.
+      let key: string | undefined = await obtainKey(true);
+      try {
+        await checkCompany(key);
+        return await send(key, 'POST', request.path, request.body, request.idempotencyKey);
+      } finally {
+        key = undefined;
+      }
     }
-    return send('GET', request.path, undefined, undefined, false);
+    return send(await obtainKey(false), 'GET', request.path, undefined, undefined);
   };
 }
