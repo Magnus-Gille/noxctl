@@ -228,7 +228,7 @@ function targetInvoice(
     subtotal_sek: 300,
     vat_amount_sek: 75,
     total_sek: 375,
-    vat_treatment: 'standard',
+    vat_treatment: 'standard_25',
     vat_rate: 25,
     paid_amount: paid ? 375 : 0,
     credited_invoice_id: null,

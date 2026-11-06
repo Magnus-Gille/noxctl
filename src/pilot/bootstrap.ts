@@ -1,4 +1,5 @@
 import { userInfo } from 'node:os';
+import { join } from 'node:path';
 import { createAccountedClient } from './accounted-client.js';
 import { createPilotHost, loadPilotConfig, type PilotHost } from './host.js';
 import { createKeychainKeyReader } from './keychain.js';
@@ -17,7 +18,10 @@ export async function openPilotHost(options: OpenPilotHostOptions): Promise<Pilo
   const config = loadPilotConfig(options.configPath);
   let fortnox;
   if (options.synthetic) {
-    fortnox = createSyntheticFortnox(config.sourceCompany).transport;
+    // Shared on disk in the pilot directory so the CLI and the MCP server see the same records.
+    fortnox = createSyntheticFortnox(config.sourceCompany, {
+      persistPath: join(config.directory, 'synthetic-fortnox.json'),
+    }).transport;
   } else {
     const { setResolvedProfile } = await import('../auth.js');
     const { defaultFortnoxTransport } = await import('../fortnox-client.js');

@@ -66,9 +66,11 @@ export function matchesInvoiceExpected(
     invoice.subtotal_sek !== expected.subtotal ||
     invoice.vat_amount_sek !== expected.vat_amount ||
     invoice.total_sek !== expected.total ||
-    invoice.vat_treatment !== 'standard' ||
+    // Deployed Accounted stores 25 % Swedish VAT as 'standard_25' (column default) and leaves
+    // paid_amount null on an unpaid draft; verified against the M5 instance in GRIM-240 phase B.
+    invoice.vat_treatment !== 'standard_25' ||
     invoice.vat_rate !== 25 ||
-    invoice.paid_amount !== 0 ||
+    (invoice.paid_amount !== null && invoice.paid_amount !== 0) ||
     invoice.credited_invoice_id !== null ||
     invoice.deduction_total !== 0 ||
     !emptyDimensions(invoice.default_dimensions)

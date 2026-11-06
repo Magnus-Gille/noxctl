@@ -2,6 +2,7 @@
  * Deterministic in-memory Fortnox transport for rehearsal (`server --synthetic-source`) and tests.
  * Models only what the pilot touches: companyinformation, customers, articles and invoices.
  */
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { FortnoxTransport, RequestOptions } from '../fortnox-client.js';
 
 type Entity = Record<string, unknown>;
@@ -21,7 +22,15 @@ export interface SyntheticFortnox {
 
 const round = (value: number) => Math.round(value * 100) / 100;
 
-export function createSyntheticFortnox(orgNr: string): SyntheticFortnox {
+export interface SyntheticOptions {
+  /** Rehearsal across processes: customers, invoices and counters are shared through this file. */
+  persistPath?: string;
+}
+
+export function createSyntheticFortnox(
+  orgNr: string,
+  options: SyntheticOptions = {},
+): SyntheticFortnox {
   const state: SyntheticFortnox['state'] = {
     customers: new Map<string, Entity>([
       [
@@ -114,8 +123,44 @@ export function createSyntheticFortnox(orgNr: string): SyntheticFortnox {
     };
   }
 
+  const persistPath = options.persistPath;
+  function load(): void {
+    if (!persistPath || !existsSync(persistPath)) return;
+    const saved = JSON.parse(readFileSync(persistPath, 'utf8')) as {
+      customers: [string, Entity][];
+      invoices: [string, Entity][];
+      nextCustomer: number;
+      nextInvoice: number;
+    };
+    state.customers = new Map(saved.customers);
+    state.invoices = new Map(saved.invoices);
+    nextCustomer = saved.nextCustomer;
+    nextInvoice = saved.nextInvoice;
+  }
+  function save(): void {
+    if (!persistPath) return;
+    const temp = `${persistPath}.${process.pid}.tmp`;
+    writeFileSync(
+      temp,
+      JSON.stringify({
+        customers: [...state.customers],
+        invoices: [...state.invoices],
+        nextCustomer,
+        nextInvoice,
+      }),
+      { mode: 0o600 },
+    );
+    renameSync(temp, persistPath);
+  }
+
   const last = (endpoint: string) => decodeURIComponent(endpoint.split('/').pop() ?? '');
-  async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  async function request<T>(endpoint: string, requestOptions: RequestOptions = {}): Promise<T> {
+    load();
+    const result = await handle<T>(endpoint, requestOptions);
+    if ((requestOptions.method ?? 'GET') !== 'GET') save();
+    return result;
+  }
+  async function handle<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     const method = options.method ?? 'GET';
     state.requests.push(`${method} ${endpoint}`);
     const body = options.body as Record<string, Entity> | undefined;

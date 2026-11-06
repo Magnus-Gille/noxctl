@@ -18,6 +18,7 @@ import {
   drainOneCommand,
   linkArticleCommand,
   previewCommand,
+  reconcileCommand,
   statusCommand,
 } from '../../src/pilot/commands.js';
 import { loadPilotConfig } from '../../src/pilot/host.js';
@@ -421,5 +422,26 @@ describe('bootstrap', () => {
     } finally {
       await host.close();
     }
+  });
+
+  it('reconciles an unknown create read-only and never sends another POST', async () => {
+    const h = await makeHost();
+    expect((await baselineCustomerCommand(h.host, '1')).ok).toBe(true);
+    const [c] = h.host.queue.snapshot().map((e) => e.record);
+    const preview = await previewCommand(h.host, c!.id);
+    h.accounted.state.getFails = true;
+    const drained = await drainOneCommand(h.host, c!.id, preview.hash!);
+    expect(drained.state).toBe('target_unknown');
+    // still failing: stays unknown
+    const again = await reconcileCommand(h.host, c!.id);
+    expect(again.ok).toBe(false);
+    expect(h.host.queue.get(c!.id)!.state).toBe('target_unknown');
+    h.accounted.state.getFails = false;
+    const ok = await reconcileCommand(h.host, c!.id);
+    expect(ok, ok.message).toMatchObject({ ok: true, state: 'applied' });
+    expect(
+      h.accounted.calls.filter((x) => x.method === 'POST' && x.url.endsWith('/customers')),
+    ).toHaveLength(1);
+    expect((await reconcileCommand(h.host, c!.id)).ok).toBe(false);
   });
 });

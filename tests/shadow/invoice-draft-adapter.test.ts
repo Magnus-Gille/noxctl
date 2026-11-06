@@ -120,7 +120,7 @@ function nativeInvoice() {
     subtotal_sek: 100,
     vat_amount_sek: 25,
     total_sek: 125,
-    vat_treatment: 'standard',
+    vat_treatment: 'standard_25',
     vat_rate: 25,
     paid_amount: 0,
     credited_invoice_id: null,
@@ -259,6 +259,14 @@ describe('unarmed native-contract invoice draft adapter with synthetic transport
     expect(request.mock.calls.filter(([r]) => r.method === 'POST')).toHaveLength(1);
   });
 
+  it('accepts the deployed Accounted draft shape: vat_treatment standard_25 and paid_amount null', async () => {
+    const { adapter, request } = setup({ ...nativeInvoice(), paid_amount: null });
+    const source = record();
+    const result = await adapter.apply(source, prepared(adapter, source));
+    expect(result.targetId).toBeTruthy();
+    expect(request.mock.calls.filter(([r]) => r.method === 'POST')).toHaveLength(1);
+  });
+
   it.each([
     ['missing items', { ...nativeInvoice(), items: undefined }],
     [
@@ -271,6 +279,10 @@ describe('unarmed native-contract invoice draft adapter with synthetic transport
     ['credit relation', { ...nativeInvoice(), credited_invoice_id: customerId }],
     ['converted total differs', { ...nativeInvoice(), total_sek: 124 }],
     ['exempt VAT treatment', { ...nativeInvoice(), vat_treatment: 'exempt' }],
+    [
+      'legacy standard label (never stored by Accounted)',
+      { ...nativeInvoice(), vat_treatment: 'standard' },
+    ],
     [
       'archived customer',
       {

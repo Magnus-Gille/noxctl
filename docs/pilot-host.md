@@ -35,14 +35,15 @@ is used for the company check and the POST, so both requests always carry the sa
 
 `node dist/pilot/cli.js --config <file> [--synthetic-source] <command>`
 
-| Command                               | Effect                                                                                                                                                               |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`                              | Counts, oldest unapplied age, every non-applied record with state and reason, and source number to target id for applied records. Also acknowledges the queue state. |
-| `preview <id>`                        | Only for the OLDEST unresolved record. Runs the adapter `prepare` (no network), prints the exact request and `hash`, writes `previews/<id>.json` (0600).             |
-| `drain-one <id> <hash>`               | One `queue.drainExpected` (below), after the checks below. Prints the state, then backs up.                                                                          |
-| `baseline-customer <CustomerNumber>`  | Reads the Fortnox customer and records a `baselineCustomer` intent (pending). No Accounted request.                                                                  |
-| `link-article <ArticleNumber> <uuid>` | Reads the Fortnox article and records a `baselineArticle` intent (pending). No Accounted request.                                                                    |
-| `backup`                              | Manual backup.                                                                                                                                                       |
+| Command                               | Effect                                                                                                                                                                                                                                                   |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                              | Counts, oldest unapplied age, every non-applied record with state and reason, and source number to target id for applied records. Also acknowledges the queue state.                                                                                     |
+| `preview <id>`                        | Only for the OLDEST unresolved record. Runs the adapter `prepare` (no network), prints the exact request and `hash`, writes `previews/<id>.json` (0600).                                                                                                 |
+| `drain-one <id> <hash>`               | One `queue.drainExpected` (below), after the checks below. Prints the state, then backs up.                                                                                                                                                              |
+| `baseline-customer <CustomerNumber>`  | Reads the Fortnox customer and records a `baselineCustomer` intent (pending). No Accounted request.                                                                                                                                                      |
+| `link-article <ArticleNumber> <uuid>` | Reads the Fortnox article and records a `baselineArticle` intent (pending). No Accounted request.                                                                                                                                                        |
+| `reconcile <id>`                      | Only for a `target_unknown` record that kept its target identity and receipt. Reads the target with the adapter's verifier (GET only, never another mutation); on a match the record becomes `applied`, otherwise it stays unknown. Backs up afterwards. |
+| `backup`                              | Manual backup.                                                                                                                                                                                                                                           |
 
 `hash = sha256(canonicalEncode({ id, operation, requestHash, request, binding, revision }))`.
 
@@ -203,3 +204,10 @@ do not match the files, storage is unhealthy and writes are refused until a new 
 ### Registry lock
 
 Initialization takes `<headDir>/registry.lock` (exclusive create, never waited on, never stolen) across the registry read, conflict check and update, so two concurrent initializations cannot lose a registration. If it exists and no pilot process is running, the operator removes it by hand after checking. Head-directory files are written through unique temporary names.
+
+## Phase B findings (GRIM-240)
+
+- The deployed Accounted stores 25 % VAT as `vat_treatment = 'standard_25'` and leaves `paid_amount` null on an unpaid draft; the draft readback now accepts exactly that.
+- The Accounted company list does not expose a key's per-company access, so a read-only key cannot be detected before the first POST: the POST is refused with 403 and the record becomes `target_unknown` (fail closed). Give the pilot key write access in the pilot company.
+- There is no pre-write preflight yet: a Fortnox write whose arguments the mapping refuses (missing InvoiceDate/DueDate/Currency, unsupported customer input fields) sits unmappable at the head of the queue. Phase C requires a preflight before every Fortnox write.
+- The synthetic source is shared on disk (`synthetic-fortnox.json`) so the CLI and MCP server see the same records.

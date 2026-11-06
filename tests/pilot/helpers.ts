@@ -63,6 +63,8 @@ export interface FakeAccountedOptions {
   postFailsAfterStore?: boolean;
   postHangs?: boolean;
   redirect?: boolean;
+  /** GET by id answers 500 while true (readback failure after a successful create). */
+  getFails?: boolean;
   /** Runs when a POST arrives, before the response. */
   onPost?: () => void;
 }
@@ -116,6 +118,8 @@ export function fakeAccounted(options: FakeAccountedOptions = {}) {
       return json(201, { data: { id } });
     }
     const customer = path.match(new RegExp(`^${base}/customers/([0-9a-f-]{36})$`));
+    if (method === 'GET' && state.getFails && /\/(customers|invoices)\/[0-9a-f-]{36}/.test(path))
+      return json(500, { error: 'readback' });
     if (method === 'GET' && customer) {
       const data = customers.get(customer[1]!);
       return data ? json(200, { data }) : json(404, {});
@@ -177,7 +181,7 @@ function invoiceReadback(
     subtotal_sek: subtotal,
     vat_amount_sek: vat,
     total_sek: subtotal + vat,
-    vat_treatment: 'standard',
+    vat_treatment: 'standard_25',
     vat_rate: 25,
     paid_amount: 0,
     credited_invoice_id: null,

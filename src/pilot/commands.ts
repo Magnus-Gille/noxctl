@@ -367,6 +367,49 @@ export async function linkArticleCommand(
   );
 }
 
+/**
+ * Read-only reconciliation of a `target_unknown` record that kept its target identity and receipt
+ * (e.g. a create whose readback failed). It only reads the target (adapter verify); it never sends
+ * another mutation. On a match the record becomes `applied`; otherwise it stays unknown.
+ */
+export async function reconcileCommand(host: PilotHost, id: string): Promise<CommandResult> {
+  return locked(host, 'reconcile', async () => {
+    const record = host.queue.get(id);
+    if (!record) return refuse(`no record ${id}`);
+    if (record.state !== 'target_unknown')
+      return refuse(`record is ${record.state}; only target_unknown can be reconciled`);
+    if (!record.targetId || !record.targetReceipt)
+      return refuse(
+        'the unknown outcome has no durable target identity; reconcile by hand against Accounted and Fortnox',
+      );
+    const adapter = host.adapterFor(record.operation);
+    if (!adapter?.verify) return refuse(`no read-only verifier for ${record.operation}`);
+    try {
+      host.beginMutation();
+    } catch {
+      return refuse('backup marker could not be made durable');
+    }
+    let matched = false;
+    let failure: string | undefined;
+    try {
+      matched = await host.queue.reconcileTarget(id, adapter);
+    } catch (error) {
+      failure = error instanceof Error ? error.name : 'Error';
+    } finally {
+      const backup = await host.afterMutation();
+      if (!backup.ok) failure = `${failure ? `${failure}; ` : ''}backup failed: ${backup.reason}`;
+    }
+    const state = host.queue.get(id)!.state;
+    if (matched && state === 'applied')
+      return { ok: true, state, message: `${id}: applied (target read back and matched)` };
+    return {
+      ok: false,
+      state,
+      message: `${id}: still ${state}${failure ? ` (${failure})` : ' (target does not match)'}; nothing was sent`,
+    };
+  });
+}
+
 export async function backupCommand(host: PilotHost): Promise<CommandResult> {
   const result = await host.backup();
   return result.ok
