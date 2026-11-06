@@ -1,7 +1,7 @@
-import { basename, extname } from 'node:path';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { pathSegment } from '../identifiers.js';
+import { snapshotOperationFile, type OperationFile } from '../operation-file.js';
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.pdf': 'application/pdf',
@@ -17,17 +17,18 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   '.xml': 'application/xml',
 };
 
-function uploadForm(filePath: string): FormData {
-  if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
-  if (!statSync(filePath).isFile()) throw new Error(`Not a regular file: ${filePath}`);
-  const buffer = readFileSync(filePath);
+function uploadForm(filePath: OperationFile): FormData {
+  const snapshot = snapshotOperationFile(filePath);
+  const content = new Uint8Array(snapshot.content.byteLength);
+  content.set(snapshot.content);
   const form = new FormData();
   form.append(
     'file',
-    new Blob([buffer], {
-      type: MIME_BY_EXTENSION[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+    new Blob([content], {
+      type:
+        MIME_BY_EXTENSION[extname(snapshot.fileName).toLowerCase()] ?? 'application/octet-stream',
     }),
-    basename(filePath),
+    snapshot.fileName,
   );
   return form;
 }
@@ -62,7 +63,7 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function uploadArchiveFile(
-    filePath: string,
+    filePath: OperationFile,
     params: { folderId?: string; path?: string } = {},
   ) {
     return transport.request<Record<string, unknown>>('archive', {
@@ -126,7 +127,7 @@ export function createFileOperations(transport: FortnoxTransport) {
   }
 
   async function uploadInboxEntry(
-    filePath: string,
+    filePath: OperationFile,
     params: { folderId?: string; path?: string } = {},
   ) {
     return transport.request<Record<string, unknown>>('inbox', {

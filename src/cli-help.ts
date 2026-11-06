@@ -67,7 +67,7 @@ export const commandGroups: ReadonlyArray<readonly [string, readonly string[]]> 
     ],
   ],
   ['CLI setup', ['completion', 'doctor', 'help', 'init', 'keychain', 'logout', 'profile']],
-  ['Integrations', ['serve']],
+  ['Integrations', ['serve', 'shadow']],
 ];
 
 const commonCommands = new Set([

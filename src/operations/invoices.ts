@@ -1,7 +1,11 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { basename, extname } from 'node:path';
+import { extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment, pathSegment } from '../identifiers.js';
+import {
+  snapshotOperationFile,
+  type OperationFile,
+  validateOperationFile,
+} from '../operation-file.js';
 import { createCustomerOperations } from './customers.js';
 import { assessEinvoiceDraft } from '../einvoice-preflight.js';
 
@@ -62,7 +66,7 @@ export type AttachmentEntityType = 'F' | 'OF' | 'O' | 'C';
 
 export interface AttachInvoiceFilesParams {
   documentNumber: string;
-  filePaths: string[];
+  filePaths: OperationFile[];
   includeOnSend?: boolean;
 }
 
@@ -291,8 +295,8 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     '.xml': 'application/xml',
   };
 
-  function mimeForFile(filePath: string): string {
-    return MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+  function mimeForFile(fileName: string): string {
+    return MIME_BY_EXT[extname(fileName).toLowerCase()] ?? 'application/octet-stream';
   }
 
   interface ArchiveFileRow {
@@ -323,10 +327,16 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
    * mostly undocumented `/api/fileattachments/attachments-v1` product API
    * instead.
    */
-  async function uploadForInvoiceAttachment(filePath: string): Promise<ArchiveFileRow> {
-    const buf = readFileSync(filePath);
+  async function uploadForInvoiceAttachment(filePath: OperationFile): Promise<ArchiveFileRow> {
+    const snapshot = snapshotOperationFile(filePath);
+    const content = new Uint8Array(snapshot.content.byteLength);
+    content.set(snapshot.content);
     const form = new FormData();
-    form.append('file', new Blob([buf], { type: mimeForFile(filePath) }), basename(filePath));
+    form.append(
+      'file',
+      new Blob([content], { type: mimeForFile(snapshot.fileName) }),
+      snapshot.fileName,
+    );
     const data = await transport.request<ArchiveFileResponse>('/3/archive', {
       method: 'POST',
       params: { folderid: 'inbox_kf' },
@@ -412,23 +422,24 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
   async function attachInvoiceFiles(
     params: AttachInvoiceFilesParams,
   ): Promise<AttachInvoiceFileResult[]> {
-    for (const filePath of params.filePaths) {
-      if (!existsSync(filePath)) throw new Error(`File not found: ${filePath}`);
-      if (!statSync(filePath).isFile()) throw new Error(`Not a file: ${filePath}`);
-    }
+    const fileOptions = { notRegularFileMessage: 'Not a file' };
+    const files = params.filePaths.map((filePath) => ({
+      file: typeof filePath === 'string' ? filePath : snapshotOperationFile(filePath, fileOptions),
+      fileName: validateOperationFile(filePath, fileOptions),
+    }));
     const includeOnSend = params.includeOnSend ?? true;
     const results: AttachInvoiceFileResult[] = [];
-    for (const filePath of params.filePaths) {
+    for (const file of files) {
       try {
-        const file = await uploadForInvoiceAttachment(filePath);
+        const uploaded = await uploadForInvoiceAttachment(file.file);
         const attachment = (await createDocumentAttachment(
           params.documentNumber,
           'F',
-          file.ArchiveFileId,
+          uploaded.ArchiveFileId,
           includeOnSend,
         )) as unknown as InvoiceAttachment;
         results.push({
-          fileName: file.Name,
+          fileName: uploaded.Name,
           fileId: attachment.fileId,
           attachmentId: attachment.id,
           includeOnSend: attachment.includeOnSend,
@@ -437,7 +448,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
         const done = results.map((r) => r.fileName).join(', ') || 'none';
         const detail = err instanceof Error ? err.message : String(err);
         throw new Error(
-          `Failed attaching "${basename(filePath)}" to invoice ${params.documentNumber}: ${detail}. Files already attached this run: ${done}.`,
+          `Failed attaching "${file.fileName}" to invoice ${params.documentNumber}: ${detail}. Files already attached this run: ${done}.`,
         );
       }
     }

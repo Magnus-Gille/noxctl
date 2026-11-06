@@ -15,6 +15,7 @@ export interface StrictToolInventoryEntry {
 }
 
 const toolInventories = new WeakMap<McpServer, StrictToolInventoryEntry[]>();
+const toolSchemas = new WeakMap<McpServer, Map<string, z.ZodType>>();
 
 function isToolShape(value: unknown): value is ToolShape {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -44,6 +45,8 @@ export function createStrictMcpServer(serverInfo: Implementation): McpServer {
   const server = new McpServer(serverInfo);
   const inventory: StrictToolInventoryEntry[] = [];
   toolInventories.set(server, inventory);
+  const schemas = new Map<string, z.ZodType>();
+  toolSchemas.set(server, schemas);
 
   server.tool = ((name: string, description: string, shape: ToolShape, callback: unknown) => {
     if (typeof description !== 'string' || !isToolShape(shape) || typeof callback !== 'function') {
@@ -59,6 +62,7 @@ export function createStrictMcpServer(serverInfo: Implementation): McpServer {
       callback as ToolCallback<typeof inputSchema>,
     ) as RegisteredTool;
     inventory.push({ name, description, inputFields: Object.keys(shape) });
+    schemas.set(name, inputSchema);
     return registeredTool;
   }) as McpServer['tool'];
 
@@ -68,4 +72,15 @@ export function createStrictMcpServer(serverInfo: Implementation): McpServer {
 /** Return the tool inventory captured at the repository's strict registration boundary. */
 export function getStrictToolInventory(server: McpServer): readonly StrictToolInventoryEntry[] {
   return toolInventories.get(server) ?? [];
+}
+
+/** Parse the actual registered schema without invoking any business callback. */
+export function parseStrictToolInput(
+  server: McpServer,
+  name: string,
+  input: unknown,
+): Record<string, unknown> {
+  const schema = toolSchemas.get(server)?.get(name);
+  if (!schema) throw new Error('No registered strict input schema for tool');
+  return schema.parse(input) as Record<string, unknown>;
 }
