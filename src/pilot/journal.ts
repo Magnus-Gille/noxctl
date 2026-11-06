@@ -28,7 +28,9 @@ import { join } from 'node:path';
 
 export type JournalEntry =
   | { kind: 'target'; intentId: string; requestHash: string; attempt: number; at: number }
-  | { kind: 'source'; stagedId: string; at: number };
+  | { kind: 'source'; stagedId: string; at: number }
+  /** Operator closed an unmappable record without any target contact (NOX-215). */
+  | { kind: 'refused'; intentId: string; at: number };
 export type ChainedEntry = JournalEntry & { seq: number; prev: string };
 export interface HeadRecord {
   pilotId: string;
@@ -260,7 +262,8 @@ export function verifyJournal(ctx: JournalContext): JournalState {
           typeof entry.intentId === 'string' &&
           typeof entry.requestHash === 'string' &&
           Number.isSafeInteger(entry.attempt)) ||
-        (entry.kind === 'source' && typeof entry.stagedId === 'string');
+        (entry.kind === 'source' && typeof entry.stagedId === 'string') ||
+        (entry.kind === 'refused' && typeof entry.intentId === 'string');
       if (!valid) return { ok: false, reason: `dispatch journal line ${index} is malformed` };
       entries.push(entry as unknown as ChainedEntry);
     }

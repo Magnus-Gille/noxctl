@@ -1,4 +1,5 @@
 import type { FortnoxTransport } from '../fortnox-client.js';
+import { isOperatorRefused } from '../shadow/operator-refusal.js';
 import type { ShadowStatus } from '../shadow/types.js';
 
 export interface WriteGateInput {
@@ -12,6 +13,11 @@ export interface WriteGateInput {
   exceptId?: string;
   /** States of `exceptId` that do not refuse (default: pending, retry_wait). */
   exceptStates?: readonly string[];
+  /**
+   * Intents the host verified as operator-refused: blocked with an OPERATOR_REFUSED reason, no target
+   * attempt or identity, and a matching `refused` journal entry. Any other blocked record refuses.
+   */
+  operatorRefused?: ReadonlySet<string>;
 }
 export type GateResult =
   | { ok: true }
@@ -38,7 +44,10 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
   if (staged && (staged.executing > 0 || staged.unknown > 0))
     return { ok: false, reason: 'a staged call is executing or has an unknown outcome' };
   const items = input.queue.status().items;
+  const refused = (item: (typeof items)[number]) =>
+    input.operatorRefused?.has(item.id) === true && isOperatorRefused(item);
   for (const item of items) {
+    if (refused(item)) continue;
     if (
       item.id === input.exceptId &&
       (input.exceptStates ?? ['pending', 'retry_wait']).includes(item.state)
@@ -57,7 +66,10 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
   }
   const oldest = items.find(
     (item) =>
-      item.id !== input.exceptId && item.state !== 'applied' && item.state !== 'source_cancelled',
+      item.id !== input.exceptId &&
+      item.state !== 'applied' &&
+      item.state !== 'source_cancelled' &&
+      !refused(item),
   );
   if (oldest) {
     const ageMs = Math.max(0, input.now() - oldest.createdAt);

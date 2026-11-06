@@ -8,6 +8,7 @@ import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { canonicalEncode, decode } from '../shadow/codec.js';
+import { isOperatorRefused } from '../shadow/operator-refusal.js';
 import type { ShadowRecord, ShadowState } from '../shadow/types.js';
 import type { PilotHost } from './host.js';
 import { PilotLockError } from './lock.js';
@@ -50,7 +51,12 @@ function oldestUnresolved(host: PilotHost): ShadowRecord | undefined {
   return host.queue
     .snapshot()
     .map((entry) => entry.record)
-    .find((record) => record.state !== 'applied' && record.state !== 'source_cancelled');
+    .find(
+      (record) =>
+        record.state !== 'applied' &&
+        record.state !== 'source_cancelled' &&
+        !isOperatorRefused(record),
+    );
 }
 const isDrainable = (record: ShadowRecord) =>
   record.state === 'pending' || record.state === 'retry_wait';
@@ -426,4 +432,68 @@ export async function backupCommand(host: PilotHost): Promise<CommandResult> {
   return result.ok
     ? { ok: true, message: `backup written to ${result.directory}` }
     : { ok: false, message: `Refused: ${result.reason}` };
+}
+
+/**
+ * Closes the OLDEST unresolved record when the adapter still refuses to map it (e.g. a Fortnox write
+ * whose arguments the mapping rejects). It becomes `blocked` with an `OPERATOR_REFUSED:` reason, a
+ * `refused` journal entry is appended, and a backup is taken. No Fortnox or Accounted request is made.
+ */
+export async function refuseCommand(
+  host: PilotHost,
+  id: string,
+  reason: string,
+): Promise<CommandResult> {
+  if (!ID.test(id)) return refuse('invalid record id');
+  if (
+    typeof reason !== 'string' ||
+    reason.trim() !== reason ||
+    reason.length === 0 ||
+    reason.length > 300 ||
+    /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/.test(reason)
+  )
+    return refuse('reason must be 1-300 characters on one line without surrounding whitespace');
+  return locked(host, 'refuse', async () => {
+    const record = host.queue.get(id);
+    if (!record) return refuse('unknown record id');
+    const adapter = host.adapterFor(record.operation);
+    if (!adapter) return refuse(`operation ${record.operation} has no adapter`);
+    const gate = await host.checkGate(id, ['pending']);
+    if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
+    try {
+      host.beginMutation();
+    } catch {
+      return refuse('nothing was done: backup marker could not be made durable');
+    }
+    const warnings: string[] = [];
+    let outcome: ReturnType<typeof host.queue.refuseUnmappable> | undefined;
+    try {
+      outcome = host.queue.refuseUnmappable(id, reason, adapter);
+      if (outcome.ok) {
+        try {
+          host.journalRefused(id);
+        } catch {
+          warnings.push(
+            'the refusal could not be journaled; the record stays blocked and the gate keeps refusing',
+          );
+        }
+      }
+    } finally {
+      const backup = await host.afterMutation();
+      if (!backup.ok) warnings.push(`backup failed: ${backup.reason}`);
+    }
+    if (!outcome.ok)
+      return refuse(
+        `nothing was changed: ${outcome.reason}${warnings.map((w) => `; ${w}`).join('')}`,
+      );
+    return {
+      ok: warnings.length === 0,
+      state: 'blocked',
+      message: [
+        `${id}: blocked - refused by the operator (mapping: ${outcome.mappingReason}); no Fortnox or Accounted request was made`,
+        ...warnings.map((w) => `warning: ${w}`),
+      ].join('\n'),
+      warnings,
+    };
+  });
 }
