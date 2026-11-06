@@ -252,6 +252,7 @@ export class ShadowQueue {
         (record.targetAttempts ?? 0) !== 0 ||
         record.targetId !== undefined ||
         record.targetReceipt !== undefined ||
+        PAYMENT_OPERATIONS.has(record.operation) ||
         record.paymentQueueOwned !== undefined ||
         record.paymentManaged !== undefined ||
         record.paymentGroup !== undefined
@@ -261,7 +262,11 @@ export class ShadowQueue {
       try {
         prepared = adapter.prepare(record);
       } catch (error) {
-        prepared = { blocked: `Adapter validation failed (${safeErrorName(error)})` };
+        // Only an explicit { blocked } result may close a record; a thrown error proves nothing.
+        return {
+          ok: false as const,
+          reason: `the mapping failed unexpectedly (${safeErrorName(error)}); nothing was changed`,
+        };
       }
       if (!('blocked' in prepared))
         return { ok: false as const, reason: 'the record is mappable; use preview and drain-one' };

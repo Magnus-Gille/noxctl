@@ -164,4 +164,30 @@ describe('refuse (NOX-215)', () => {
     expect(gate.ok).toBe(false);
     expect(JSON.stringify(gate)).toMatch(/operator refusal/);
   });
+
+  it('does not close a record when the mapping throws or the record is a payment operation', async () => {
+    const h = await makeHost();
+    await unmappable(h, 'bad-1');
+    const entries = journal(h).length;
+    const throwing = {
+      prepare: () => {
+        throw new Error('boom');
+      },
+      apply: async () => ({ targetId: 'x', receipt: {} }),
+    };
+    const result = h.host.queue.refuseUnmappable('bad-1', 'no', throwing);
+    expect(result).toMatchObject({ ok: false });
+    expect(h.host.queue.get('bad-1')!.state).toBe('pending');
+    expect(journal(h).length).toBe(entries);
+    expect(await h.host.checkGate()).toEqual({ ok: true });
+
+    const h2 = await makeHost();
+    await h2.host.queue.execute(
+      { id: 'pay-1', operation: 'createInvoicePayment', args: [{}] },
+      async () => ({ Number: '1' }),
+    );
+    const blocked = { prepare: () => ({ blocked: 'x' }), apply: throwing.apply };
+    expect(h2.host.queue.refuseUnmappable('pay-1', 'no', blocked)).toMatchObject({ ok: false });
+    expect(h2.host.queue.get('pay-1')!.state).toBe('pending');
+  });
 });

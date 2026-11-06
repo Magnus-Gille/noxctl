@@ -87,7 +87,9 @@ function preflightCustomer(
   };
   const prepared = adapter.prepare(provisional(source));
   if (!('blocked' in prepared)) return undefined;
-  // Needs Currency/VATType from the response; the arguments cannot carry them.
-  if (prepared.blocked.startsWith(CUSTOMER_COUNTRY_UNVERIFIED)) return undefined;
-  return prepared.blocked;
+  if (!prepared.blocked.startsWith(CUSTOMER_COUNTRY_UNVERIFIED)) return prepared.blocked;
+  // The country rule needs Currency/VATType from the response, which the arguments cannot carry.
+  // Satisfy it with placeholders and still report every other input error.
+  const rerun = adapter.prepare(provisional({ ...source, Currency: 'SEK', VATType: 'SEVAT' }));
+  return 'blocked' in rerun ? rerun.blocked : undefined;
 }

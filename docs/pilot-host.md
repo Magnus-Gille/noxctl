@@ -238,7 +238,7 @@ The preflight runs the real mapping on a provisional record:
   not a string or fails the Accounted schema (for example `Email`), a `Type` other than `COMPANY`, a
   `CountryCode` other than `SE`, and a given CustomerNumber that already has a queue record. NOT
   decided: values the arguments do not name. An absent `Type` or `CountryCode` is assumed
-  acceptable, because Fortnox fills it in; the `CUSTOMER_COUNTRY_UNVERIFIED` rule needs the response.
+  acceptable, because Fortnox fills it in; the `CUSTOMER_COUNTRY_UNVERIFIED` rule needs the response, so it is satisfied with placeholders (Currency `SEK`, VATType `SEVAT`) and every other input error is still reported.
 - `createInvoice`: the input half of the draft validation (`preflightInvoiceDraft` in
   `src/shadow/invoice-draft-mapping.ts`): exactly the supported header and row fields, all of
   CustomerNumber, InvoiceDate, DueDate (real dates, not before the invoice date), Currency `SEK`,
@@ -255,7 +255,7 @@ Such a record is the unmappable head record that `refuse` exists for.
 ### `refuse <id> <reason>`
 
 Allowed only for the oldest unresolved record, in state `pending`, with zero target attempts, no
-target id or receipt, not payment-managed, and only if `adapter.prepare` still returns blocked
+target id or receipt, not a payment operation or payment-managed, and only if `adapter.prepare` still returns an explicit blocked result (a thrown error never closes a record)
 (re-run inside the queue transaction, `queue.refuseUnmappable`). Under the pilot lock and the full
 write gate (only this record's `pending` state is exempted) the host writes the backup marker, marks
 the record `blocked` with reason `OPERATOR_REFUSED: <operator reason> (mapping: <mapping reason>)`,

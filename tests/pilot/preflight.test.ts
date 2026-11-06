@@ -125,4 +125,25 @@ describe('mapping preflight before every Fortnox write (NOX-215)', () => {
     expect(posts(h.synthetic.state.requests)).toEqual([]);
     await client.close();
   });
+
+  it('does not let the country rule mask other input errors', async () => {
+    const h = await makeHost();
+    const client = await connect(h.host);
+    const bad = await stagedCreate(client, 'fortnox_create_customer', {
+      Name: 'X AB',
+      Type: 'COMPANY',
+      CountryCode: '',
+      Email: 'not-an-email',
+    });
+    expect(bad.isError).toBe(true);
+    expect(textOf(bad)).toMatch(/Email/);
+    expect(posts(h.synthetic.state.requests)).toEqual([]);
+    const ok = await stagedCreate(client, 'fortnox_create_customer', {
+      Name: 'X AB',
+      Type: 'COMPANY',
+      CountryCode: '',
+    });
+    expect(ok.isError, textOf(ok)).not.toBe(true);
+    await client.close();
+  });
 });
