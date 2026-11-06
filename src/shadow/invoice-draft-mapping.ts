@@ -1090,11 +1090,13 @@ function resolveArticle(
   }
   const state = isPlainObject(resolution) ? resolution.state : undefined;
   if (state === 'missing') {
-    return { blocked: `${ARTICLE_REFUSAL.unmapped}: Source article has no createArticle receipt.` };
+    return {
+      blocked: `${ARTICLE_REFUSAL.unmapped}: Source article has no applied createArticle or baselineArticle receipt.`,
+    };
   }
   if (state === 'unresolved') {
     return {
-      blocked: `${ARTICLE_REFUSAL.unresolved}: Article creator receipt is incomplete or has an unknown outcome.`,
+      blocked: `${ARTICLE_REFUSAL.unresolved}: Article identity receipt is incomplete or has an unknown outcome.`,
     };
   }
   if (state === 'conflict') {

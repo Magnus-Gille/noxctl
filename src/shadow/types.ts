@@ -121,3 +121,15 @@ export class TargetReceiptPendingError extends Error {
     this.name = 'TargetReceiptPendingError';
   }
 }
+
+/**
+ * The adapter proved, with read-only requests, that the target does not match; nothing was
+ * mutated. The queue records `blocked` (not `target_unknown`) with the message as the reason, but
+ * only for operations in READ_ONLY_TARGET_OPERATIONS; elsewhere it is treated as an unknown outcome.
+ */
+export class TargetBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TargetBlockedError';
+  }
+}

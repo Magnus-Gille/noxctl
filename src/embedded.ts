@@ -56,6 +56,7 @@ export {
   type InvoiceStageUnverified,
 } from './shadow/invoice-stage-verifier.js';
 export { createQueueObserver } from './shadow/observer.js';
+export { AccountedArticleLinkAdapter } from './shadow/article-link-adapter.js';
 export {
   AccountedShadowAdapter,
   AccountedMasterDataAdapter,
@@ -72,7 +73,11 @@ export type {
   PaymentDrainResult,
 } from './shadow/types.js';
 
-export { TargetNotDispatchedError, TargetReceiptPendingError } from './shadow/types.js';
+export {
+  TargetBlockedError,
+  TargetNotDispatchedError,
+  TargetReceiptPendingError,
+} from './shadow/types.js';
 
 export {
   createStagedServer,

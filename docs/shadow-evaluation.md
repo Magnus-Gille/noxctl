@@ -73,6 +73,53 @@ or null is a verification failure with no replay). Absent, non-string, whitespac
 padded or control-character units are refused with a `UNIT_INVALID` reason. Payment
 parity does not depend on the unit. Non-positive quantities remain refused.
 
+### Baseline links (NOX-213)
+
+Purpose: Fortnox customers and articles that existed before shadowing started can never get a
+`createCustomer` / `createArticle` receipt, so invoices referencing them would stay unresolved.
+Two operator-initiated operations link them through the same durable queue lifecycle
+(`execute` then `drainOne`); there is no new state machine and no bypass. They are host
+operations only: they are not in the staged MCP allowlist and not model tools, and unknown
+operations are still blocked.
+
+No fabricated creator receipts: a baseline is its own operation name, so the request hash and
+the Accounted idempotency key (which derive from the operation) never coincide with a create.
+Nothing claims that a create happened.
+
+- `baselineCustomer`, args `[{ CustomerNumber }]`. The host supplies the `invoke` as a Fortnox
+  customer READ (nothing is written to Fortnox); its customer object is the `sourceResult`, the
+  same shape `createCustomer` stores. `AccountedShadowAdapter` / `AccountedMasterDataAdapter`
+  then use the identical mapping, refusal rules, single POST and exact readback as
+  `createCustomer` (the arguments must be exactly the source's `CustomerNumber`, otherwise
+  `BASELINE_CUSTOMER_ARGS_INVALID`). The applied record also supplies `sourceCustomer` evidence.
+- `baselineArticle`, args `[{ ArticleNumber, targetArticleId }]`, where `targetArticleId` is the
+  UUID of an EXISTING Accounted article chosen by the operator. The `invoke` is a Fortnox article
+  READ whose result carries `ArticleNumber`. `AccountedArticleLinkAdapter` (also routed by
+  `AccountedMasterDataAdapter`) never mutates Accounted: it issues only
+  `GET /api/v1/companies/<target>/articles?include_inactive=true` (Accounted has no GET-by-id for
+  articles; inactive articles are included so an inactive target is reported as such and an
+  `article_number` reused by an inactive article is ambiguous). `prepare` requires `ArticleNumber` to be an opaque string, never coerced or trimmed,
+  equal in the arguments and the source result, and `targetArticleId` to be a UUID
+  (`ARTICLE_LINK_ARGS_INVALID`, `ARTICLE_LINK_NUMBER_INVALID`, `ARTICLE_LINK_UUID_INVALID`).
+  `apply` requires exactly one list entry with that id, whose `article_number` equals the source
+  `ArticleNumber` exactly (leading zeros and case matter), `active === true`, and no other entry
+  with the same `article_number` (`ARTICLE_LINK_NOT_FOUND`, `ARTICLE_LINK_NUMBER_MISMATCH`,
+  `ARTICLE_LINK_ACTIVE`, `ARTICLE_LINK_AMBIGUOUS`). A proven mismatch throws `TargetBlockedError`,
+  so the record becomes `blocked` with that reason and is never applied (the queue honours
+  `TargetBlockedError` only for `READ_ONLY_TARGET_OPERATIONS`, currently `baselineArticle`; from any
+  other operation it is treated as an unknown outcome); a failed or malformed
+  list request leaves it `target_unknown` (read-only, but still not retried automatically). The
+  receipt is `{ data: { id, article_number, active }, expected }` with `targetId` equal to the
+  chosen UUID. `verify()` (and `verifyApplied`) repeat the same GET checks to detect drift; a
+  changed, deactivated, renumbered, duplicated or removed article fails verification.
+
+Identity and conflict rules: `baselineCustomer` and `baselineArticle` are identity sources next
+to the creators. `createCustomer` plus `baselineCustomer` for one number, two baselines for one
+number, and one target UUID claimed by different source numbers all resolve as `conflict`.
+Only an applied record whose receipt confirms its UUID is `ready`. Invoice drafts then resolve
+customers and articles exactly as before, with `ARTICLE_*` refusals unchanged. Baseline records
+are unrelated to invoice stage and payment lifecycle projections.
+
 ### Customer and invoice field allowlist
 
 Both mappers classify every key of the confirmed source result. "Populated" means not

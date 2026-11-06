@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { canonicalEncode, decode } from './codec.js';
+import { BASELINE_OPERATIONS } from './identity.js';
 import { OPERATION_CATALOGUE } from './operations.js';
 import type { ShadowBinding, ShadowRecord, ShadowSnapshotEntry, ShadowState } from './types.js';
 
@@ -210,7 +211,10 @@ export function projectInvoicePaymentLifecycle(
     )
       return invalid('Snapshot record identity, state, arguments, or binding is invalid.');
     ids.add(record.id);
-    if (!Object.hasOwn(OPERATION_CATALOGUE, record.operation))
+    if (
+      !Object.hasOwn(OPERATION_CATALOGUE, record.operation) &&
+      !BASELINE_OPERATIONS.has(record.operation)
+    )
       return invalid(`Snapshot contains an unclassified operation: ${record.operation}.`);
     if (typeof record.requestHash !== 'string' || !HASH.test(record.requestHash))
       return invalid(`Snapshot request hash is invalid for ${record.id}.`);

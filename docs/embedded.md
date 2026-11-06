@@ -126,7 +126,11 @@ Company mismatches, conflicting creators, missing receipts and unknown outcomes
 remain non-ready under the existing identity rules. Lookup makes no provider/network calls; the queue reads its SQLite store.
 
 This adds a receipt lookup, not an Accounted article creation adapter or a historical
-import crosswalk. It does not enable article creation in the staged MCP allowlist,
-change target catalog values, or allow article-linked invoices through the current
-invoice mapper. A host still needs a reviewed article adapter and verified target
-API/data model; absent source price/unit must not silently become zero/st.
+import crosswalk. No adapter creates articles in Accounted. The invoice mapper
+consumes an applied `createArticle` receipt OR an applied `baselineArticle` receipt
+(see "Baseline links (NOX-213)" in `shadow-evaluation.md`) and resolves article-linked
+rows to its target UUID; without either, the row is refused. Existing Fortnox articles
+are linked through `baselineArticle`, which only reads Accounted. This does not enable
+article creation or baselines in the staged MCP allowlist, and does not change target
+catalog values. A host still needs a reviewed article adapter and verified target
+API/data model to create articles; absent source price/unit must not silently become zero/st.

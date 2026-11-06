@@ -36,6 +36,11 @@ export interface ShadowSourceCustomer {
 
 type CreatorIdentity = { kind: ShadowResourceKind; sourceField: string; allowNumeric?: boolean };
 
+/**
+ * Identity sources: operations whose applied receipt may establish a source-to-target identity.
+ * Creators (create*) record an effect that happened; baselines (NOX-213) link a pre-existing
+ * Fortnox record to an Accounted one. A baseline is never recorded as a creator.
+ */
 const CREATOR_IDENTITIES: Readonly<Record<string, CreatorIdentity>> = Object.freeze({
   createCustomer: { kind: 'customer', sourceField: 'CustomerNumber' },
   createSupplier: { kind: 'supplier', sourceField: 'SupplierNumber' },
@@ -43,7 +48,22 @@ const CREATOR_IDENTITIES: Readonly<Record<string, CreatorIdentity>> = Object.fre
   createInvoice: { kind: 'invoice', sourceField: 'DocumentNumber' },
   creditInvoice: { kind: 'invoice', sourceField: 'DocumentNumber' },
   createInvoicePayment: { kind: 'invoice-payment', sourceField: 'Number' },
+  baselineCustomer: { kind: 'customer', sourceField: 'CustomerNumber' },
+  baselineArticle: { kind: 'article', sourceField: 'ArticleNumber', allowNumeric: false },
 });
+
+/** Host/operator-initiated baseline operations (never model tools; not in the Fortnox catalogue). */
+export const BASELINE_OPERATIONS: ReadonlySet<string> = new Set([
+  'baselineCustomer',
+  'baselineArticle',
+]);
+
+/**
+ * Operations whose target side issues read-only requests only. Only these may report a proven
+ * mismatch as `blocked` (TargetBlockedError); for every other operation an error after dispatch
+ * leaves the outcome unknown.
+ */
+export const READ_ONLY_TARGET_OPERATIONS: ReadonlySet<string> = new Set(['baselineArticle']);
 
 const RESOURCE_KINDS: ReadonlySet<string> = new Set([
   'customer',
@@ -157,7 +177,7 @@ export function resolveShadowIdentity(
   });
 
   if (matching.length > 1) {
-    return conflict(matching, 'Multiple creator intents match the source identity.');
+    return conflict(matching, 'Multiple identity-source intents match the source identity.');
   }
   const record = matching[0];
   if (!record) return { state: 'missing' };

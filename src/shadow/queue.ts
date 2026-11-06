@@ -8,10 +8,14 @@ import {
   planPaymentQueue,
   PAYMENT_OPERATIONS,
 } from './payment-queue-plan.js';
-import { resolveShadowIdentity } from './identity.js';
+import { READ_ONLY_TARGET_OPERATIONS, resolveShadowIdentity } from './identity.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from './identity.js';
 export { canonicalEncode } from './codec.js';
-import { TargetNotDispatchedError, TargetReceiptPendingError } from './types.js';
+import {
+  TargetBlockedError,
+  TargetNotDispatchedError,
+  TargetReceiptPendingError,
+} from './types.js';
 import { createHash } from 'node:crypto';
 import { mkdirSync, lstatSync, chmodSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -259,6 +263,15 @@ export class ShadowQueue {
         claimed.record.nextAttemptAt =
           this.now() +
           Math.min(60_000, 1000 * 2 ** Math.min(6, (claimed.record.targetAttempts ?? 1) - 1));
+        this.save(claimed.record);
+        return false;
+      }
+      if (
+        error instanceof TargetBlockedError &&
+        READ_ONLY_TARGET_OPERATIONS.has(claimed.record.operation)
+      ) {
+        claimed.record.state = 'blocked';
+        claimed.record.reason = error.message.slice(0, 500);
         this.save(claimed.record);
         return false;
       }
