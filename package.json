@@ -71,6 +71,7 @@
   },
   "files": [
     "dist/",
+    "!dist/pilot/",
     "docs/embedded.md",
     "docs/shadow-evaluation.md",
     "README.md",
