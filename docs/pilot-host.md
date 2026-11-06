@@ -242,14 +242,16 @@ The preflight runs the real mapping on a provisional record:
 - `createInvoice`: the input half of the draft validation (`preflightInvoiceDraft` in
   `src/shadow/invoice-draft-mapping.ts`): exactly the supported header and row fields, all of
   CustomerNumber, InvoiceDate, DueDate (real dates, not before the invoice date), Currency `SEK`,
-  rows (quantity, price, 25 % VAT, unit, account format, cent arithmetic, at least one product row),
+  the optional texts `Remarks` (at most 1024 characters), `YourReference` and `OurReference` (at
+  most 50 each; nonempty strings when given), rows (quantity, price, 25 % VAT, unit, account format, cent arithmetic, at least one product row),
   then customer identity ready with complete mirrored customer evidence and every referenced
   ArticleNumber ready, both resolved with `queue.resolveIdentity` exactly as drain does.
 
 Not covered, so a post-write refusal is still possible: everything that needs the real Fortnox
 response, namely the source totals and row amounts, `Booked`/`Sent`/`Cancelled`, accounting method,
 country, rounding, tax reduction, cost center/project, source row fields, the account number the
-source row got, the optional header texts, and the customer rules that depend on response defaults.
+source row got, the optional header texts (including whether Fortnox echoes a given `Remarks`, `YourReference` or
+`OurReference` verbatim, which drain requires), and the customer rules that depend on response defaults.
 Such a record is the unmappable head record that `refuse` exists for.
 
 ### `refuse <id> <reason>`
