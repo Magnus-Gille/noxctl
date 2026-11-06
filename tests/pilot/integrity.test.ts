@@ -293,17 +293,28 @@ describe('finding 4: backups are durable before success is reported', () => {
   it('keeps the marker when an fsync fails, and fsyncs files and directories on success', async () => {
     let failing = false;
     let calls = 0;
+    let dirOf: () => string = () => '';
+    let armedAt = 0;
+    const manifests = () => {
+      const root = join(dirOf(), 'backups');
+      return existsSync(root)
+        ? readdirSync(root).filter((n) => existsSync(join(root, n, 'manifest.json'))).length
+        : 0;
+    };
     const h = await makeHost({
       fsync: () => {
         calls++;
-        if (failing) throw new Error('EIO');
+        // Only the backup's own fsyncs fail: a manifest exists in some backup directory.
+        if (failing && manifests() > armedAt) throw new Error('EIO');
       },
     });
+    dirOf = () => h.config.directory;
     const marker = join(h.config.directory, 'backup-pending');
     await baselineCustomerCommand(h.host, '1');
     const id = h.host.queue.snapshot()[0]!.record.id;
     const preview = await previewCommand(h.host, id);
     failing = true;
+    armedAt = manifests();
     const result = await drainOneCommand(h.host, id, preview.hash!);
     // the journal append shares the failing fsync, so nothing was dispatched either
     expect(JSON.stringify(result)).toMatch(/backup failed/i);
@@ -336,5 +347,118 @@ describe('finding 4: backups are durable before success is reported', () => {
     expect((await h.host.checkGate()).ok).toBe(false);
     expect((await backupCommand(h.host)).ok).toBe(true);
     expect(await h.host.checkGate()).toEqual({ ok: true });
+  });
+});
+
+describe('round 3', () => {
+  it('does not re-initialize when the whole state directory is lost or replaced', async () => {
+    const { h } = await dispatched();
+    await h.host.close();
+    rmSync(h.config.directory, { recursive: true, force: true });
+    const lost = await makeHost({ root: h.root });
+    expect(existsSync(join(h.config.directory, 'pilot-id'))).toBe(false);
+    expect(existsSync(jp(h.config.directory))).toBe(false);
+    const gate = await lost.host.checkGate();
+    expect(gate.ok).toBe(false);
+    expect(JSON.stringify(gate)).toMatch(RECONCILE);
+  });
+
+  it('refuses a new directory with the same binding but initializes a fresh binding', async () => {
+    const { h } = await dispatched();
+    const other = await makeHost({ headDir: h.headDir });
+    expect(existsSync(join(other.config.directory, 'pilot-id'))).toBe(false);
+    const gate = await other.host.checkGate();
+    expect(gate.ok).toBe(false);
+    expect(JSON.stringify(gate)).toMatch(RECONCILE);
+    const fresh = await makeHost({
+      headDir: h.headDir,
+      configOverrides: { targetCompany: '55555555-5555-4555-8555-555555555555' },
+    });
+    expect(existsSync(join(fresh.config.directory, 'pilot-id'))).toBe(true);
+    expect(statSync(join(h.headDir, 'registry.json')).mode & 0o777).toBe(0o600);
+  });
+
+  it('rejects any request that reuses the id of an in-flight non-tool request', async () => {
+    let release!: () => void;
+    const hold = new Promise<void>((resolve) => (release = resolve));
+    let posts = 0;
+    const synthetic = createSyntheticFortnox(ORG);
+    const fortnox = {
+      ...synthetic.transport,
+      request: async (endpoint: string, options?: { method?: string }) => {
+        if (options?.method === 'POST') posts++;
+        return (synthetic.transport.request as (e: string, o?: unknown) => Promise<unknown>)(
+          endpoint,
+          options,
+        );
+      },
+    } as unknown as FortnoxTransport;
+    const h = await makeHost({ synthetic, fortnox });
+    const client = await connect(h.host);
+    const prepared = await client.callTool({
+      name: 'staged_prepare',
+      arguments: {
+        tool: 'fortnox_create_customer',
+        args: { Name: 'X 8', CustomerNumber: '8', confirm: true },
+      },
+    });
+    const { id } = JSON.parse(textOf(prepared as never)) as { id: string };
+    await client.close();
+    h.host.staged.server.server.fallbackRequestHandler = async () => {
+      await hold;
+      return {};
+    };
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const responses: JSONRPCMessage[] = [];
+    ct.onmessage = (message) => void responses.push(message);
+    await h.host.staged.server.connect(h.host.wrapTransport(st));
+    await ct.start();
+    await ct.send({ jsonrpc: '2.0', id: 77, method: 'x/slow' });
+    await ct.send({
+      jsonrpc: '2.0',
+      id: 77,
+      method: 'tools/call',
+      params: { name: 'staged_execute', arguments: { id, confirm: true } },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(responses).toHaveLength(1);
+    expect(responses[0]).toMatchObject({ id: 77, error: expect.anything() });
+    expect(posts).toBe(0);
+    expect(existsSync(join(h.config.directory, 'pilot.lock'))).toBe(false);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(responses).toHaveLength(2);
+    expect(responses[1]).toMatchObject({ id: 77, result: {} });
+    expect(posts).toBe(0);
+    await ct.close();
+  });
+
+  it('refuses a mutation whose backup marker cannot be made durable', async () => {
+    let failing = false;
+    const h = await makeHost({
+      fsync: () => {
+        if (failing) throw new Error('EIO');
+      },
+    });
+    await baselineCustomerCommand(h.host, '1');
+    const id = h.host.queue.snapshot()[0]!.record.id;
+    const preview = await previewCommand(h.host, id);
+    failing = true;
+    const drained = await drainOneCommand(h.host, id, preview.hash!);
+    expect(drained.ok).toBe(false);
+    expect(h.accounted.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    failing = false;
+    expect((await h.host.checkGate(id)).ok).toBe(false);
+    // staged path: no Fortnox write either
+    const client = await connect(h.host);
+    failing = true;
+    const before = h.synthetic.state.customers.size;
+    const refused = await stagedCreate(client, 'fortnox_create_customer', {
+      Name: 'X AB',
+      CustomerNumber: '9',
+    });
+    expect(refused.isError).toBe(true);
+    expect(h.synthetic.state.customers.size).toBe(before);
+    await client.close();
   });
 });

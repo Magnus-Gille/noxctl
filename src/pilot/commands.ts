@@ -241,7 +241,11 @@ async function drainOneLocked(host: PilotHost, id: string, hash: string): Promis
 
   const adapter = host.adapterFor(first.record.operation)!;
   const warnings: string[] = [];
-  host.beginMutation();
+  try {
+    host.beginMutation();
+  } catch {
+    return refuse('nothing was dispatched: backup marker could not be made durable');
+  }
   let refusal: string | undefined;
   try {
     // Claims only the previewed record AND request, decided inside the claim transaction.
@@ -305,7 +309,11 @@ async function stagedBaseline(
     if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
     if (host.queue.resolveIdentity(identityKind, sourceNumber).state !== 'missing')
       return refuse(`${identityKind} ${sourceNumber} already has a queue record`);
-    host.beginMutation();
+    try {
+      host.beginMutation();
+    } catch {
+      return refuse('nothing was done: backup marker could not be made durable');
+    }
     try {
       await host.queue.execute({ id, operation, args }, read);
     } finally {

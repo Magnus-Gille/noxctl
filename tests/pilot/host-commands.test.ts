@@ -410,7 +410,11 @@ describe('bootstrap', () => {
     const { openPilotHost } = await import('../../src/pilot/bootstrap.js');
     const root = tempRoot();
     const { path } = configFor(root);
-    const host = await openPilotHost({ configPath: path, synthetic: true });
+    const host = await openPilotHost({
+      configPath: path,
+      synthetic: true,
+      headDir: join(root, 'heads'),
+    });
     try {
       expect((await statusCommand(host)).ok).toBe(true);
       expect(await host.checkGate()).toEqual({ ok: true });

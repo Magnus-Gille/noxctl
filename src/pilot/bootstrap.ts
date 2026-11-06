@@ -8,6 +8,8 @@ export interface OpenPilotHostOptions {
   configPath: string;
   /** Rehearsal: swap Fortnox for the deterministic in-memory transport (org nr from config). */
   synthetic?: boolean;
+  /** Journal head/registry directory; defaults to ~/Library/Application Support/noxctl-pilot. */
+  headDir?: string;
 }
 
 /** Shared by the pilot CLI and MCP server: same profile/auth as `noxctl`, no new auth code. */
@@ -23,6 +25,7 @@ export async function openPilotHost(options: OpenPilotHostOptions): Promise<Pilo
     fortnox = defaultFortnoxTransport;
   }
   return createPilotHost(config, {
+    ...(options.headDir ? { headDir: options.headDir } : {}),
     fortnox,
     accounted: createAccountedClient({
       origin: config.accountedOrigin,

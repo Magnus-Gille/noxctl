@@ -18,6 +18,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeSync,
 } from 'node:fs';
@@ -69,15 +70,15 @@ export function readPilotId(directory: string): string | undefined {
   return id;
 }
 
-function writeHead(ctx: JournalContext, head: HeadRecord): void {
+/** Atomic, durable private file in the head directory (temp, fsync, rename, fsync directory). */
+function writeHeadDirFile(ctx: JournalContext, path: string, content: string): void {
   const fsync = ctx.fsync ?? fsyncSync;
   mkdirSync(ctx.headDir, { recursive: true, mode: 0o700 });
   chmodSync(ctx.headDir, 0o700);
-  const path = headRecordPath(ctx.headDir, head.pilotId);
   const temp = `${path}.tmp`;
   const fd = openSync(temp, 'w', 0o600);
   try {
-    writeSync(fd, JSON.stringify(head));
+    writeSync(fd, content);
     fsync(fd);
   } finally {
     closeSync(fd);
@@ -86,17 +87,75 @@ function writeHead(ctx: JournalContext, head: HeadRecord): void {
   renameSync(temp, path);
   fsyncDirectory(ctx.headDir, fsync);
 }
+function writeHead(ctx: JournalContext, head: HeadRecord): void {
+  writeHeadDirFile(ctx, headRecordPath(ctx.headDir, head.pilotId), JSON.stringify(head));
+}
+
+export class PilotRegistryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PilotRegistryError';
+  }
+}
+export interface PilotBinding {
+  sourceCompany: string;
+  targetCompany: string;
+}
+interface RegistryEntry extends PilotBinding {
+  directory: string;
+  pilotId: string;
+}
+export const registryPath = (headDir: string) => join(headDir, 'registry.json');
+
+/**
+ * Durable registry next to the head records: which pilot id was created for which (real) state
+ * directory and binding. Consulted before initialization so that losing the state directory cannot
+ * start a second pilot for the same directory or binding.
+ */
+function readRegistry(headDir: string): RegistryEntry[] {
+  let text: string;
+  try {
+    text = readFileSync(registryPath(headDir), 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw new PilotRegistryError('pilot registry is unreadable');
+  }
+  try {
+    const parsed = JSON.parse(text) as { version?: unknown; entries?: unknown };
+    if (parsed.version !== 1 || !Array.isArray(parsed.entries)) throw new Error('shape');
+    return parsed.entries as RegistryEntry[];
+  } catch {
+    throw new PilotRegistryError('pilot registry is malformed');
+  }
+}
 
 /**
  * First initialization of a pilot directory: head record, then genesis journal, then pilot-id.
  * Throws when pilot-id or the journal already exists (never re-initializes).
  */
-export function initializeJournal(ctx: JournalContext, now: number): string {
+export function initializeJournal(ctx: JournalContext, now: number, binding: PilotBinding): string {
   const fsync = ctx.fsync ?? fsyncSync;
   const { directory } = ctx;
   if (existsSync(pilotIdPath(directory)) || existsSync(journalPath(directory)))
     throw new Error('pilot directory is already initialized');
+  const real = realpathSync(directory);
+  const entries = readRegistry(ctx.headDir);
+  if (
+    entries.some(
+      (e) =>
+        e.directory === real ||
+        (e.sourceCompany === binding.sourceCompany && e.targetCompany === binding.targetCompany),
+    )
+  )
+    throw new PilotRegistryError(
+      'a pilot was already registered for this state directory or binding',
+    );
   const pilotId = randomUUID();
+  writeHeadDirFile(
+    ctx,
+    registryPath(ctx.headDir),
+    JSON.stringify({ version: 1, entries: [...entries, { directory: real, ...binding, pilotId }] }),
+  );
   const genesis = JSON.stringify({ kind: 'genesis', pilotId, createdAt: now });
   writeHead(ctx, { pilotId, seq: 0, hash: sha256(genesis) });
   mkdirSync(journalDir(directory), { recursive: true, mode: 0o700 });

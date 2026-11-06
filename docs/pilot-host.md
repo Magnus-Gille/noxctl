@@ -149,11 +149,20 @@ The write gate fails closed (every mutation, CLI or MCP) when:
 
 The message says that read-only reconciliation against Fortnox and Accounted is required.
 
+- Registry: `~/Library/Application Support/noxctl-pilot/registry.json` (0600, atomic write with
+  fsync of file and directory) maps the real path of each state directory AND its binding
+  (`sourceCompany`, `targetCompany`) to its pilot id. It is written at initialization, before the
+  journal. Initialization is refused (gate refuses, reconciliation required) when an entry already
+  exists for this directory OR this binding, so losing or replacing the whole state directory does
+  not start a new pilot beside the surviving head record. A fresh directory with a fresh binding
+  initializes normally; a malformed registry also refuses.
+
 What the operator must never delete or edit: `pilot-id`, `journal/`, the head record in
-`~/Library/Application Support/noxctl-pilot/`, the queue and `staged.sqlite`. Deleting `pilot-id`
-and the journal together (with empty databases) makes the directory look pristine and starts a NEW
-pilot with a new genesis; that is an operator action equivalent to abandoning the old pilot, and
-the host cannot detect it (the old pilot id is unknown to it).
+`~/Library/Application Support/noxctl-pilot/`, the queue and `staged.sqlite`. `registry.json` is on that list too. Deleting `pilot-id` and the journal (or the whole state
+directory) is detected through the registry and refused. Starting a new pilot for the same
+directory or binding is therefore an explicit operator action: abandon the old pilot (use a new
+directory and binding), or remove its registry entry and head record by hand, which is equivalent
+to abandoning it.
 
 Restore procedure: stop the server; restore `staged.sqlite` and `queue/shadow.sqlite` from a backup
 (remove stale `-wal`/`-shm` files); NEVER touch `journal/`, `pilot-id` or the head record; start the
@@ -165,17 +174,21 @@ directory, or to start a fresh directory with a new binding.
 
 ## MCP requests: duplicate ids and lock ownership
 
-Each incoming `tools/call` gets a server-generated random token; the pilot lock is owned and released
-by that token, never by the client's JSON-RPC id. A request whose JSON-RPC id equals one still in
-flight on the same connection is answered with a JSON-RPC error (`-32600`) and never reaches a
-handler, so it cannot share, take or release the first request's lock.
+Every incoming request with an id is registered as in flight (any method), and `tools/call` requests also get a server-generated random token; the pilot lock is owned and released
+by that token, never by the client's JSON-RPC id. A request of ANY method whose JSON-RPC id equals
+one still in flight on the same connection is answered with a JSON-RPC error (`-32600`) and never reaches a
+handler, so it cannot share, take or release the first request's lock. A response removes only the entry of
+its own request; the lock is released only when that entry is a staged tool call holding the token.
 
 ## Durable backups
 
 A backup reports success only after, in this order: `VACUUM INTO` of both databases, integrity
 check, `manifest.json` written, fsync of each copied file and of the manifest, fsync of the backup
 directory and of `backups/`, removal of the `backup-pending` marker, fsync of the state directory.
-Any failure keeps (or re-creates) the marker and removes the incomplete backup directory. The gate
+The `backup-pending` marker itself is written, and the file and the state directory fsynced,
+before any mutation starts; if that fails the mutation is refused (nothing dispatched) and the
+marker stays, so the gate refuses until a backup succeeds. Any backup failure keeps (or re-creates)
+the marker and removes the incomplete backup directory. The gate
 also reads the newest backup on every check: if its manifest is missing, or its sha256/size values
 do not match the files, storage is unhealthy and writes are refused until a new backup succeeds.
 

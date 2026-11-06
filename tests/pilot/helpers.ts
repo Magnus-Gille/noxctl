@@ -222,12 +222,13 @@ export interface HarnessOptions {
   stderr?: string[];
   osUser?: string;
   headDir?: string;
+  configOverrides?: Record<string, unknown>;
   fsync?: (fd: number) => void;
 }
 export async function makeHost(options: HarnessOptions = {}) {
   const root = options.root ?? tempRoot();
   mkdirSync(root, { recursive: true });
-  const { path } = configFor(root);
+  const { path } = configFor(root, options.configOverrides);
   const config = loadPilotConfig(path);
   const synthetic = options.synthetic ?? createSyntheticFortnox(ORG);
   const accounted = options.accounted ?? fakeAccounted({ articles: [articleEntry()] });
