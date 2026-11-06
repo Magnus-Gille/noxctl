@@ -115,6 +115,26 @@ describe('baselineCustomer', () => {
     queue.close();
   });
 
+  it('refuses a customer number with a control character before any POST', async () => {
+    const queue = await openShadowQueue(directory(), binding);
+    const bad = { ...sourceCustomer, CustomerNumber: '7\u0007' };
+    await queue.execute(
+      { id: 'x1', operation: 'createCustomer', args: [{ CustomerNumber: '7\u0007' }] },
+      async () => bad,
+    );
+    await queue.execute(
+      { id: 'x2', operation: 'baselineCustomer', args: [{ CustomerNumber: '7\u0007' }] },
+      async () => bad,
+    );
+    const target = fakeCustomerTarget();
+    const adapter = new AccountedMasterDataAdapter(binding, target.request);
+    expect(await queue.drainOne(adapter)).toBe(false);
+    expect(queue.get('x1')).toMatchObject({ state: 'blocked' });
+    expect(queue.get('x1')!.reason).toMatch(/customer number/i);
+    expect(target.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    queue.close();
+  });
+
   it('derives different request hashes and idempotency keys from createCustomer for the same input', async () => {
     const queue = await openShadowQueue(directory(), binding);
     const args = [{ CustomerNumber: '7' }];

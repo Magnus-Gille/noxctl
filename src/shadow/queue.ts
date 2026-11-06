@@ -618,9 +618,12 @@ export class ShadowQueue {
     const persist = (state: 'blocked' | 'target_unknown', reason: string): void =>
       this.transaction(() => {
         const current = this.get(id);
+        // A confirmed mismatch outranks an unknown result for the same identity; an unknown result
+        // never replaces anything but the applied state that was verified.
+        const allowed = state === 'blocked' ? ['applied', 'target_unknown'] : ['applied'];
         if (
           !current ||
-          current.state !== 'applied' ||
+          !allowed.includes(current.state) ||
           current.targetId !== record.targetId ||
           current.requestHash !== record.requestHash
         )
