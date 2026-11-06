@@ -567,7 +567,17 @@ export class ShadowQueue {
       !adapter.verify
     )
       throw new Error('No confirmed target identity/verifier');
-    const matches = await adapter.verify(record);
+    let matches: boolean;
+    try {
+      matches = await adapter.verify(record);
+    } catch (error) {
+      // The check could not establish that the target still matches. Withhold the identity
+      // (target_unknown keeps targetId and receipt) until reconcileTarget confirms it by reading.
+      record.state = 'target_unknown';
+      record.reason = `Drift verification could not complete; identity withheld until read-only reconciliation (${safeErrorName(error)})`;
+      this.save(record);
+      throw error;
+    }
     if (!matches) {
       record.state = 'blocked';
       record.reason = 'Target readback mismatch; do not replay';

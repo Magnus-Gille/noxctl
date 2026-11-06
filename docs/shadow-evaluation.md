@@ -111,7 +111,10 @@ Nothing claims that a create happened.
   list request leaves it `target_unknown` (read-only, but still not retried automatically). The
   receipt is `{ data: { id, article_number, active }, expected }` with `targetId` equal to the
   chosen UUID. `verify()` (and `verifyApplied`) repeat the same GET checks to detect drift; a
-  changed, deactivated, renumbered, duplicated or removed article fails verification.
+  changed, deactivated, renumbered, duplicated or removed article fails verification. If
+  `verifyApplied` cannot complete (an HTTP failure or a malformed list), the record becomes
+  `target_unknown` with its target identity kept, so the identity is no longer `ready`, until
+  `reconcileTarget` confirms it again by reading.
 
 Identity and conflict rules: `baselineCustomer` and `baselineArticle` are identity sources next
 to the creators. `createCustomer` plus `baselineCustomer` for one number, two baselines for one

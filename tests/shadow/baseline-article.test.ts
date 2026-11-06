@@ -217,6 +217,41 @@ describe('baselineArticle', () => {
     queue.close();
   });
 
+  it.each([
+    [
+      'an HTTP failure',
+      (t: ReturnType<typeof fakeArticleTarget>) => {
+        t.state.status = 503;
+      },
+    ],
+    [
+      'a malformed list',
+      (t: ReturnType<typeof fakeArticleTarget>) => {
+        t.state.articles = [{}];
+      },
+    ],
+  ])(
+    'withholds the identity when drift verification cannot complete: %s',
+    async (_label, breakIt) => {
+      const queue = await queued();
+      const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB')]);
+      const adapter = new AccountedArticleLinkAdapter(binding.targetCompany, target.request);
+      await queue.drainOne(adapter);
+      expect(queue.resolveIdentity('article', '00123-aB')).toMatchObject({ state: 'ready' });
+      breakIt(target);
+      await expect(queue.verifyApplied('baseline-a', adapter)).rejects.toThrow();
+      expect(queue.get('baseline-a')).toMatchObject({ state: 'target_unknown', targetId: ids[1] });
+      expect(queue.resolveIdentity('article', '00123-aB').state).not.toBe('ready');
+      // A later successful read-only reconciliation restores the identity.
+      target.state.status = 200;
+      target.state.articles = [articleEntry(ids[1]!, '00123-aB')];
+      expect(await queue.reconcileTarget('baseline-a', adapter)).toBe(true);
+      expect(queue.resolveIdentity('article', '00123-aB')).toMatchObject({ state: 'ready' });
+      expect(target.calls.every((call) => call.method === 'GET')).toBe(true);
+      queue.close();
+    },
+  );
+
   it('refuses another target company binding', async () => {
     const queue = await queued();
     const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB')]);
