@@ -194,11 +194,12 @@ describe('durable queue identity projection', () => {
         ? { request: { invoice_id: identity.targetId } }
         : { blocked: `Invoice identity ${identity.state}` };
     };
+    // The second creator was blocked before dispatch (NOX-213), so it holds the queue: the
+    // dependent payment is never prepared or applied.
+    expect(queue.get('second')).toMatchObject({ state: 'blocked' });
+    expect(queue.get('second')!.reason).toContain('IDENTITY_SOURCE_COMPETING');
     expect(await queue.drainOne(target)).toBe(false);
-    expect(queue.get('payment')).toMatchObject({
-      state: 'blocked',
-      reason: 'Invoice identity conflict',
-    });
+    expect(queue.get('payment')!.state).toBe('pending');
     expect(target.apply).not.toHaveBeenCalled();
     queue.close();
   });

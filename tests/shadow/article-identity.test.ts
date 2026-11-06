@@ -36,12 +36,19 @@ async function createArticle(
   articleNumber: string,
   targetId: string,
   args: unknown[] = [{ Name: 'Synthetic article' }],
+  expectApplied = true,
 ): Promise<ShadowAdapter> {
   await queue.execute({ id, operation: 'createArticle', args }, async () => ({
     ArticleNumber: articleNumber,
   }));
   const target = adapter(targetId);
-  expect(await queue.drainOne(target)).toBe(true);
+  expect(await queue.drainOne(target)).toBe(expectApplied);
+  if (!expectApplied) {
+    // A competing identity source is blocked before dispatch (NOX-213).
+    expect(queue.get(id)).toMatchObject({ state: 'blocked' });
+    expect(queue.get(id)!.reason).toContain('IDENTITY_SOURCE_COMPETING');
+    expect(target.apply).not.toHaveBeenCalled();
+  }
   return target;
 }
 
@@ -205,7 +212,7 @@ describe('article shadow identity contract', () => {
       );
     }
 
-    await createArticle(queue, 'second-same-source', 'A-9', targetIds[1]!);
+    await createArticle(queue, 'second-same-source', 'A-9', targetIds[1]!, undefined, false);
     expect(queue.resolveIdentity('article', 'A-9')).toMatchObject({ state: 'conflict' });
     queue.close();
 

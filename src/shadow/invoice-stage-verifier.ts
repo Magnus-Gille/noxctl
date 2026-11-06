@@ -1,5 +1,6 @@
 import { canonicalEncode, decode } from './codec.js';
 import { resolveShadowIdentity, type ShadowResourceKind } from './identity.js';
+import { BASELINE_OPERATIONS } from './identity.js';
 import { OPERATION_CATALOGUE } from './operations.js';
 import { AccountedInvoiceDraftAdapter } from './invoice-draft-adapter.js';
 import { AccountedInvoiceIssueAdapter } from './invoice-issue-adapter.js';
@@ -145,6 +146,8 @@ function directRelation(record: ShadowRecord, sourceInvoiceId: string): Relation
 
 function classifyRelation(record: ShadowRecord, sourceInvoiceId: string): Relation {
   const operation = record.operation;
+  // Baseline links (NOX-213) concern customers/articles, never an invoice's stage.
+  if (BASELINE_OPERATIONS.has(operation)) return { kind: 'unrelated' };
   if (!Object.hasOwn(OPERATION_CATALOGUE, operation)) {
     return { kind: 'unsupported', reason: `Unknown operation: ${operation}.` };
   }

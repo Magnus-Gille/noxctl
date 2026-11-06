@@ -8,10 +8,18 @@ import {
   planPaymentQueue,
   PAYMENT_OPERATIONS,
 } from './payment-queue-plan.js';
-import { resolveShadowIdentity } from './identity.js';
+import {
+  READ_ONLY_TARGET_OPERATIONS,
+  competingIdentitySources,
+  resolveShadowIdentity,
+} from './identity.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from './identity.js';
 export { canonicalEncode } from './codec.js';
-import { TargetNotDispatchedError, TargetReceiptPendingError } from './types.js';
+import {
+  TargetBlockedError,
+  TargetNotDispatchedError,
+  TargetReceiptPendingError,
+} from './types.js';
 import { createHash } from 'node:crypto';
 import { mkdirSync, lstatSync, chmodSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -234,6 +242,21 @@ export class ShadowQueue {
         this.save(record);
         return undefined;
       }
+      // Never dispatch an identity source while another intent claims the same source object:
+      // a second create or baseline could produce a duplicate target object (NOX-213).
+      const allRecords = this.db
+        .prepare('SELECT record FROM intents ORDER BY seq')
+        .all()
+        .map((row) => decode(row.record as string) as ShadowRecord);
+      const competing = competingIdentitySources(allRecords, record);
+      if (competing.length > 0) {
+        record.state = 'blocked';
+        record.reason = `IDENTITY_SOURCE_COMPETING: intents ${competing
+          .map((other) => other.id)
+          .join(', ')} claim the same source identity; nothing was dispatched.`.slice(0, 500);
+        this.save(record);
+        return undefined;
+      }
       // Serialize before claiming so a nonserializable translation cannot reach the target.
       const request = decode(canonicalEncode(prepared.request));
       record.targetAttempts = (record.targetAttempts ?? 0) + 1;
@@ -259,6 +282,15 @@ export class ShadowQueue {
         claimed.record.nextAttemptAt =
           this.now() +
           Math.min(60_000, 1000 * 2 ** Math.min(6, (claimed.record.targetAttempts ?? 1) - 1));
+        this.save(claimed.record);
+        return false;
+      }
+      if (
+        error instanceof TargetBlockedError &&
+        READ_ONLY_TARGET_OPERATIONS.has(claimed.record.operation)
+      ) {
+        claimed.record.state = 'blocked';
+        claimed.record.reason = error.message.slice(0, 500);
         this.save(claimed.record);
         return false;
       }
@@ -535,12 +567,38 @@ export class ShadowQueue {
       !adapter.verify
     )
       throw new Error('No confirmed target identity/verifier');
-    const matches = await adapter.verify(record);
-    if (!matches) {
-      record.state = 'blocked';
-      record.reason = 'Target readback mismatch; do not replay';
-      this.save(record);
+    // Persist a result only if the record is still the applied state that was verified, so a
+    // concurrent verification can never overwrite a newer transition (e.g. a confirmed mismatch).
+    const persist = (state: 'blocked' | 'target_unknown', reason: string): void =>
+      this.transaction(() => {
+        const current = this.get(id);
+        // A confirmed mismatch outranks an unknown result for the same identity; an unknown result
+        // never replaces anything but the applied state that was verified.
+        const allowed = state === 'blocked' ? ['applied', 'target_unknown'] : ['applied'];
+        if (
+          !current ||
+          !allowed.includes(current.state) ||
+          current.targetId !== record.targetId ||
+          current.requestHash !== record.requestHash
+        )
+          return;
+        current.state = state;
+        current.reason = reason;
+        this.save(current);
+      });
+    let matches: boolean;
+    try {
+      matches = await adapter.verify(record);
+    } catch (error) {
+      // The check could not establish that the target still matches. Withhold the identity
+      // (target_unknown keeps targetId and receipt) until reconcileTarget confirms it by reading.
+      persist(
+        'target_unknown',
+        `Drift verification could not complete; identity withheld until read-only reconciliation (${safeErrorName(error)})`,
+      );
+      throw error;
     }
+    if (!matches) persist('blocked', 'Target readback mismatch; do not replay');
     return matches;
   }
   /** Resolve only an already persisted target identity using the operation-specific read verifier. */

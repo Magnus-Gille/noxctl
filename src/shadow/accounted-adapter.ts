@@ -3,6 +3,7 @@ import { TargetReceiptPendingError } from './types.js';
 import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { createSupplierMapping } from './supplier-mapping.js';
+import { AccountedArticleLinkAdapter } from './article-link-adapter.js';
 import type { ShadowAdapter, ShadowBinding, ShadowRecord } from './types.js';
 
 export interface AccountedRequest {
@@ -66,6 +67,9 @@ const ALLOWED_INPUTS = new Set([
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Stable refusal reason: baselineCustomer arguments do not name exactly the read source customer. */
+export const BASELINE_CUSTOMER_ARGS_INVALID = 'BASELINE_CUSTOMER_ARGS_INVALID';
+
 /** Stable refusal reason: a populated source customer field has no Accounted counterpart. */
 export const CUSTOMER_FIELD_UNSUPPORTED = 'CUSTOMER_FIELD_UNSUPPORTED';
 
@@ -100,7 +104,6 @@ const NOTES_LABELLED_FIELDS = [
   'VisitingCountryCode',
 ] as const;
 /** C0/C1 controls (incl. tab, CR, LF, VT, FF, NEL) and Unicode line/paragraph separators. */
-// eslint-disable-next-line no-control-regex
 const NOTES_LINE_BREAK_OR_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 const CUSTOMER_MAPPED = new Set<string>([
   'CustomerNumber',
@@ -430,12 +433,28 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
   prepare(record: ShadowRecord): { request: unknown } | { blocked: string } {
     if (record.targetCompany !== this.targetCompany)
       return { blocked: 'Target company does not match the adapter binding.' };
-    if (record.operation !== 'createCustomer')
+    if (record.operation !== 'createCustomer' && record.operation !== 'baselineCustomer')
       return { blocked: `Unsupported operation: ${record.operation}.` };
     if (!Array.isArray(record.args) || record.args.length !== 1 || !plainObject(record.args[0])) {
-      return { blocked: 'createCustomer requires exactly one plain object argument.' };
+      return { blocked: `${record.operation} requires exactly one plain object argument.` };
     }
     const input = record.args[0];
+    if (record.operation === 'baselineCustomer') {
+      // NOX-213: the source result is a Fortnox READ of an existing customer; the argument only
+      // names it. Everything else goes through the identical createCustomer mapping below.
+      const keys = Object.keys(input);
+      if (
+        keys.length !== 1 ||
+        keys[0] !== 'CustomerNumber' ||
+        !plainObject(record.sourceResult) ||
+        !nonemptyString(input.CustomerNumber) ||
+        record.sourceResult.CustomerNumber !== input.CustomerNumber
+      ) {
+        return {
+          blocked: `${BASELINE_CUSTOMER_ARGS_INVALID}: baselineCustomer requires exactly { CustomerNumber } equal to the source customer's number.`,
+        };
+      }
+    }
     if (Object.hasOwn(input, 'TermsOfPayment')) {
       return {
         blocked:
@@ -451,8 +470,15 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
     const source = record.sourceResult;
     if (!nonemptyString(source.CustomerNumber))
       return { blocked: 'Confirmed source CustomerNumber is required.' };
-    if (source.CustomerNumber.length > 32 || source.CustomerNumber.trim() !== source.CustomerNumber)
-      return { blocked: 'Accounted customer number must be unpadded and at most 32 characters.' };
+    if (
+      source.CustomerNumber.length > 32 ||
+      source.CustomerNumber.trim() !== source.CustomerNumber ||
+      /\p{Cc}/u.test(source.CustomerNumber)
+    )
+      return {
+        blocked:
+          'Accounted customer number must be unpadded, free of control characters and at most 32 characters.',
+      };
     if (!nonemptyString(source.Name)) return { blocked: 'Confirmed source Name is required.' };
     if (source.Type !== 'COMPANY')
       return { blocked: 'Only confirmed COMPANY customers are supported.' };
@@ -619,6 +645,7 @@ export class AccountedMasterDataAdapter implements ShadowAdapter {
   private readonly binding: ShadowBinding;
   private readonly customers: AccountedShadowAdapter;
   private readonly suppliers: AccountedSupplierAdapter;
+  private readonly articles: AccountedArticleLinkAdapter;
 
   constructor(
     binding: ShadowBinding,
@@ -628,16 +655,19 @@ export class AccountedMasterDataAdapter implements ShadowAdapter {
     this.binding = { ...binding };
     this.customers = new AccountedShadowAdapter(binding.targetCompany, request);
     this.suppliers = new AccountedSupplierAdapter(binding, request, supplierClassifications);
+    this.articles = new AccountedArticleLinkAdapter(binding.targetCompany, request);
   }
 
-  private select(record: ShadowRecord): AccountedCreateAdapter | undefined {
+  private select(record: ShadowRecord): ShadowAdapter | undefined {
     if (
       record.sourceCompany !== this.binding.sourceCompany ||
       record.targetCompany !== this.binding.targetCompany
     )
       return undefined;
-    if (record.operation === 'createCustomer') return this.customers;
+    if (record.operation === 'createCustomer' || record.operation === 'baselineCustomer')
+      return this.customers;
     if (record.operation === 'createSupplier') return this.suppliers;
+    if (record.operation === 'baselineArticle') return this.articles;
     return undefined;
   }
 
@@ -659,6 +689,6 @@ export class AccountedMasterDataAdapter implements ShadowAdapter {
 
   async verify(record: ShadowRecord): Promise<boolean> {
     const adapter = this.select(record);
-    return adapter ? adapter.verify(record) : false;
+    return adapter?.verify ? adapter.verify(record) : false;
   }
 }
