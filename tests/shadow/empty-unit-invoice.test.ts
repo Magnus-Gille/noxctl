@@ -130,7 +130,7 @@ function targetInvoice(expected: ReturnType<typeof mappedOk>['expected'], units:
     subtotal_sek: expected.subtotal,
     vat_amount_sek: expected.vat_amount,
     total_sek: expected.total,
-    vat_treatment: 'standard',
+    vat_treatment: 'standard_25',
     vat_rate: 25,
     paid_amount: 0,
     credited_invoice_id: null,

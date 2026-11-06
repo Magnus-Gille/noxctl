@@ -168,7 +168,7 @@ function targetInvoice(status: 'draft' | 'sent' | 'paid', paid = false) {
     subtotal_sek: 100,
     vat_amount_sek: 25,
     total_sek: 125,
-    vat_treatment: 'standard',
+    vat_treatment: 'standard_25',
     vat_rate: 25,
     paid_amount: paid ? 125 : 0,
     credited_invoice_id: null,

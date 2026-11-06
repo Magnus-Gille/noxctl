@@ -129,6 +129,12 @@ Only an applied record whose receipt confirms its UUID is `ready`. Invoice draft
 customers and articles exactly as before, with `ARTICLE_*` refusals unchanged. Baseline records
 are unrelated to invoice stage and payment lifecycle projections.
 
+### Pilot host (NOX-214)
+
+The trusted host that supplies the Accounted HTTP client, credentials and drain commands for a
+bounded pilot is described in [pilot-host.md](pilot-host.md). It is unpublished and not part of the
+npm tarball.
+
 ### Customer and invoice field allowlist
 
 Both mappers classify every key of the confirmed source result. "Populated" means not
