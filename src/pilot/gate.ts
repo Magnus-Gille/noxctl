@@ -10,6 +10,8 @@ export interface WriteGateInput {
   storageOk: boolean;
   /** The one record a drain-one is about to take; its own pending state is not a refusal. */
   exceptId?: string;
+  /** States of `exceptId` that do not refuse (default: pending, retry_wait). */
+  exceptStates?: readonly string[];
 }
 export type GateResult =
   | { ok: true }
@@ -37,7 +39,10 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
     return { ok: false, reason: 'a staged call is executing or has an unknown outcome' };
   const items = input.queue.status().items;
   for (const item of items) {
-    if (item.id === input.exceptId && (item.state === 'pending' || item.state === 'retry_wait'))
+    if (
+      item.id === input.exceptId &&
+      (input.exceptStates ?? ['pending', 'retry_wait']).includes(item.state)
+    )
       continue;
     if (REFUSING.has(item.state))
       return {

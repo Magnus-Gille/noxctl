@@ -384,6 +384,9 @@ export async function reconcileCommand(host: PilotHost, id: string): Promise<Com
       );
     const adapter = host.adapterFor(record.operation);
     if (!adapter?.verify) return refuse(`no read-only verifier for ${record.operation}`);
+    // Every other gate condition still applies (storage, journal, restore ack, Fortnox company).
+    const gate = await host.checkGate(id, ['target_unknown']);
+    if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
     try {
       host.beginMutation();
     } catch {
@@ -391,17 +394,25 @@ export async function reconcileCommand(host: PilotHost, id: string): Promise<Com
     }
     let matched = false;
     let failure: string | undefined;
+    let backupFailure: string | undefined;
     try {
       matched = await host.queue.reconcileTarget(id, adapter);
     } catch (error) {
       failure = error instanceof Error ? error.name : 'Error';
     } finally {
       const backup = await host.afterMutation();
-      if (!backup.ok) failure = `${failure ? `${failure}; ` : ''}backup failed: ${backup.reason}`;
+      if (!backup.ok) backupFailure = `backup failed: ${backup.reason}`;
     }
     const state = host.queue.get(id)!.state;
     if (matched && state === 'applied')
-      return { ok: true, state, message: `${id}: applied (target read back and matched)` };
+      return backupFailure
+        ? {
+            ok: false,
+            state,
+            message: `${id}: applied (target read back and matched), but ${backupFailure}; further writes stay gated until \`backup\` succeeds`,
+          }
+        : { ok: true, state, message: `${id}: applied (target read back and matched)` };
+    if (backupFailure) failure = `${failure ? `${failure}; ` : ''}${backupFailure}`;
     return {
       ok: false,
       state,

@@ -444,4 +444,33 @@ describe('bootstrap', () => {
     ).toHaveLength(1);
     expect((await reconcileCommand(h.host, c!.id)).ok).toBe(false);
   });
+
+  it('reconcile respects the write gate and reports a failed backup', async () => {
+    const h = await makeHost();
+    expect((await baselineCustomerCommand(h.host, '1')).ok).toBe(true);
+    const [c] = h.host.queue.snapshot().map((e) => e.record);
+    const preview = await previewCommand(h.host, c!.id);
+    h.accounted.state.getFails = true;
+    await drainOneCommand(h.host, c!.id, preview.hash!);
+    h.accounted.state.getFails = false;
+    // an unresolved backup marker keeps reconcile from changing the queue
+    writeFileSync(join(h.config.directory, 'backup-pending'), '1', { mode: 0o600 });
+    const gets = h.accounted.calls.length;
+    const refused = await reconcileCommand(h.host, c!.id);
+    expect(refused.ok).toBe(false);
+    expect(refused.message).toMatch(/write gate/);
+    expect(h.accounted.calls.length).toBe(gets);
+    expect(h.host.queue.get(c!.id)!.state).toBe('target_unknown');
+    rmSync(join(h.config.directory, 'backup-pending'));
+    // a backup failure after a successful match is reported, not hidden
+    chmodSync(join(h.config.directory, 'backups'), 0o500);
+    try {
+      const result = await reconcileCommand(h.host, c!.id);
+      expect(h.host.queue.get(c!.id)!.state).toBe('applied');
+      expect(result.ok).toBe(false);
+      expect(result.message).toMatch(/backup failed/);
+    } finally {
+      chmodSync(join(h.config.directory, 'backups'), 0o700);
+    }
+  });
 });
