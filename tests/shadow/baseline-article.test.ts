@@ -252,6 +252,35 @@ describe('baselineArticle', () => {
     },
   );
 
+  it('does not let a later failed verification overwrite a confirmed mismatch', async () => {
+    const queue = await queued();
+    const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB')]);
+    const adapter = new AccountedArticleLinkAdapter(binding.targetCompany, target.request);
+    await queue.drainOne(adapter);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const mismatch = {
+      ...adapter,
+      prepare: adapter.prepare.bind(adapter),
+      apply: adapter.apply.bind(adapter),
+      verify: async () => false,
+    };
+    const failing = {
+      ...mismatch,
+      verify: async () => {
+        await gate;
+        throw new Error('network');
+      },
+    };
+    const slow = queue.verifyApplied('baseline-a', failing);
+    expect(await queue.verifyApplied('baseline-a', mismatch)).toBe(false);
+    expect(queue.get('baseline-a')!.state).toBe('blocked');
+    release();
+    await expect(slow).rejects.toThrow();
+    expect(queue.get('baseline-a')!.state).toBe('blocked');
+    queue.close();
+  });
+
   it('refuses another target company binding', async () => {
     const queue = await queued();
     const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB')]);
