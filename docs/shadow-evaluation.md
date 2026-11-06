@@ -115,7 +115,13 @@ Nothing claims that a create happened.
 
 Identity and conflict rules: `baselineCustomer` and `baselineArticle` are identity sources next
 to the creators. `createCustomer` plus `baselineCustomer` for one number, two baselines for one
-number, and one target UUID claimed by different source numbers all resolve as `conflict`.
+number, and one target UUID claimed by different source numbers all resolve as `conflict`. Before
+any dispatch, `drainOne` also refuses an identity source (creator or baseline) while another
+intent claims the same source object, recording `blocked` with `IDENTITY_SOURCE_COMPETING` and no
+target attempt, so a duplicate target object is never created. The article list must be
+well-formed for every entry (UUID `id`, string-or-null `article_number`, boolean `active`); otherwise
+the outcome stays unknown. UUIDs are compared case-insensitively and case-only duplicate ids are
+ambiguous.
 Only an applied record whose receipt confirms its UUID is `ready`. Invoice drafts then resolve
 customers and articles exactly as before, with `ARTICLE_*` refusals unchanged. Baseline records
 are unrelated to invoice stage and payment lifecycle projections.

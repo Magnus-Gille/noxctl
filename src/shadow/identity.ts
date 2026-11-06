@@ -236,6 +236,27 @@ export function resolveShadowIdentity(
   };
 }
 
+/**
+ * Other intents that claim the same source identity as `record` (same resource kind and source
+ * number), in any state except source_cancelled. A non-empty result means dispatching `record`
+ * could create a second target object for one source object, so it must not be dispatched.
+ */
+export function competingIdentitySources(
+  records: readonly ShadowRecord[],
+  record: ShadowRecord,
+): ShadowRecord[] {
+  const creator = CREATOR_IDENTITIES[record.operation];
+  if (!creator) return [];
+  const sourceId = sourceIdentity(record, creator.sourceField, creator.allowNumeric);
+  if (sourceId === undefined) return [];
+  return records.filter((other) => {
+    if (other.id === record.id || other.state === 'source_cancelled') return false;
+    const otherCreator = CREATOR_IDENTITIES[other.operation];
+    if (!otherCreator || otherCreator.kind !== creator.kind) return false;
+    return sourceIdentity(other, otherCreator.sourceField, otherCreator.allowNumeric) === sourceId;
+  });
+}
+
 function addressText(value: unknown): string {
   if (value === undefined || value === null) return '';
   return typeof value === 'string' ? value : `\u0000${typeof value}`;

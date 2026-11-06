@@ -95,10 +95,24 @@ export class AccountedArticleLinkAdapter implements ShadowAdapter {
     const body = response.json;
     const list = plain(body) && plain(body.data) ? body.data.articles : undefined;
     if (!Array.isArray(list)) throw new Error('Accounted articles list is malformed.');
-    const entries = list.filter(plain);
+    // Every entry must carry valid identity fields, or the list cannot prove uniqueness.
+    const entries = list.filter(
+      (entry): entry is { id: string; article_number: string | null; active: boolean } =>
+        plain(entry) &&
+        typeof entry.id === 'string' &&
+        UUID.test(entry.id) &&
+        (entry.article_number === null || typeof entry.article_number === 'string') &&
+        typeof entry.active === 'boolean',
+    );
     if (entries.length !== list.length) throw new Error('Accounted articles list is malformed.');
+    const wantedId = link.targetArticleId.toLowerCase();
+    const distinctIds = new Set(entries.map((entry) => entry.id.toLowerCase()));
+    if (distinctIds.size !== entries.length)
+      throw new TargetBlockedError(
+        `${ARTICLE_LINK_AMBIGUOUS}: the article list contains duplicate ids (case-insensitive).`,
+      );
 
-    const byId = entries.filter((entry) => entry.id === link.targetArticleId);
+    const byId = entries.filter((entry) => entry.id.toLowerCase() === wantedId);
     if (byId.length === 0)
       throw new TargetBlockedError(
         `${ARTICLE_LINK_NOT_FOUND}: target article is not in the company's article list.`,

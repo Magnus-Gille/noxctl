@@ -95,7 +95,6 @@ describe('baselineArticle', () => {
     ['case differs', [articleEntry(ids[1]!, '00123-AB')], ARTICLE_LINK_NUMBER_MISMATCH],
     ['null article number', [articleEntry(ids[1]!, null)], ARTICLE_LINK_NUMBER_MISMATCH],
     ['inactive', [articleEntry(ids[1]!, '00123-aB', { active: false })], ARTICLE_LINK_ACTIVE],
-    ['active flag missing', [{ id: ids[1], article_number: '00123-aB' }], ARTICLE_LINK_ACTIVE],
     [
       'duplicate article_number on another article',
       [articleEntry(ids[1]!, '00123-aB'), articleEntry(ids[2]!, '00123-aB')],
@@ -123,6 +122,42 @@ describe('baselineArticle', () => {
     expect(target.calls.every((call) => call.method === 'GET')).toBe(true);
     expect(queue.resolveIdentity('article', '00123-aB')).toMatchObject({ state: 'unresolved' });
     queue.close();
+  });
+
+  it.each([
+    ['an empty object entry', [{}]],
+    ['a missing article_number', [{ id: ids[2], active: true }]],
+    ['a numeric article_number', [{ id: ids[2], article_number: 123, active: true }]],
+    ['a non-UUID id', [{ id: 'x', article_number: 'OTHER', active: true }]],
+    ['a non-boolean active', [{ id: ids[2], article_number: 'OTHER', active: 'yes' }]],
+    ['a missing active flag', [{ id: ids[2], article_number: 'OTHER' }]],
+  ])('treats a list with %s as malformed (unknown, never applied)', async (_label, extra) => {
+    const queue = await queued();
+    const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB'), ...(extra as unknown[])]);
+    const adapter = new AccountedArticleLinkAdapter(binding.targetCompany, target.request);
+    expect(await queue.drainOne(adapter)).toBe(false);
+    expect(queue.get('baseline-a')!.state).toBe('target_unknown');
+    queue.close();
+  });
+
+  it('compares UUIDs case-insensitively and treats case-only duplicates as ambiguous', async () => {
+    const upper = ids[1]!.toUpperCase();
+    const queue = await queued();
+    const ok = fakeArticleTarget([articleEntry(upper, '00123-aB')]);
+    const adapter = new AccountedArticleLinkAdapter(binding.targetCompany, ok.request);
+    expect(await queue.drainOne(adapter)).toBe(true);
+    expect(queue.get('baseline-a')!.targetId).toBe(ids[1]);
+    queue.close();
+
+    const queue2 = await queued();
+    const dup = fakeArticleTarget([
+      articleEntry(ids[1]!, '00123-aB'),
+      articleEntry(upper, 'OTHER'),
+    ]);
+    const adapter2 = new AccountedArticleLinkAdapter(binding.targetCompany, dup.request);
+    expect(await queue2.drainOne(adapter2)).toBe(false);
+    expect(queue2.get('baseline-a')!.reason).toContain(ARTICLE_LINK_AMBIGUOUS);
+    queue2.close();
   });
 
   it('blocks malformed arguments or a source result that disagrees, before any request', async () => {

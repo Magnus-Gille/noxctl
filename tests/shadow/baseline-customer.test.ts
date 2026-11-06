@@ -132,13 +132,38 @@ describe('baselineCustomer', () => {
       queue.execute({ id: 'a', operation: 'baselineCustomer', args }, async () => sourceCustomer),
     ).rejects.toThrow(/identity conflict/);
 
+    // Two identity sources for one customer: neither may dispatch a POST.
     const target = fakeCustomerTarget();
     const adapter = new AccountedMasterDataAdapter(binding, target.request);
-    await queue.drainOne(adapter);
-    await queue.drainOne(adapter);
-    const keys = target.calls.filter((c) => c.method === 'POST').map((c) => c.idempotencyKey);
-    expect(keys).toHaveLength(2);
-    expect(keys[0]).not.toBe(keys[1]);
+    expect(await queue.drainOne(adapter)).toBe(false);
+    expect(queue.get('a')).toMatchObject({ state: 'blocked' });
+    expect(queue.get('a')!.reason).toContain('IDENTITY_SOURCE_COMPETING');
+    expect(queue.get('a')!.targetAttempts ?? 0).toBe(0);
+    expect(target.calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+    queue.close();
+  });
+
+  it.each([
+    ['baseline after an applied create', 'createCustomer', 'baselineCustomer', true],
+    ['baseline after a pending create', 'createCustomer', 'baselineCustomer', false],
+    ['create after an applied baseline', 'baselineCustomer', 'createCustomer', true],
+    ['two baselines, first applied', 'baselineCustomer', 'baselineCustomer', true],
+  ])('never POSTs a second customer: %s', async (_label, first, second, drainFirst) => {
+    const queue = await openShadowQueue(directory(), binding);
+    const args = [{ CustomerNumber: '7' }];
+    const target = fakeCustomerTarget();
+    const adapter = new AccountedMasterDataAdapter(binding, target.request);
+    await queue.execute({ id: 'first', operation: first, args }, async () => sourceCustomer);
+    if (drainFirst) expect(await queue.drainOne(adapter)).toBe(true);
+    await queue.execute({ id: 'second', operation: second, args }, async () => sourceCustomer);
+    while (await queue.drainOne(adapter)) {
+      /* drain until blocked or idle */
+    }
+    expect(target.calls.filter((c) => c.method === 'POST')).toHaveLength(drainFirst ? 1 : 0);
+    // The oldest unresolved intent that competes is the one blocked; nothing else dispatches.
+    const blockedId = drainFirst ? 'second' : 'first';
+    expect(queue.get(blockedId)).toMatchObject({ state: 'blocked' });
+    expect(queue.get(blockedId)!.reason).toContain('IDENTITY_SOURCE_COMPETING');
     queue.close();
   });
 });

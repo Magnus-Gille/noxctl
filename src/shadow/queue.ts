@@ -8,7 +8,11 @@ import {
   planPaymentQueue,
   PAYMENT_OPERATIONS,
 } from './payment-queue-plan.js';
-import { READ_ONLY_TARGET_OPERATIONS, resolveShadowIdentity } from './identity.js';
+import {
+  READ_ONLY_TARGET_OPERATIONS,
+  competingIdentitySources,
+  resolveShadowIdentity,
+} from './identity.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from './identity.js';
 export { canonicalEncode } from './codec.js';
 import {
@@ -235,6 +239,21 @@ export class ShadowQueue {
       if ('blocked' in prepared) {
         record.state = 'blocked';
         record.reason = prepared.blocked.slice(0, 500);
+        this.save(record);
+        return undefined;
+      }
+      // Never dispatch an identity source while another intent claims the same source object:
+      // a second create or baseline could produce a duplicate target object (NOX-213).
+      const allRecords = this.db
+        .prepare('SELECT record FROM intents ORDER BY seq')
+        .all()
+        .map((row) => decode(row.record as string) as ShadowRecord);
+      const competing = competingIdentitySources(allRecords, record);
+      if (competing.length > 0) {
+        record.state = 'blocked';
+        record.reason = `IDENTITY_SOURCE_COMPETING: intents ${competing
+          .map((other) => other.id)
+          .join(', ')} claim the same source identity; nothing was dispatched.`.slice(0, 500);
         this.save(record);
         return undefined;
       }
