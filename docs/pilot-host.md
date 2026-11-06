@@ -35,15 +35,16 @@ is used for the company check and the POST, so both requests always carry the sa
 
 `node dist/pilot/cli.js --config <file> [--synthetic-source] <command>`
 
-| Command                               | Effect                                                                                                                                                                                                                                                   |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `status`                              | Counts, oldest unapplied age, every non-applied record with state and reason, and source number to target id for applied records. Also acknowledges the queue state.                                                                                     |
-| `preview <id>`                        | Only for the OLDEST unresolved record. Runs the adapter `prepare` (no network), prints the exact request and `hash`, writes `previews/<id>.json` (0600).                                                                                                 |
-| `drain-one <id> <hash>`               | One `queue.drainExpected` (below), after the checks below. Prints the state, then backs up.                                                                                                                                                              |
-| `baseline-customer <CustomerNumber>`  | Reads the Fortnox customer and records a `baselineCustomer` intent (pending). No Accounted request.                                                                                                                                                      |
-| `link-article <ArticleNumber> <uuid>` | Reads the Fortnox article and records a `baselineArticle` intent (pending). No Accounted request.                                                                                                                                                        |
-| `reconcile <id>`                      | Only for a `target_unknown` record that kept its target identity and receipt. Reads the target with the adapter's verifier (GET only, never another mutation); on a match the record becomes `applied`, otherwise it stays unknown. Backs up afterwards. |
-| `backup`                              | Manual backup.                                                                                                                                                                                                                                           |
+| Command                               | Effect                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`                              | Counts, oldest unapplied age, every non-applied record with state and reason, and source number to target id for applied records. Also acknowledges the queue state.                                                                                                                                       |
+| `preview <id>`                        | Only for the OLDEST unresolved record. Runs the adapter `prepare` (no network), prints the exact request and `hash`, writes `previews/<id>.json` (0600).                                                                                                                                                   |
+| `drain-one <id> <hash>`               | One `queue.drainExpected` (below), after the checks below. Prints the state, then backs up.                                                                                                                                                                                                                |
+| `baseline-customer <CustomerNumber>`  | Reads the Fortnox customer and records a `baselineCustomer` intent (pending). No Accounted request.                                                                                                                                                                                                        |
+| `link-article <ArticleNumber> <uuid>` | Reads the Fortnox article and records a `baselineArticle` intent (pending). No Accounted request.                                                                                                                                                                                                          |
+| `reconcile <id>`                      | Only for a `target_unknown` record that kept its target identity and receipt. Reads the target with the adapter's verifier (GET only, never another mutation); on a match the record becomes `applied`, otherwise it stays unknown. Backs up afterwards.                                                   |
+| `refuse <id> <reason>`                | Closes the OLDEST unresolved record, state `pending`, with no target attempt or identity, when the adapter still refuses to map it (see "Preflight and refuse"). Marks it `blocked` (`OPERATOR_REFUSED: <reason> (mapping: <mapping reason>)`), journals it and backs up. No Fortnox or Accounted request. |
+| `backup`                              | Manual backup.                                                                                                                                                                                                                                                                                             |
 
 `hash = sha256(canonicalEncode({ id, operation, requestHash, request, binding, revision }))`.
 
@@ -117,6 +118,9 @@ touches it. Entries are written immediately before the external write:
   `retry_wait` (not dispatched).
 - `{"kind":"source","stagedId","at"}` immediately before every Fortnox write run by the staged
   server. If the append fails the write is not made.
+- `{"kind":"refused","intentId","at"}` after `refuse` has marked the record `blocked` in the queue
+  (queue first, journal second: a crash in between leaves a blocked record without an entry, which
+  keeps refusing the gate). No external write is involved.
 
 ### Genesis, hash chain and head record
 
@@ -143,6 +147,9 @@ The write gate fails closed (every mutation, CLI or MCP) when:
 - a journaled target intent is absent from the queue, has a different request hash, is `pending`,
   or is `retry_wait` with fewer recorded attempts than the journaled attempt (a rollback; a
   `retry_wait` whose attempt was recorded as not dispatched is legitimate);
+- a journaled operator refusal is absent from the queue, or its record is not `blocked` with an
+  `OPERATOR_REFUSED:` reason and zero target attempts and no target identity (a restore that
+  brought the record back to `pending`);
 - a journaled staged call is absent from `staged.sqlite` or is not `executing`/`unknown`/`completed`;
 - a journaled staged call is `completed` but its queue record `<stagedId>:0` is absent, has an
   operation other than the staged tool's (`fortnox_create_customer` -> `createCustomer`,
@@ -209,5 +216,57 @@ Initialization takes `<headDir>/registry.lock` (exclusive create, never waited o
 
 - The deployed Accounted stores 25 % VAT as `vat_treatment = 'standard_25'` and leaves `paid_amount` null on an unpaid draft; the draft readback now accepts exactly that.
 - The Accounted company list does not expose a key's per-company access, so a read-only key cannot be detected before the first POST: the POST is refused with 403 and the record becomes `target_unknown` (fail closed). Give the pilot key write access in the pilot company.
-- There is no pre-write preflight yet: a Fortnox write whose arguments the mapping refuses (missing InvoiceDate/DueDate/Currency, unsupported customer input fields) sits unmappable at the head of the queue. Phase C requires a preflight before every Fortnox write.
+- A Fortnox write whose arguments the mapping refuses (missing InvoiceDate/DueDate/Currency, unsupported customer input fields) used to sit unmappable at the head of the queue. NOX-215 added the preflight and the `refuse` command below.
 - The synthetic source is shared on disk (`synthetic-fortnox.json`) so the CLI and MCP server see the same records.
+
+## Preflight and refuse (NOX-215)
+
+### Mapping preflight before every Fortnox write
+
+The staged server calls the host's `preflight` hook on the planned arguments (the Fortnox payload
+without `confirm`/`dryRun`/`includeRaw`, as the queue will store them) at `staged_prepare` (before the
+call is saved) and again at `staged_execute` (before the call is claimed, so before any Fortnox
+request). A refusal is logged on stderr (`pilot: write refused: preflight: ...`), returned in the
+tool error (`Preflight refused: ...`), saves/claims nothing and makes no Fortnox write. The host
+authorization and gate run first, so the Fortnox company-information read still happens.
+
+The preflight runs the real mapping on a provisional record:
+
+- `createCustomer`: the real customer adapter `prepare`, with a synthetic source result made of the
+  arguments plus the CustomerNumber (a placeholder when none is given). Refused: an unsupported or
+  malformed input field (for example `Currency`, `VATType`, `TermsOfPayment`), a field that is
+  not a string or fails the Accounted schema (for example `Email`), a `Type` other than `COMPANY`, a
+  `CountryCode` other than `SE`, and a given CustomerNumber that already has a queue record. NOT
+  decided: values the arguments do not name. An absent `Type` or `CountryCode` is assumed
+  acceptable, because Fortnox fills it in; the `CUSTOMER_COUNTRY_UNVERIFIED` rule needs the response, so it is satisfied with placeholders (Currency `SEK`, VATType `SEVAT`) and every other input error is still reported.
+- `createInvoice`: the input half of the draft validation (`preflightInvoiceDraft` in
+  `src/shadow/invoice-draft-mapping.ts`): exactly the supported header and row fields, all of
+  CustomerNumber, InvoiceDate, DueDate (real dates, not before the invoice date), Currency `SEK`,
+  rows (quantity, price, 25 % VAT, unit, account format, cent arithmetic, at least one product row),
+  then customer identity ready with complete mirrored customer evidence and every referenced
+  ArticleNumber ready, both resolved with `queue.resolveIdentity` exactly as drain does.
+
+Not covered, so a post-write refusal is still possible: everything that needs the real Fortnox
+response, namely the source totals and row amounts, `Booked`/`Sent`/`Cancelled`, accounting method,
+country, rounding, tax reduction, cost center/project, source row fields, the account number the
+source row got, the optional header texts, and the customer rules that depend on response defaults.
+Such a record is the unmappable head record that `refuse` exists for.
+
+### `refuse <id> <reason>`
+
+Allowed only for the oldest unresolved record, in state `pending`, with zero target attempts, no
+target id or receipt, not a payment operation or payment-managed, and only if `adapter.prepare` still returns an explicit blocked result (a thrown error never closes a record)
+(re-run inside the queue transaction, `queue.refuseUnmappable`). Under the pilot lock and the full
+write gate (only this record's `pending` state is exempted) the host writes the backup marker, marks
+the record `blocked` with reason `OPERATOR_REFUSED: <operator reason> (mapping: <mapping reason>)`,
+appends the `refused` journal entry and backs up. The reason is 1-300 characters on one line.
+
+Effect on the queue: a record that is `blocked`, whose reason starts with `OPERATOR_REFUSED:`, with
+no target id and zero target attempts, is skipped as "oldest unresolved" by `drainOne`/`drainExpected`,
+`preview`, `refuse` and the queue's oldest-age figures. It stays in the queue and `status` still
+lists it. The pilot gate additionally requires the matching `refused` journal entry before it stops
+refusing on it. Every other blocked, unknown or in-flight record still holds the queue and the gate.
+The queue itself cannot see the journal, so only the pilot commands (which run the gate) are safe
+against a forged `OPERATOR_REFUSED:` reason in the database; the payment-aware planner is unchanged.
+A refused `createCustomer` that already exists in Fortnox keeps claiming its CustomerNumber, so a
+later baseline of that customer is blocked as a competing identity source.

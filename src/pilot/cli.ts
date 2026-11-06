@@ -8,6 +8,7 @@ import {
   drainOneCommand,
   linkArticleCommand,
   reconcileCommand,
+  refuseCommand,
   previewCommand,
   statusCommand,
   type CommandResult,
@@ -20,6 +21,7 @@ const USAGE = `usage: node dist/pilot/cli.js --config <file> [--synthetic-source
   baseline-customer <CustomerNumber>
   link-article <ArticleNumber> <targetArticleUuid>
   reconcile <id>
+  refuse <id> <reason>
   backup`;
 
 export async function main(argv: string[]): Promise<number> {
@@ -41,6 +43,7 @@ export async function main(argv: string[]): Promise<number> {
     'baseline-customer': 1,
     'link-article': 2,
     reconcile: 1,
+    refuse: 2,
     backup: 0,
   };
   if (!configPath || !command || arity[command] !== params.length) {
@@ -68,6 +71,9 @@ export async function main(argv: string[]): Promise<number> {
         break;
       case 'reconcile':
         result = await reconcileCommand(host, params[0]!);
+        break;
+      case 'refuse':
+        result = await refuseCommand(host, params[0]!, params[1]!);
         break;
       default:
         result = await backupCommand(host);

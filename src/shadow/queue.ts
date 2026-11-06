@@ -14,6 +14,7 @@ import {
   resolveShadowIdentity,
 } from './identity.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from './identity.js';
+import { OPERATOR_REFUSED_PREFIX, isOperatorRefused } from './operator-refusal.js';
 export { canonicalEncode } from './codec.js';
 import {
   TargetBlockedError,
@@ -208,6 +209,77 @@ export class ShadowQueue {
     return result;
   }
 
+  /**
+   * The oldest record that is neither applied, source_cancelled nor operator-refused (NOX-215).
+   * Every other blocked or unknown record keeps holding the queue.
+   */
+  private oldestUnresolved(): ShadowRecord | undefined {
+    const rows = this.db
+      .prepare(
+        "SELECT record FROM intents WHERE state NOT IN ('applied', 'source_cancelled') ORDER BY seq",
+      )
+      .iterate();
+    for (const row of rows) {
+      const record = decode(row.record as string) as ShadowRecord;
+      if (!isOperatorRefused(record)) return record;
+    }
+    return undefined;
+  }
+
+  /**
+   * Operator closure of an unmappable record (NOX-215). Inside one transaction: the record must be
+   * the oldest unresolved one, `pending`, with no target attempt and no target identity, not
+   * payment-managed, and the adapter must STILL refuse to prepare it. It then becomes `blocked`
+   * with an `OPERATOR_REFUSED:` reason. Never contacts a target.
+   */
+  refuseUnmappable(
+    id: string,
+    reason: string,
+    adapter: ShadowAdapter,
+  ): { ok: true; mappingReason: string } | { ok: false; reason: string } {
+    return this.transaction(() => {
+      const record = this.get(id);
+      if (!record) return { ok: false as const, reason: 'unknown record id' };
+      const oldest = this.oldestUnresolved();
+      if (oldest?.id !== id)
+        return {
+          ok: false as const,
+          reason: `${id} is not the oldest unresolved record (that is ${oldest?.id ?? 'none'})`,
+        };
+      if (record.state !== 'pending')
+        return { ok: false as const, reason: `record is ${record.state}, not pending` };
+      if (
+        (record.targetAttempts ?? 0) !== 0 ||
+        record.targetId !== undefined ||
+        record.targetReceipt !== undefined ||
+        PAYMENT_OPERATIONS.has(record.operation) ||
+        record.paymentQueueOwned !== undefined ||
+        record.paymentManaged !== undefined ||
+        record.paymentGroup !== undefined
+      )
+        return { ok: false as const, reason: 'record has target contact or payment state' };
+      let prepared: ReturnType<ShadowAdapter['prepare']>;
+      try {
+        prepared = adapter.prepare(record);
+      } catch (error) {
+        // Only an explicit { blocked } result may close a record; a thrown error proves nothing.
+        return {
+          ok: false as const,
+          reason: `the mapping failed unexpectedly (${safeErrorName(error)}); nothing was changed`,
+        };
+      }
+      if (!('blocked' in prepared))
+        return { ok: false as const, reason: 'the record is mappable; use preview and drain-one' };
+      record.state = 'blocked';
+      record.reason = `${OPERATOR_REFUSED_PREFIX} ${reason} (mapping: ${prepared.blocked})`.slice(
+        0,
+        500,
+      );
+      this.save(record);
+      return { ok: true as const, mappingReason: prepared.blocked };
+    });
+  }
+
   /** Strict queue order preserves prerequisites. A gap pauses target replay, never new source work. */
   async drainOne(adapter: ShadowAdapter): Promise<boolean> {
     return this.drainSingle(adapter);
@@ -250,12 +322,7 @@ export class ShadowQueue {
           return undefined;
         record = this.get(plan.id);
       } else {
-        const row = this.db
-          .prepare(
-            "SELECT record FROM intents WHERE state NOT IN ('applied', 'source_cancelled') ORDER BY seq LIMIT 1",
-          )
-          .get();
-        record = row ? (decode(row.record as string) as ShadowRecord) : undefined;
+        record = this.oldestUnresolved();
       }
       if (
         !record ||
@@ -683,8 +750,7 @@ export class ShadowQueue {
       .prepare(
         `WITH totals AS (SELECT state, COUNT(*) AS total FROM intents GROUP BY state)
          SELECT
-           (SELECT json_group_object(state, total) FROM totals) AS counts,
-           (SELECT record FROM intents WHERE state NOT IN ('applied', 'source_cancelled') ORDER BY seq LIMIT 1) AS oldest`,
+           (SELECT json_group_object(state, total) FROM totals) AS counts`,
       )
       .get()!;
     const counts = Object.fromEntries(states.map((state) => [state, 0])) as Record<
@@ -700,7 +766,7 @@ export class ShadowQueue {
         throw new Error('Invalid shadow queue state count');
       counts[state as ShadowState] = count as number;
     }
-    const oldest = row.oldest ? (decode(row.oldest as string) as ShadowRecord) : undefined;
+    const oldest = this.oldestUnresolved();
     return {
       enabled: true,
       binding: { ...this.binding },
@@ -719,7 +785,10 @@ export class ShadowQueue {
     >;
     for (const record of records) counts[record.state]++;
     const oldest = records.find(
-      (record) => record.state !== 'applied' && record.state !== 'source_cancelled',
+      (record) =>
+        record.state !== 'applied' &&
+        record.state !== 'source_cancelled' &&
+        !isOperatorRefused(record),
     );
     return {
       enabled: true,

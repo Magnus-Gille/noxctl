@@ -177,21 +177,25 @@ describe('end to end with article-linked invoice', () => {
     expect((await baselineCustomerCommand(h.host, '1')).ok).toBe(true);
     expect((await linkArticleCommand(h.host, 'A-1', ARTICLE_UUID)).ok).toBe(true);
     const client = await connect(h.host);
-    const executed = await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
-    expect(executed.isError, textOf(executed)).not.toBe(true);
-    // backup after a successful staged execute
-    expect(readdirSync(join(h.config.directory, 'backups')).length).toBeGreaterThanOrEqual(1);
-    const [c, a, inv] = h.host.queue.snapshot().map((e) => e.record);
-    expect(inv!.operation).toBe('createInvoice');
-
-    // the invoice cannot jump the queue
-    expect((await previewCommand(h.host, inv!.id)).ok).toBe(false);
-    for (const record of [c!, a!, inv!]) {
+    // NOX-215: the invoice preflight needs applied customer and article identities, so those
+    // baselines drain first; the invoice then queues behind nothing and drains last.
+    const [c, a] = h.host.queue.snapshot().map((e) => e.record);
+    for (const record of [c!, a!]) {
       const preview = await previewCommand(h.host, record.id);
       expect(preview.ok, preview.message).toBe(true);
       const drained = await drainOneCommand(h.host, record.id, preview.hash!);
       expect(drained, drained.message).toMatchObject({ ok: true, state: 'applied' });
     }
+    const executed = await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
+    expect(executed.isError, textOf(executed)).not.toBe(true);
+    // backup after a successful staged execute
+    expect(readdirSync(join(h.config.directory, 'backups')).length).toBeGreaterThanOrEqual(1);
+    const inv = h.host.queue.snapshot()[2]!.record;
+    expect(inv.operation).toBe('createInvoice');
+    const preview = await previewCommand(h.host, inv.id);
+    expect(preview.ok, preview.message).toBe(true);
+    const drained = await drainOneCommand(h.host, inv.id, preview.hash!);
+    expect(drained, drained.message).toMatchObject({ ok: true, state: 'applied' });
     expect(
       h.accounted.calls.filter((x) => x.method === 'POST').map((x) => x.url.split('/').pop()),
     ).toEqual(['customers', 'invoices']);
@@ -205,12 +209,12 @@ describe('end to end with article-linked invoice', () => {
       const h = await makeHost();
       await baselineCustomerCommand(h.host, '1');
       await linkArticleCommand(h.host, 'A-1', ARTICLE_UUID);
-      const client = await connect(h.host);
-      await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
       for (const entry of h.host.queue.snapshot().slice(0, 2)) {
         const p = await previewCommand(h.host, entry.record.id);
         await drainOneCommand(h.host, entry.record.id, p.hash!);
       }
+      const client = await connect(h.host);
+      await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
       const invoice = h.host.queue.snapshot()[2]!.record;
       const preview = await previewCommand(h.host, invoice.id);
       expect(preview.ok, preview.message).toBe(true);
@@ -228,12 +232,12 @@ describe('end to end with article-linked invoice', () => {
     const h = await makeHost();
     await baselineCustomerCommand(h.host, '1');
     await linkArticleCommand(h.host, 'A-1', ARTICLE_UUID);
-    const client = await connect(h.host);
-    await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
     for (const entry of h.host.queue.snapshot().slice(0, 2)) {
       const p = await previewCommand(h.host, entry.record.id);
       await drainOneCommand(h.host, entry.record.id, p.hash!);
     }
+    const client = await connect(h.host);
+    await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
     const invoice = h.host.queue.snapshot()[2]!.record;
     const preview = await previewCommand(h.host, invoice.id);
     // flip Sent when Accounted receives the POST

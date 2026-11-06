@@ -32,6 +32,16 @@ export interface CreateStagedServerOptions {
   maxPreparationAgeMs: number;
   /** Host must authenticate the caller before connecting MCP; literal true grants this action. */
   authorize: (context: StagedAuthorizationContext) => boolean | Promise<boolean>;
+  /**
+   * Optional host check of the planned call, run before the call is saved (prepare) and again
+   * before Fortnox is contacted (execute). Return a reason to refuse; the reason reaches the
+   * caller in the tool error.
+   */
+  preflight?: (call: {
+    tool: string;
+    operation: string;
+    args: Readonly<Record<string, unknown>>;
+  }) => string | undefined | Promise<string | undefined>;
   now?: () => number;
 }
 export interface StagedServer {
@@ -115,6 +125,7 @@ export async function createStagedServer(
     maxPreparationAgeMs: options.maxPreparationAgeMs,
   });
   const authorize = options.authorize;
+  const preflight = options.preflight;
   const clock = options.now ?? Date.now;
   function now(): number {
     const value = clock();
@@ -212,6 +223,10 @@ export async function createStagedServer(
         record.id,
       );
     };
+    async function runPreflight(tool: string, args: Record<string, unknown>): Promise<void> {
+      const reason = await preflight?.({ tool, operation: allowed.get(tool)!, args: copy(args) });
+      if (reason !== undefined) throw new StagedHostError(`Preflight refused: ${reason}`);
+    }
     async function guarded(fn: () => Promise<CallToolResult>): Promise<CallToolResult> {
       try {
         return await fn();
@@ -247,6 +262,7 @@ export async function createStagedServer(
           }
           if (normalized.confirm !== true || normalized.dryRun === true)
             throw new StagedHostError('Prepared call must be confirmed and not a dry run');
+          await runPreflight(tool, normalized);
           const createdAt = now();
           const record: PreparedCall = {
             id: randomUUID(),
@@ -274,6 +290,8 @@ export async function createStagedServer(
         guarded(async () => {
           await permit('execute', id);
           if (confirm !== true) throw new StagedHostError('Explicit confirmation required');
+          const planned = get(id);
+          if (planned?.state === 'prepared') await runPreflight(planned.tool, planned.args);
           const claim = transaction(db, () => {
             const record = get(id);
             if (!record) throw new StagedHostError('Unknown intent');

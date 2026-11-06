@@ -662,7 +662,17 @@ function houseWorkTypeIsNone(value: unknown): boolean {
   return value === undefined || value === null || value === '' || value === 'none';
 }
 
+type InputOnlyDraft = { inputOnly: true; customerNumber: string; articleInputs: unknown[] };
+
 function validateDraft(record: ShadowRecord, binding: ShadowBinding): ValidationResult {
+  return validateDraftImpl(record, binding, false) as ValidationResult;
+}
+
+function validateDraftImpl(
+  record: ShadowRecord,
+  binding: ShadowBinding,
+  inputOnly: boolean,
+): ValidationResult | InputOnlyDraft {
   if (
     !isPlainObject(record) ||
     !isPlainObject(binding) ||
@@ -835,6 +845,16 @@ function validateDraft(record: ShadowRecord, binding: ShadowBinding): Validation
     targetNet + targetVat !== totalCents / 100
   )
     return { blocked: 'Target aggregate arithmetic cannot preserve the source cents.' };
+
+  if (inputOnly) {
+    return {
+      inputOnly: true,
+      customerNumber,
+      articleInputs: rows.flatMap((row) =>
+        row.kind === 'product' && row.inputArticle !== undefined ? [row.inputArticle] : [],
+      ),
+    };
+  }
 
   if (!isPlainObject(record.sourceResult)) {
     return { blocked: 'A confirmed source invoice result is required.' };
@@ -1218,4 +1238,43 @@ export function mapInvoiceDraft(
   };
 
   return { request, expected, sourceInvoiceId: validated.sourceInvoiceId };
+}
+
+/**
+ * Pure input-level preflight (NOX-215), run BEFORE the Fortnox write on the planned arguments:
+ * the input half of the draft validation plus customer and article identity readiness. It decides
+ * nothing that depends on the Fortnox response (source totals, row amounts, flags, account
+ * numbers, header texts), which `mapInvoiceDraft` still checks after the write.
+ */
+export function preflightInvoiceDraft(
+  record: ShadowRecord,
+  binding: ShadowBinding,
+  lookup: CustomerIdentityLookup,
+): { blocked: string } | { ok: true } {
+  const validated = validateDraftImpl(record, binding, true);
+  if ('blocked' in validated) return validated;
+  if (!('inputOnly' in validated)) return { blocked: 'Invoice preflight is input-only.' };
+  const customer = lookup('customer', validated.customerNumber);
+  if (!isMatchingCustomerIdentity(customer, binding, validated.customerNumber)) {
+    return { blocked: 'Confirmed customer identity is missing, unresolved, or conflicting.' };
+  }
+  if (!isCompleteCustomerEvidence(customer.sourceCustomer)) {
+    return {
+      blocked: `${INVOICE_REFUSAL.customerEvidenceMissing}: Customer identity lacks complete mirrored customer evidence.`,
+    };
+  }
+  const seen = new Set<string>();
+  for (const input of validated.articleInputs) {
+    const articleNumber = sourceArticleNumber(input);
+    if (articleNumber === undefined) {
+      return {
+        blocked: `${ARTICLE_REFUSAL.invalid}: Source ArticleNumber must be an opaque nonblank string.`,
+      };
+    }
+    if (articleNumber === null || seen.has(articleNumber)) continue;
+    seen.add(articleNumber);
+    const article = resolveArticle(lookup, binding, articleNumber);
+    if ('blocked' in article) return article;
+  }
+  return { ok: true };
 }

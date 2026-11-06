@@ -50,6 +50,8 @@ import {
   type JournalContext,
 } from './journal.js';
 import { acquirePilotLock, PilotLockError } from './lock.js';
+import { isOperatorRefused } from '../shadow/operator-refusal.js';
+import { preflightStagedCall } from './preflight.js';
 
 export interface PilotConfig {
   version: 1;
@@ -153,6 +155,8 @@ export interface PilotHost {
   withLock<T>(command: string, fn: () => Promise<T>): Promise<T>;
   /** Dispatch-journal hook: durable record BEFORE a target request; failure means nothing is sent. */
   journalTarget(record: ShadowRecord): void;
+  /** Durable record that the operator refused an unmappable intent (after the queue change). */
+  journalRefused(intentId: string): void;
   /** Operator has looked at the real state (`status`); lifts the restore/outside-change refusal. */
   acknowledge(): void;
   wrapTransport(transport: Transport): Transport;
@@ -339,6 +343,12 @@ export async function createPilotHost(
       ]),
     );
     for (const entry of state.entries) {
+      if (entry.kind === 'refused') {
+        const refused = host.queue.get(entry.intentId);
+        if (!refused || !isOperatorRefused(refused))
+          return `journaled operator refusal ${entry.intentId} is ${refused?.state ?? 'absent'} in the queue (rollback?); ${RECONCILE}`;
+        continue;
+      }
       if (entry.kind === 'source') {
         const call = stagedCalls.get(entry.stagedId);
         if (call?.state !== 'executing' && call?.state !== 'unknown' && call?.state !== 'completed')
@@ -369,6 +379,19 @@ export async function createPilotHost(
         return `journaled Accounted dispatch ${entry.intentId} is ${record.state} in the queue (rollback?); ${RECONCILE}`;
     }
     return undefined;
+  }
+
+  /** Intents with a `refused` journal entry whose queue record still shows the operator refusal. */
+  function operatorRefusedIds(): ReadonlySet<string> {
+    const state = verifyJournal(journalCtx);
+    const ids = new Set<string>();
+    if (!state.ok) return ids;
+    for (const entry of state.entries) {
+      if (entry.kind !== 'refused') continue;
+      const record = host.queue.get(entry.intentId);
+      if (record && isOperatorRefused(record)) ids.add(entry.intentId);
+    }
+    return ids;
   }
 
   const byName = (a: string, b: string) => a.localeCompare(b, 'en', { numeric: true });
@@ -414,6 +437,7 @@ export async function createPilotHost(
       storageOk: ownMarker || !existsSync(markerPath),
       exceptId,
       ...(exceptStates ? { exceptStates } : {}),
+      operatorRefused: operatorRefusedIds(),
     });
     if (!queueGate.ok) {
       failures.push(queueGate.reason);
@@ -445,6 +469,20 @@ export async function createPilotHost(
     revision: config.revision,
     maxPreparationAgeMs: MAX_PREPARATION_MS,
     authorize: (context) => authorize(context),
+    preflight: ({ operation, args }) => {
+      const reason = preflightStagedCall(
+        {
+          binding,
+          adapterFor: (name) => host.adapterFor(name),
+          resolveIdentity: (resource, sourceId) => host.queue.resolveIdentity(resource, sourceId),
+          now,
+        },
+        operation,
+        args,
+      );
+      if (reason !== undefined) log(`pilot: write refused: preflight: ${reason}`);
+      return reason;
+    },
     now,
   });
   const queue = staged.queue;
@@ -564,6 +602,9 @@ export async function createPilotHost(
       } catch {
         throw new PilotNotDispatchedError('dispatch journal could not be written');
       }
+    },
+    journalRefused(intentId) {
+      appendJournal(journalCtx, { kind: 'refused', intentId, at: now() });
     },
     beginMutation() {
       // Durable before the mutation proceeds; any failure throws and the caller refuses.
