@@ -221,6 +221,8 @@ export interface HarnessOptions {
   clock?: { now: number };
   stderr?: string[];
   osUser?: string;
+  headDir?: string;
+  fsync?: (fd: number) => void;
 }
 export async function makeHost(options: HarnessOptions = {}) {
   const root = options.root ?? tempRoot();
@@ -231,6 +233,7 @@ export async function makeHost(options: HarnessOptions = {}) {
   const accounted = options.accounted ?? fakeAccounted({ articles: [articleEntry()] });
   const clock = options.clock ?? { now: BASE_TIME };
   const stderr = options.stderr ?? [];
+  const headDir = options.headDir ?? join(root, 'heads');
   const host = await createPilotHost(config, {
     fortnox: options.fortnox ?? synthetic.transport,
     accounted: createAccountedClient({
@@ -243,9 +246,11 @@ export async function makeHost(options: HarnessOptions = {}) {
     now: () => clock.now,
     stderr: (line) => stderr.push(line),
     osUser: () => options.osUser ?? 'pilot-operator',
+    headDir,
+    ...(options.fsync ? { fsync: options.fsync } : {}),
   });
   hosts.push(host);
-  return { host, root, config, synthetic, accounted, clock, stderr };
+  return { host, root, config, synthetic, accounted, clock, stderr, headDir };
 }
 
 export function articleEntry(extra: Record<string, unknown> = {}) {

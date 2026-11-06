@@ -117,24 +117,67 @@ touches it. Entries are written immediately before the external write:
 - `{"kind":"source","stagedId","at"}` immediately before every Fortnox write run by the staged
   server. If the append fails the write is not made.
 
+### Genesis, hash chain and head record
+
+- When a pilot directory is first initialized (no `pilot-id`, no journal, and both databases absent
+  or empty) the host writes, in this order: the head record, the journal's first line
+  `{"kind":"genesis","pilotId":<uuid>,"createdAt"}`, and `<directory>/pilot-id` (0600).
+- Every later line carries `seq` (1, 2, 3, ...) and `prev`, the sha256 of the previous raw line.
+- The independent head record `~/Library/Application Support/noxctl-pilot/<pilotId>.head.json`
+  (directory 0700, file 0600) holds `{pilotId, seq, hash}` of the last journal line. It is
+  rewritten (temp file, fsync, rename, fsync of the directory) after every append. It is not under
+  the state directory, so restoring or deleting the state directory does not touch it. (The
+  location is injectable in the host dependencies for tests.)
+- A crash between the journal append and the head update leaves the journal one line ahead of the
+  head; the gate refuses this like any mismatch (fail closed) and needs reconciliation.
+
 The write gate fails closed (every mutation, CLI or MCP) when:
 
-- the journal is missing or unreadable while the queue or the staged database is not empty (an
-  empty journal is created only for a pristine directory);
+- `pilot-id` exists but the journal is missing, empty, lacks a valid genesis with that pilot id, has
+  a broken seq/prev chain, or its last line differs from the head record (seq and hash);
+- the head record is missing for an initialized pilot;
+- the databases are not empty (or a journal exists) but `pilot-id` is missing;
+- `pilot-id` exists but `staged.sqlite` or `queue/shadow.sqlite` was missing at startup (checked
+  before the opener could create an empty one);
 - a journaled target intent is absent from the queue, has a different request hash, is `pending`,
   or is `retry_wait` with fewer recorded attempts than the journaled attempt (a rollback; a
   `retry_wait` whose attempt was recorded as not dispatched is legitimate);
-- a journaled staged call is absent from `staged.sqlite` or is not `executing`/`unknown`/`completed`.
+- a journaled staged call is absent from `staged.sqlite` or is not `executing`/`unknown`/`completed`;
+- a journaled staged call is `completed` but its queue record `<stagedId>:0` is absent, has an
+  operation other than the staged tool's (`fortnox_create_customer` -> `createCustomer`,
+  `fortnox_create_invoice` -> `createInvoice`), or is still `prepared`/`source_in_flight`.
 
 The message says that read-only reconciliation against Fortnox and Accounted is required.
 
+What the operator must never delete or edit: `pilot-id`, `journal/`, the head record in
+`~/Library/Application Support/noxctl-pilot/`, the queue and `staged.sqlite`. Deleting `pilot-id`
+and the journal together (with empty databases) makes the directory look pristine and starts a NEW
+pilot with a new genesis; that is an operator action equivalent to abandoning the old pilot, and
+the host cannot detect it (the old pilot id is unknown to it).
+
 Restore procedure: stop the server; restore `staged.sqlite` and `queue/shadow.sqlite` from a backup
-(remove stale `-wal`/`-shm` files); NEVER touch `journal/`; start the host and run `status`
-(acknowledges the restore). If the gate then reports a journal refusal, the restored databases are
-older than what was really dispatched. Reconcile by hand, read-only, against Fortnox (was the
-journaled write made?) and Accounted (does the target object exist?). There is no command or flag
-that overrides the refusal; the safe outcomes are to abandon the pilot company and directory, or
-to start a fresh directory with a new binding.
+(remove stale `-wal`/`-shm` files); NEVER touch `journal/`, `pilot-id` or the head record; start the
+host and run `status` (acknowledges the restore). If the gate then reports a journal refusal, the
+restored databases are older than what was really dispatched. Reconcile by hand, read-only, against
+Fortnox (was the journaled write made?) and Accounted (does the target object exist?). There is no
+command or flag that overrides the refusal; the safe outcomes are to abandon the pilot company and
+directory, or to start a fresh directory with a new binding.
+
+## MCP requests: duplicate ids and lock ownership
+
+Each incoming `tools/call` gets a server-generated random token; the pilot lock is owned and released
+by that token, never by the client's JSON-RPC id. A request whose JSON-RPC id equals one still in
+flight on the same connection is answered with a JSON-RPC error (`-32600`) and never reaches a
+handler, so it cannot share, take or release the first request's lock.
+
+## Durable backups
+
+A backup reports success only after, in this order: `VACUUM INTO` of both databases, integrity
+check, `manifest.json` written, fsync of each copied file and of the manifest, fsync of the backup
+directory and of `backups/`, removal of the `backup-pending` marker, fsync of the state directory.
+Any failure keeps (or re-creates) the marker and removes the incomplete backup directory. The gate
+also reads the newest backup on every check: if its manifest is missing, or its sha256/size values
+do not match the files, storage is unhealthy and writes are refused until a new backup succeeds.
 
 ## Recovery
 
