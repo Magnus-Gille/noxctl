@@ -281,6 +281,38 @@ describe('baselineArticle', () => {
     queue.close();
   });
 
+  it('records a confirmed mismatch even after a concurrent failed verification', async () => {
+    const queue = await queued();
+    const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB')]);
+    const adapter = new AccountedArticleLinkAdapter(binding.targetCompany, target.request);
+    await queue.drainOne(adapter);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const base = { prepare: adapter.prepare.bind(adapter), apply: adapter.apply.bind(adapter) };
+    const slowMismatch = queue.verifyApplied('baseline-a', {
+      ...base,
+      verify: async () => {
+        await gate;
+        return false;
+      },
+    });
+    await expect(
+      queue.verifyApplied('baseline-a', {
+        ...base,
+        verify: async () => {
+          throw new Error('network');
+        },
+      }),
+    ).rejects.toThrow();
+    expect(queue.get('baseline-a')!.state).toBe('target_unknown');
+    release();
+    expect(await slowMismatch).toBe(false);
+    expect(queue.get('baseline-a')!.state).toBe('blocked');
+    // A blocked mismatch can no longer be reconciled back to applied.
+    await expect(queue.reconcileTarget('baseline-a', adapter)).rejects.toThrow();
+    queue.close();
+  });
+
   it('refuses another target company binding', async () => {
     const queue = await queued();
     const target = fakeArticleTarget([articleEntry(ids[1]!, '00123-aB')]);
