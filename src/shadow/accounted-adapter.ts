@@ -79,7 +79,7 @@ export const CUSTOMER_FIELD_UNCLASSIFIED = 'CUSTOMER_FIELD_UNCLASSIFIED';
  *    ZipCode, City, VATNumber, EmailInvoiceCC/BCC, Comments (notes), YourReference (contact_person);
  *  - mapped into `notes` (owner decision 2026-11-06, NOX-210; supersedes the earlier refusal):
  *    OurReference, WWW, Visiting* as labelled single-line entries after Comments (see the notes
- *    composition in the mapper); a non-string, multi-line or padded value is refused;
+ *    composition in the mapper); a non-string, padded value or one with control characters or line/paragraph separators is refused;
  *  - validated: Type, Country, CountryCode, Currency, VATType, Active (false refused), and
  *    EmailInvoice/EmailOffer/EmailOrder (neutral only when equal to Email);
  *  - derived/neutral: @url, DefaultDeliveryTypes, DefaultTemplates, PriceList, TermsOfPayment;
@@ -99,6 +99,9 @@ const NOTES_LABELLED_FIELDS = [
   'VisitingCountry',
   'VisitingCountryCode',
 ] as const;
+/** C0/C1 controls (incl. tab, CR, LF, VT, FF, NEL) and Unicode line/paragraph separators. */
+// eslint-disable-next-line no-control-regex
+const NOTES_LINE_BREAK_OR_CONTROL = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 const CUSTOMER_MAPPED = new Set<string>([
   'CustomerNumber',
   'Name',
@@ -573,9 +576,9 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
       if (typeof value !== 'string') {
         return { blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a string.` };
       }
-      if (/[\r\n]/.test(value) || value !== value.trim()) {
+      if (NOTES_LINE_BREAK_OR_CONTROL.test(value) || value !== value.trim()) {
         return {
-          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a single line without surrounding whitespace to be mirrored into notes.`,
+          blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a single line without control characters or surrounding whitespace to be mirrored into notes.`,
         };
       }
       labelled[key] = value;

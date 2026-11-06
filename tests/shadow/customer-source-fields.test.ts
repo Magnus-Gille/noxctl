@@ -276,24 +276,35 @@ describe('customer notes composed from source-only fields (NOX-210)', () => {
       blocked: `${CUSTOMER_FIELD_UNSUPPORTED}: source ${key} must be a string.`,
     });
   });
-  it.each(['a\nb', 'a\rb', ' padded', 'padded ', '\tx'])(
-    'blocks multi-line or padded labelled value %j',
-    (value) => {
-      for (const key of [
-        'OurReference',
-        'WWW',
-        'VisitingAddress',
-        'VisitingZipCode',
-        'VisitingCity',
-        'VisitingCountry',
-        'VisitingCountryCode',
-      ]) {
-        expect(prepare({ [key]: value })).toEqual({
-          blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source ${key}`),
-        });
-      }
-    },
-  );
+  it.each([
+    'a\nb',
+    'a\rb',
+    ' padded',
+    'padded ',
+    '\tx',
+    'a\u2028b',
+    'a\u2029b',
+    'a\u0085b',
+    'a\u000bb',
+    'a\u000cb',
+    'a\tb',
+    'a\u0000b',
+    'a\u007fb',
+  ])('blocks multi-line, control-character or padded labelled value %j', (value) => {
+    for (const key of [
+      'OurReference',
+      'WWW',
+      'VisitingAddress',
+      'VisitingZipCode',
+      'VisitingCity',
+      'VisitingCountry',
+      'VisitingCountryCode',
+    ]) {
+      expect(prepare({ [key]: value })).toEqual({
+        blocked: expect.stringContaining(`${CUSTOMER_FIELD_UNSUPPORTED}: source ${key}`),
+      });
+    }
+  });
   it('still refuses GLN and GLNDelivery', () => {
     for (const f of ['GLN', 'GLNDelivery'])
       expect(prepare({ [f]: '123', OurReference: 'A' })).toEqual({
