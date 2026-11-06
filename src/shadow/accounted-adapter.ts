@@ -470,8 +470,15 @@ export class AccountedShadowAdapter extends AccountedCreateAdapter {
     const source = record.sourceResult;
     if (!nonemptyString(source.CustomerNumber))
       return { blocked: 'Confirmed source CustomerNumber is required.' };
-    if (source.CustomerNumber.length > 32 || source.CustomerNumber.trim() !== source.CustomerNumber)
-      return { blocked: 'Accounted customer number must be unpadded and at most 32 characters.' };
+    if (
+      source.CustomerNumber.length > 32 ||
+      source.CustomerNumber.trim() !== source.CustomerNumber ||
+      /\p{Cc}/u.test(source.CustomerNumber)
+    )
+      return {
+        blocked:
+          'Accounted customer number must be unpadded, free of control characters and at most 32 characters.',
+      };
     if (!nonemptyString(source.Name)) return { blocked: 'Confirmed source Name is required.' };
     if (source.Type !== 'COMPANY')
       return { blocked: 'Only confirmed COMPANY customers are supported.' };
