@@ -160,6 +160,20 @@ const INPUT_FIELDS = new Set([
   'Currency',
   'InvoiceRows',
 ]);
+/**
+ * Optional free-text invoice input. Each one, when given, must be a string within the Fortnox
+ * field limit, and the confirmed source invoice must echo it verbatim; the existing header
+ * mapping then carries it to the Accounted draft and verifies it on readback.
+ */
+const OPTIONAL_TEXT_INPUT_LIMITS = new Map<string, number>([
+  ['Remarks', 1024],
+  ['YourReference', 50],
+  ['OurReference', 50],
+]);
+const ALLOWED_INPUT_FIELDS: ReadonlySet<string> = new Set([
+  ...INPUT_FIELDS,
+  ...OPTIONAL_TEXT_INPUT_LIMITS.keys(),
+]);
 const ROW_FIELDS = new Set([
   'Description',
   'DeliveredQuantity',
@@ -697,10 +711,19 @@ function validateDraftImpl(
   }
 
   const input = record.args[0];
-  const unsupportedHeader = inputFieldsBlock(input, INPUT_FIELDS, 'header');
+  const unsupportedHeader = inputFieldsBlock(input, ALLOWED_INPUT_FIELDS, 'header');
   if (unsupportedHeader) return { blocked: unsupportedHeader };
   for (const field of INPUT_FIELDS) {
     if (!Object.hasOwn(input, field)) return { blocked: `Invoice input is missing ${field}.` };
+  }
+  for (const [field, limit] of OPTIONAL_TEXT_INPUT_LIMITS) {
+    if (!Object.hasOwn(input, field)) continue;
+    const value = input[field];
+    if (typeof value !== 'string' || value.length === 0 || value.length > limit) {
+      return {
+        blocked: `${INVOICE_REFUSAL.headerTextInvalid}: ${field} input must be a nonempty string of at most ${limit} characters.`,
+      };
+    }
   }
 
   const customerNumber = input.CustomerNumber;
@@ -925,6 +948,13 @@ function validateDraftImpl(
     return { blocked: 'Source CostCenter and Project must be empty.' };
   }
 
+  for (const field of OPTIONAL_TEXT_INPUT_LIMITS.keys()) {
+    if (Object.hasOwn(input, field) && source[field] !== input[field]) {
+      return {
+        blocked: `${INVOICE_REFUSAL.headerTextInvalid}: confirmed source ${field} does not match the invoice input.`,
+      };
+    }
+  }
   const header = validateHeaderFields(source);
   if ('blocked' in header) return header;
 

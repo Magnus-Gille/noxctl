@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { INVOICE_REFUSAL, mapInvoiceDraft } from '../../src/shadow/invoice-draft-mapping.js';
+import {
+  INVOICE_REFUSAL,
+  mapInvoiceDraft,
+  preflightInvoiceDraft,
+} from '../../src/shadow/invoice-draft-mapping.js';
 import { matchesDraft } from '../../src/shadow/invoice-draft-adapter.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from '../../src/shadow/identity.js';
 import type { ShadowRecord } from '../../src/shadow/types.js';
@@ -684,5 +688,78 @@ describe('live target customer drift on invoice readback', () => {
     expect(
       matchesDraft(customerWith({ address_line1: null }), invoiceId, expectedFor({}, mirrored)),
     ).toBe(false);
+  });
+});
+
+describe('optional invoice text input', () => {
+  function withInput(inputPatch: Obj, headerPatch: Obj = {}): ShadowRecord {
+    const base = record(headerPatch);
+    return { ...base, args: [{ ...(base.args[0] as Obj), ...inputPatch }] };
+  }
+  const text = {
+    Remarks: 'Workshop days.\nSee agreement',
+    YourReference: 'Kim Kund',
+    OurReference: 'Sam Säljare',
+  };
+
+  it('accepts Remarks, YourReference and OurReference echoed by the source', () => {
+    const result = mapInvoiceDraft(withInput(text, text), binding, lookupFor());
+    if ('blocked' in result) throw new Error(result.blocked);
+    for (const target of [result.request, result.expected]) {
+      expect(target).toMatchObject({
+        notes: text.Remarks,
+        your_reference: text.YourReference,
+        our_reference: text.OurReference,
+      });
+    }
+  });
+
+  it('passes preflight with the text input', () => {
+    expect(preflightInvoiceDraft(withInput(text), binding, lookupFor())).toEqual({ ok: true });
+  });
+
+  it.each(Object.keys(text))('refuses a source that does not echo %s', (field) => {
+    const result = mapInvoiceDraft(
+      withInput(text, { ...text, [field]: 'changed' }),
+      binding,
+      lookupFor(),
+    );
+    expect(result).toEqual({
+      blocked: expect.stringContaining(`confirmed source ${field} does not match`),
+    });
+  });
+
+  it.each([
+    ['Remarks', 'x'.repeat(1025)],
+    ['YourReference', 'x'.repeat(51)],
+    ['OurReference', 'x'.repeat(51)],
+    ['Remarks', ''],
+    ['YourReference', 5],
+    ['OurReference', null],
+  ])('refuses invalid %s input %j in preflight and mapping', (field, value) => {
+    const expected = { blocked: expect.stringContaining(INVOICE_REFUSAL.headerTextInvalid) };
+    expect(preflightInvoiceDraft(withInput({ [field]: value }), binding, lookupFor())).toEqual(
+      expected,
+    );
+    expect(
+      mapInvoiceDraft(withInput({ [field]: value }, { [field]: value }), binding, lookupFor()),
+    ).toEqual(expected);
+  });
+
+  it('accepts the maximum lengths', () => {
+    const max = {
+      Remarks: 'r'.repeat(1024),
+      YourReference: 'y'.repeat(50),
+      OurReference: 'o'.repeat(50),
+    };
+    expect(preflightInvoiceDraft(withInput(max), binding, lookupFor())).toEqual({ ok: true });
+  });
+
+  it('still refuses other header input such as YourOrderNumber', () => {
+    expect(
+      preflightInvoiceDraft(withInput({ YourOrderNumber: 'PO-1' }), binding, lookupFor()),
+    ).toEqual({
+      blocked: 'Unsupported invoice header fields: YourOrderNumber.',
+    });
   });
 });

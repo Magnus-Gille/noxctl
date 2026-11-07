@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Shadow mirroring accepts invoice text and references as input.** A
+  `createInvoice` may now carry `Remarks` (fakturatext, at most 1024 characters),
+  `YourReference` and `OurReference` (at most 50 each). Preflight validates them,
+  drain requires the confirmed Fortnox invoice to echo each given value verbatim,
+  and the existing header mapping carries them to Accounted `notes`,
+  `your_reference` and `our_reference` and verifies them on readback. Other
+  header input such as `YourOrderNumber` is still refused.
+
 ### Fixed
 
 - **An id of `.` or `..`, or an empty id, is rejected instead of being sent.**
