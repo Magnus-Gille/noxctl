@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Invoice-payment preflight and offline measurement (NOX-211, first slice).**
+  The pilot preflight now checks a planned `createInvoicePayment` before any
+  Fortnox write: exact keys (`InvoiceNumber`, `Amount`, `PaymentDate`, optional
+  `Source`), a mirrored and applied strict SEK invoice, the exact full amount, a
+  real date, and no earlier payment record for that invoice. The staged server
+  gains an opt-in `enableInvoicePayments` for `fortnox_create_invoice_payment`;
+  it is **off by default and the pilot host does not enable it** until payment
+  preview, drain and reconciliation are wired. New `npm run measure:payments -- <export.json>` measures an offline export
+  and prints counts only, by refusal reason.
 - **Shadow mirroring accepts invoice text and references as input.** A
   `createInvoice` may now carry `Remarks` (fakturatext, at most 1024 characters),
   `YourReference` and `OurReference` (at most 50 each). Preflight validates them,
@@ -127,7 +136,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `noxctl supplier-invoices attachments <givenNumber>` and
   `fortnox_list_supplier_invoice_attachments` list files (e.g. the scanned or
   emailed invoice itself) attached to a supplier invoice; `noxctl
-  supplier-invoices file <fileId>` and `fortnox_get_supplier_invoice_file`
+supplier-invoices file <fileId>` and `fortnox_get_supplier_invoice_file`
   download them. Unlike voucher attachments, this reaches the original
   document directly, so it works for `unbooked`/`authorizepending` invoices —
   before they've been bookkept into a voucher. No new scope required.
@@ -244,7 +253,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`fortnox_create_voucher` silently dropped per-row fields.** `VoucherRowSchema` declared only `Account`, `Debit`, `Credit` and `Description`, and the MCP SDK strips any argument a schema does not declare — so a per-line note passed as `TransactionInformation` never reached Fortnox, with no error and a voucher that booked fine minus the data. The schema now covers the full `VoucherRowSinglePayloadItem` set: `TransactionInformation`, `CostCenter`, `Project`, `Quantity` and `Removed`. `createVoucher()` already forwarded rows verbatim, so the schema was the only place fields were lost. Same root cause as the Supplier gap in #96; the test asserts the declared property list so it cannot drift again. Thanks to @hedborg (#101).
 - Row-level `Description` now documents that Fortnox normally overwrites it with the account's own registered name, and points callers at `TransactionInformation` for per-line free text. **Not independently confirmed against a live account** — reported from real usage and adopted because the guidance is right either way: `TransactionInformation` is unambiguously the per-line free-text field.
 
-
 ## [0.7.1] - 2026-08-19
 
 ### Internal
@@ -259,7 +267,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Internal
 
 - Dev tooling: `eslint` 10.0.3 → 10.8.1, `lint-staged` 17.1.0 → 17.3.0, `typescript-eslint` 8.57.0 → 8.67.0 (supersedes Dependabot #91). Dev-only — the published package is unchanged, so this needs no release of its own.
-
 
 ## [0.7.0] - 2026-08-19
 
@@ -289,8 +296,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Internal
 
-- `@types/node` realigned to `^22` (was `^25.9.5`). The types should track the *minimum* supported Node, not the newest release — typing against a newer Node than `engines` allows lets TypeScript accept APIs that do not exist at runtime for users on the supported floor. The build and full suite pass unchanged on `@types/node@22`, confirming nothing depended on the newer typings. This supersedes the proposed bump to 26.
-- `lint-staged` 16.4.0 → 17.1.0 (dev-only). It requires Node 22.22.1, which is now the documented *development* prerequisite; the published package's `engines` stays at 22.12.0, since that is the runtime contract for users.
+- `@types/node` realigned to `^22` (was `^25.9.5`). The types should track the _minimum_ supported Node, not the newest release — typing against a newer Node than `engines` allows lets TypeScript accept APIs that do not exist at runtime for users on the supported floor. The build and full suite pass unchanged on `@types/node@22`, confirming nothing depended on the newer typings. This supersedes the proposed bump to 26.
+- `lint-staged` 16.4.0 → 17.1.0 (dev-only). It requires Node 22.22.1, which is now the documented _development_ prerequisite; the published package's `engines` stays at 22.12.0, since that is the runtime contract for users.
 
 ### Security
 
@@ -320,7 +327,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- **Invoice PDF export** (#66) — `noxctl invoices pdf <docNumber>` and the `fortnox_invoice_pdf` MCP tool download an invoice as a PDF. Writes to `--file <path>`, to stdout with `--file -`, or to `invoice-<docNumber>.pdf` by default (the destination is `--file` because `-o/--output` is globally the output *format*). The PDF always comes from Fortnox's `/preview` endpoint, which returns the document **without** marking the invoice as sent. `--mark-sent` additionally calls `/print` afterwards to set `Sent`, and therefore prompts for confirmation; the file is written first, so a failed write can never leave an invoice flagged as sent with no PDF to show for it. Works for credit invoices too.
+- **Invoice PDF export** (#66) — `noxctl invoices pdf <docNumber>` and the `fortnox_invoice_pdf` MCP tool download an invoice as a PDF. Writes to `--file <path>`, to stdout with `--file -`, or to `invoice-<docNumber>.pdf` by default (the destination is `--file` because `-o/--output` is globally the output _format_). The PDF always comes from Fortnox's `/preview` endpoint, which returns the document **without** marking the invoice as sent. `--mark-sent` additionally calls `/print` afterwards to set `Sent`, and therefore prompts for confirmation; the file is written first, so a failed write can never leave an invoice flagged as sent with no PDF to show for it. Works for credit invoices too.
 
   The MCP tool will not overwrite an existing file unless `overwrite: true` is passed, and defaults to a fresh private temp directory rather than a predictable path — its arguments are agent-generated.
 

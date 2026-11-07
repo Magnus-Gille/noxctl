@@ -40,6 +40,7 @@
     "check:release": "npm run verify && npm run audit:api-coverage:offline && npm audit --omit=dev && node scripts/check-embedded-consumer.mjs && npm pack --dry-run --ignore-scripts",
     "check:api": "bash scripts/check-api-changes.sh",
     "audit:schemas": "npm run build --silent && node scripts/audit-tool-schemas.mjs",
+    "measure:payments": "npm run build --silent && node scripts/measure-payment-mapping.mjs",
     "audit:api-coverage": "npm run build --silent && node scripts/audit-api-coverage.mjs",
     "audit:api-coverage:offline": "node scripts/audit-api-coverage.mjs --offline",
     "prepublishOnly": "npm run check:release",
