@@ -441,12 +441,15 @@ financial target mapping/readback remain separate acceptance work.
 ## Credit invoices (NOX-212): refused, API gap
 
 Credit invoices (`Credit` true, or a populated `CreditInvoiceReference`) are refused with
-`INVOICE_CREDIT_UNSUPPORTED` / `INVOICE_CREDIT_REFERENCE_UNSUPPORTED`; negative rows still hit
-`ROW_NONPOSITIVE_QUANTITY`. They are not mirrored because the Accounted public API cannot express
+`INVOICE_CREDIT_UNSUPPORTED` / `INVOICE_CREDIT_REFERENCE_UNSUPPORTED`. Credit-style rows stay
+refused by the row rules: a nonpositive integer input quantity hits `ROW_NONPOSITIVE_QUANTITY`, a
+negative price gets the price refusal, and a negative confirmed source quantity a row mismatch. They are not mirrored because the Accounted public API cannot express
 them as a verifiable draft: the draft create schema has no `credited_invoice_id`, and the only credit
 route (`POST .../invoices/:id/credit`) takes only a reason, credits the whole original, requires it to be
-sent/paid/overdue, dates the credit note today, issues it immediately as `KR-<original>` and posts the
-journal entry. Mirroring needs a decision on mapping the Fortnox `creditInvoice` operation (a full credit
+sent/paid/overdue, dates the credit note today and issues it immediately as `KR-<original>`. Journal posting is
+conditional (none for an unpaid cash-method original without a booking signal) and best-effort when
+required: a posting failure can leave an issued credit note with only a warning. An integration must
+therefore handle the warning and verify the journal outcome, not assume an entry exists. Mirroring needs a decision on mapping the Fortnox `creditInvoice` operation (a full credit
 of an already mirrored and issued original) onto that route as an issue-stage step, with readback of
 `credited_invoice_id`, negated rows and totals. The `createInvoice` tool itself accepts neither `Credit`
 nor `CreditInvoiceReference`, so a credit cannot be staged through it.
