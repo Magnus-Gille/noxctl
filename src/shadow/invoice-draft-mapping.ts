@@ -316,7 +316,8 @@ export const INVOICE_REFUSAL = {
   /**
    * Fortnox Credit is true: a credit invoice. Accounted's draft API (CreateInvoiceSchema) has no
    * credited_invoice_id, and its only credit route issues a full, same-day, already-sent credit
-   * note with a journal entry, so it cannot be mirrored as a verified draft (NOX-212).
+   * note whose journal posting is conditional and best-effort (a failure leaves only a warning),
+   * so it cannot be mirrored as a verified draft (NOX-212).
    */
   creditInvoiceUnsupported: 'INVOICE_CREDIT_UNSUPPORTED',
   /** CreditInvoiceReference is populated: the invoice is credited by (or credits) another one. */
