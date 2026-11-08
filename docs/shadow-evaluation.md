@@ -448,6 +448,8 @@ nothing is written. The export is a JSON object with `InvoicePayments`, `Invoice
 `export-shape-unsupported`.
 
 The expected target invoice is derived from the Fortnox invoice by an approximation (SEK, no
-rounding, 25 percent VAT, no discount), and the financial-year id is taken from the voucher year.
-The count therefore bounds source-side support only; it does not replace the queue-backed
+rounding, 25 percent VAT, no discount; `AccountingMethod` must be `CASH` and `InvoiceType`
+`INVOICE` when the export carries them), and the financial-year id is taken from the voucher year.
+The export must be a root object; a bare array is `export-shape-unsupported`. `mapped` is
+therefore an upper bound on source-side support only; it does not replace the queue-backed
 `AccountedInvoicePaymentAdapter.prepare` check and authorizes nothing.

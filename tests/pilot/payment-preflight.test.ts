@@ -102,6 +102,33 @@ describe('invoice payment preflight (NOX-211)', () => {
     expect(check(h, pay({}))).toMatch(/already has payment record pay-1/);
   });
 
+  it('refuses when the receipt and the request name different invoices', async () => {
+    const h = await withInvoice();
+    await h.host.queue.execute(
+      { id: 'pay-c', operation: 'createInvoicePayment', args: [pay({})] },
+      async () => ({ Number: '9', InvoiceNumber: '2', Booked: false }),
+    );
+    expect(check(h, pay({}))).toMatch(/already has payment record pay-c/);
+  });
+
+  it('sees the invoice named in update fields', async () => {
+    const h = await withInvoice();
+    await h.host.queue.execute(
+      { id: 'pay-u', operation: 'updateInvoicePayment', args: ['9', { InvoiceNumber: 1 }] },
+      async () => ({ Number: '9' }),
+    );
+    expect(check(h, pay({}))).toMatch(/already has payment record pay-u/);
+  });
+
+  it('blocks a new payment while a payment record names no invoice', async () => {
+    const h = await withInvoice();
+    await h.host.queue.execute(
+      { id: 'pay-b', operation: 'bookkeepInvoicePayment', args: ['9'] },
+      async () => ({ Number: '9' }),
+    );
+    expect(check(h, pay({}))).toMatch(/Payment record pay-b names no invoice/);
+  });
+
   it('fails closed when the host supplies no queue lookup', async () => {
     const h = await withInvoice();
     const { getRecord: _g, records: _r, ...bare } = depsOf(h);

@@ -155,14 +155,28 @@ function preflightInvoicePayment(
   if (amount !== mapped.expected.total)
     return 'Only the exact full payment of the mirrored invoice is supported';
   // One payment per invoice: any earlier payment-chain record (even a refused one) forbids another.
-  const earlier = deps.records().find((record) => {
-    if (!PAYMENT_OPERATIONS.has(record.operation) || record.state === 'source_cancelled')
-      return false;
-    const sourceNumber = (record.sourceResult as Record<string, unknown> | undefined)
-      ?.InvoiceNumber;
-    const argNumber = (record.args?.[0] as Record<string, unknown> | undefined)?.InvoiceNumber;
-    return String(sourceNumber ?? argNumber) === sourceInvoiceId;
-  });
+  // Every identifier a payment record carries is compared independently (receipt, create args,
+  // update fields), so contradictory evidence cannot hide a match; a payment record whose invoice
+  // cannot be determined blocks every new payment until it is resolved.
+  let earlier: { id: string } | undefined;
+  for (const record of deps.records()) {
+    if (!PAYMENT_OPERATIONS.has(record.operation) || record.state === 'source_cancelled') continue;
+    const candidates: unknown[] = [];
+    const receipt = record.sourceResult;
+    if (receipt !== null && typeof receipt === 'object' && 'InvoiceNumber' in receipt)
+      candidates.push((receipt as Record<string, unknown>).InvoiceNumber);
+    for (const arg of Array.isArray(record.args) ? record.args : []) {
+      if (arg !== null && typeof arg === 'object' && 'InvoiceNumber' in arg)
+        candidates.push((arg as Record<string, unknown>).InvoiceNumber);
+    }
+    const known = candidates.filter((value) => value !== undefined && value !== null);
+    if (known.length === 0)
+      return `Payment record ${record.id} names no invoice; resolve it before a new payment`;
+    if (known.some((value) => String(value) === sourceInvoiceId)) {
+      earlier = record;
+      break;
+    }
+  }
   if (earlier) return `Invoice ${sourceInvoiceId} already has payment record ${earlier.id}`;
   return undefined;
 }

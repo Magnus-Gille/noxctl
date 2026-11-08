@@ -93,6 +93,29 @@ describe('payment mapping measurement (NOX-211)', () => {
     expect(result).toEqual({ payments: 1, mapped: 1, refused: {} });
   });
 
+  it('never reads a root array as any collection', () => {
+    expect(measurePaymentMapping([])).toEqual({
+      payments: 0,
+      mapped: 0,
+      refused: { 'export-shape-unsupported': 1 },
+    });
+  });
+
+  it('keeps invoices outside the CASH / INVOICE lane out of mapped', () => {
+    for (const [extra, label] of [
+      [{ AccountingMethod: 'ACCRUAL' }, 'invoice-not-strict: accounting-method'],
+      [{ InvoiceType: 'CASHINVOICE' }, 'invoice-not-strict: invoice-type'],
+    ] as const) {
+      const result = measurePaymentMapping({
+        InvoicePayments: [payment(1, '10')],
+        Invoices: [invoice('10', extra)],
+        Vouchers: [voucher(1, '10')],
+      });
+      expect(result.mapped).toBe(0);
+      expect(Object.keys(result.refused).join()).toContain(label);
+    }
+  });
+
   it('counts refusals by fixed reason and nothing else', () => {
     const result = measurePaymentMapping({
       InvoicePayments: [

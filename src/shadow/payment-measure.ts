@@ -37,7 +37,9 @@ type Obj = Record<string, unknown>;
 const isObj = (value: unknown): value is Obj =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 function list(value: unknown, key: string): Obj[] | undefined {
-  const raw = isObj(value) && !Array.isArray(value[key]) && isObj(value[key]) ? value[key] : value;
+  // The export must be a root object; a bare array is never read as any collection.
+  if (!isObj(value)) return undefined;
+  const raw = value[key];
   const items = isObj(raw) ? raw[key] : raw;
   return Array.isArray(items) && items.every(isObj) ? (items as Obj[]) : undefined;
 }
@@ -53,6 +55,12 @@ const key = (...parts: unknown[]) => parts.map(String).join('|');
 /** Fixed facets only; returns the label of the first reason the invoice is outside the strict lane. */
 function deriveExpected(invoice: Obj): { expected: InvoiceDraftExpected } | { label: string } {
   if (invoice.Currency !== 'SEK') return { label: 'invoice-not-strict: currency' };
+  // The invoice mapper's strict lane is CASH accounting and a standard INVOICE. A facet absent from
+  // the export is not checked, so `mapped` stays an upper bound (docs/shadow-evaluation.md).
+  if (invoice.AccountingMethod !== undefined && invoice.AccountingMethod !== 'CASH')
+    return { label: 'invoice-not-strict: accounting-method' };
+  if (invoice.InvoiceType !== undefined && invoice.InvoiceType !== 'INVOICE')
+    return { label: 'invoice-not-strict: invoice-type' };
   const roundOff = num(invoice.RoundOff);
   if (roundOff === undefined || roundOff !== 0) return { label: 'invoice-not-strict: rounding' };
   const rows = invoice.InvoiceRows;
