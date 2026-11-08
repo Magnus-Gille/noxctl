@@ -111,6 +111,18 @@ describe('invoice payment preflight (NOX-211)', () => {
     expect(check(h, pay({}))).toMatch(/pay-c has a malformed or ambiguous invoice number/);
   });
 
+  it.each([[null], [undefined]])(
+    'blocks when a receipt carries InvoiceNumber %j next to a different request invoice',
+    async (value) => {
+      const h = await withInvoice();
+      await h.host.queue.execute(
+        { id: 'pay-n', operation: 'createInvoicePayment', args: [pay({ InvoiceNumber: 2 })] },
+        async () => ({ Number: '9', InvoiceNumber: value, Booked: false }),
+      );
+      expect(check(h, pay({}))).toMatch(/pay-n has a malformed or ambiguous invoice number/);
+    },
+  );
+
   it.each([[''], ['01'], [' 1'], [0], [1.5], [{}]])(
     'blocks while a payment record carries the malformed invoice number %j',
     async (value) => {

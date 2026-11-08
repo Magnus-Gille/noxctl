@@ -169,7 +169,8 @@ function preflightInvoicePayment(
       if (arg !== null && typeof arg === 'object' && 'InvoiceNumber' in arg)
         candidates.push((arg as Record<string, unknown>).InvoiceNumber);
     }
-    const known = candidates.filter((value) => value !== undefined && value !== null);
+    // A present InvoiceNumber, even null or undefined, is evidence and must be canonical.
+    const known = candidates;
     if (known.length === 0)
       return `Payment record ${record.id} names no invoice; resolve it before a new payment`;
     const canonical = known.map((value) =>
