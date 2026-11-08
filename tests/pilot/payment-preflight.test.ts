@@ -102,14 +102,26 @@ describe('invoice payment preflight (NOX-211)', () => {
     expect(check(h, pay({}))).toMatch(/already has payment record pay-1/);
   });
 
-  it('refuses when the receipt and the request name different invoices', async () => {
+  it('blocks when the receipt and the request name different invoices', async () => {
     const h = await withInvoice();
     await h.host.queue.execute(
       { id: 'pay-c', operation: 'createInvoicePayment', args: [pay({})] },
       async () => ({ Number: '9', InvoiceNumber: '2', Booked: false }),
     );
-    expect(check(h, pay({}))).toMatch(/already has payment record pay-c/);
+    expect(check(h, pay({}))).toMatch(/pay-c has a malformed or ambiguous invoice number/);
   });
+
+  it.each([[''], ['01'], [' 1'], [0], [1.5], [{}]])(
+    'blocks while a payment record carries the malformed invoice number %j',
+    async (value) => {
+      const h = await withInvoice();
+      await h.host.queue.execute(
+        { id: 'pay-m', operation: 'bookkeepInvoicePayment', args: ['9'] },
+        async () => ({ Number: '9', InvoiceNumber: value }),
+      );
+      expect(check(h, pay({}))).toMatch(/pay-m has a malformed or ambiguous invoice number/);
+    },
+  );
 
   it('sees the invoice named in update fields', async () => {
     const h = await withInvoice();

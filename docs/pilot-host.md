@@ -285,8 +285,9 @@ Customer invoice payments are **not yet part of the pilot**. What exists:
   the mirrored invoice total (full payment only); and any invoice that already has a payment-chain
   record, refused ones included. Every invoice number a payment record carries (receipt, create
   args, update fields) is compared independently, so contradictory evidence cannot hide a match, and
-  a payment record that names no invoice (for example an unreceipted bookkeep) blocks every new
-  payment until it is resolved. A host must pass `getRecord` and `records`, otherwise it refuses.
+  a payment record that names no invoice (for example an unreceipted bookkeep), or one whose invoice
+  numbers are malformed (not a canonical positive integer) or disagree, blocks every new payment
+  until it is resolved. A host must pass `getRecord` and `records`, otherwise it refuses.
 - `createStagedServer({ enableInvoicePayments: true })` allows the tool. The default is off and
   `createPilotHost` does not set it, so `staged_prepare` answers "Tool outside staged contract".
   Reason: a payment record in the queue can currently be neither previewed, drained nor refused

@@ -172,7 +172,16 @@ function preflightInvoicePayment(
     const known = candidates.filter((value) => value !== undefined && value !== null);
     if (known.length === 0)
       return `Payment record ${record.id} names no invoice; resolve it before a new payment`;
-    if (known.some((value) => String(value) === sourceInvoiceId)) {
+    const canonical = known.map((value) =>
+      typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+        ? String(value)
+        : typeof value === 'string' && /^[1-9]\d{0,15}$/.test(value)
+          ? value
+          : undefined,
+    );
+    if (canonical.some((value) => value === undefined) || new Set(canonical).size > 1)
+      return `Payment record ${record.id} has a malformed or ambiguous invoice number; resolve it before a new payment`;
+    if (canonical[0] === sourceInvoiceId) {
       earlier = record;
       break;
     }
