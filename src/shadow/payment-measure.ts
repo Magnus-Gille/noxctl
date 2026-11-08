@@ -202,7 +202,13 @@ export function measurePaymentMapping(data: unknown): PaymentMeasurement {
 
 /** Reads a regular file (bounded) and measures it. Errors carry no file content. */
 export function measurePaymentExportFile(path: string): PaymentMeasurement {
-  const fd = openSync(path, 'r');
+  let fd: number;
+  try {
+    fd = openSync(path, 'r');
+  } catch {
+    // Fixed message: a filesystem error would otherwise echo the path.
+    throw new Error('Export file could not be opened');
+  }
   try {
     const stat = fstatSync(fd);
     if (!stat.isFile() || stat.size > MAX_BYTES)

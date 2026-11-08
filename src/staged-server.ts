@@ -47,6 +47,12 @@ export interface CreateStagedServerOptions {
    * refused by the operator, so a host enables this only together with a payment drain.
    */
   enableInvoicePayments?: boolean;
+  /**
+   * The host asserts that every staged_prepare/staged_execute is serialized with all other
+   * pilot mutations (the pilot host's pilot.lock), so an execute-time preflight cannot race.
+   * Required, together with `preflight`, when `enableInvoicePayments` is true.
+   */
+  serializedExecution?: boolean;
   now?: () => number;
 }
 export interface StagedServer {
@@ -133,6 +139,13 @@ export async function createStagedServer(
     revision: options.revision,
     maxPreparationAgeMs: options.maxPreparationAgeMs,
   });
+  if (
+    options.enableInvoicePayments === true &&
+    (typeof options.preflight !== 'function' || options.serializedExecution !== true)
+  )
+    throw new StagedHostError(
+      'Invoice payment staging requires a host preflight and serialized execution',
+    );
   const allowed = new Map(
     options.enableInvoicePayments === true ? [...baseAllowed, ...paymentAllowed] : baseAllowed,
   );

@@ -289,6 +289,10 @@ Customer invoice payments are **not yet part of the pilot**. What exists:
   Reason: a payment record in the queue can currently be neither previewed, drained nor refused
   (`refuse` rejects payment operations by design), so staging one would leave the pilot gate
   refusing every later write. Do not enable it before the remaining work below.
+  Enabling it also requires a `preflight` and `serializedExecution: true`, the host's assertion
+  that every prepare/execute is serialized with all other pilot mutations (pilot.lock). Without
+  both, `createStagedServer` refuses to start, so a duplicate-payment preflight cannot race.
+- `measure:payments` reports a fixed message when the export cannot be opened, never the path.
 
 Remaining before payments can be enabled in the pilot: bookkeep staging (a created payment is
 unbooked until `bookkeepInvoicePayment`), a durable captured-voucher source for

@@ -179,6 +179,18 @@ describe('payment mapping measurement (NOX-211)', () => {
     expect(measurePaymentExportFile(good)).toEqual({ payments: 0, mapped: 0, refused: {} });
   });
 
+  it('never echoes the export path when the file cannot be opened', () => {
+    const missing = join(tmp(), 'Sentinel-Secret-Dir', 'export.json');
+    let message = '';
+    try {
+      measurePaymentExportFile(missing);
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+    }
+    expect(message).toBe('Export file could not be opened');
+    expect(message).not.toContain('Sentinel');
+  });
+
   const script = join(process.cwd(), 'scripts', 'measure-payment-mapping.mjs');
   it.skipIf(!existsSync(join(process.cwd(), 'dist', 'shadow', 'payment-measure.js')))(
     'the script prints counts only and rejects bad usage',

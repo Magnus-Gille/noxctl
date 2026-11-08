@@ -127,7 +127,11 @@ describe('invoice payment preflight (NOX-211)', () => {
 });
 
 describe('staged server payment opt-in (NOX-211)', () => {
-  async function staged(enable: boolean | undefined, preflight?: () => string | undefined) {
+  async function staged(
+    enable: boolean | undefined,
+    preflight?: () => string | undefined,
+    serializedExecution: boolean | undefined = enable === true ? true : undefined,
+  ) {
     const directory = join(tempRoot(), 'staged');
     mkdirSync(directory, { mode: 0o700 });
     const server = await createStagedServer({
@@ -140,6 +144,7 @@ describe('staged server payment opt-in (NOX-211)', () => {
       authorize: () => true,
       ...(preflight ? { preflight } : {}),
       ...(enable === undefined ? {} : { enableInvoicePayments: enable }),
+      ...(serializedExecution === undefined ? {} : { serializedExecution }),
     });
     const client = new Client({ name: 't', version: '1.0.0' });
     const [ct, st] = InMemoryTransport.createLinkedPair();
@@ -152,6 +157,15 @@ describe('staged server payment opt-in (NOX-211)', () => {
     return { server, client, prepare };
   }
   const args = { InvoiceNumber: 1, Amount: 125, PaymentDate: '2026-11-05', confirm: true };
+
+  it('refuses to start with payments enabled but no preflight or no serialization', async () => {
+    await expect(staged(true, undefined)).rejects.toThrow(
+      /requires a host preflight and serialized execution/,
+    );
+    await expect(staged(true, () => undefined, false)).rejects.toThrow(
+      /requires a host preflight and serialized execution/,
+    );
+  });
 
   it('refuses the payment tool by default', async () => {
     for (const flag of [undefined, false]) {
