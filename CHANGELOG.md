@@ -27,6 +27,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Shadow mirroring refuses credit invoices with explicit codes.** `Credit` true now
+  yields `INVOICE_CREDIT_UNSUPPORTED` and a populated `CreditInvoiceReference`
+  `INVOICE_CREDIT_REFERENCE_UNSUPPORTED` instead of a generic or linked-document
+  reason. Behaviour is unchanged (still refused); mirroring awaits an Accounted
+  API able to create a credit-note draft (NOX-212).
+
 - **An id of `.` or `..`, or an empty id, is rejected instead of being sent.**
   `encodeURIComponent` leaves dots alone and URL parsing collapses dot segments,
   so `inbox delete .` would have sent `DELETE /3/inbox/` and `..` the API root.

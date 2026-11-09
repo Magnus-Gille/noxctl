@@ -313,6 +313,15 @@ export const INVOICE_REFUSAL = {
   addressMismatch: 'INVOICE_ADDRESS_MISMATCH',
   /** InvoiceReference / OrderReference / ContractReference links the invoice to another document. */
   linkedDocumentUnsupported: 'INVOICE_LINKED_DOCUMENT_UNSUPPORTED',
+  /**
+   * Fortnox Credit is true: a credit invoice. Accounted's draft API (CreateInvoiceSchema) has no
+   * credited_invoice_id, and its only credit route issues a full, same-day, already-sent credit
+   * note whose journal posting is conditional and best-effort (a failure leaves only a warning),
+   * so it cannot be mirrored as a verified draft (NOX-212).
+   */
+  creditInvoiceUnsupported: 'INVOICE_CREDIT_UNSUPPORTED',
+  /** CreditInvoiceReference is populated: the invoice is credited by (or credits) another one. */
+  creditReferenceUnsupported: 'INVOICE_CREDIT_REFERENCE_UNSUPPORTED',
   /** The ready customer identity carries no complete, correctly typed mirrored customer evidence. */
   customerEvidenceMissing: 'INVOICE_CUSTOMER_EVIDENCE_MISSING',
   /** EDIInformation holds a populated field with no Accounted mapping. */
@@ -534,6 +543,11 @@ function validateHeaderFields(
         blocked: `${INVOICE_REFUSAL.deliveryAddressUnsupported}: ${field} is populated; Accounted invoices have no delivery address.`,
       };
     }
+  }
+  if (!emptyLink(source.CreditInvoiceReference)) {
+    return {
+      blocked: `${INVOICE_REFUSAL.creditReferenceUnsupported}: CreditInvoiceReference links a credit invoice and cannot be mirrored.`,
+    };
   }
   for (const field of LINK_FIELDS) {
     if (!emptyLink(source[field])) {
@@ -912,7 +926,9 @@ function validateDraftImpl(
     return { blocked: 'Source invoice must be unbooked, unsent, and not cancelled.' };
   }
   if (source.Credit !== false && source.Credit !== 'false') {
-    return { blocked: 'Credit invoices are not supported.' };
+    return {
+      blocked: `${INVOICE_REFUSAL.creditInvoiceUnsupported}: Credit invoices are not supported; Accounted's draft API cannot link a credit note via credited_invoice_id.`,
+    };
   }
   if (source.VATIncluded !== false || source.CurrencyRate !== 1 || source.CurrencyUnit !== 1) {
     return { blocked: 'Source invoice currency and VAT settings are unsupported.' };
