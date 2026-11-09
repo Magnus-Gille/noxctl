@@ -6,13 +6,18 @@
 import { decode, canonicalEncode } from '../shadow/codec.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from '../shadow/identity.js';
 import { CUSTOMER_COUNTRY_UNVERIFIED } from '../shadow/accounted-adapter.js';
-import { preflightInvoiceDraft } from '../shadow/invoice-draft-mapping.js';
+import { mapInvoiceDraft, preflightInvoiceDraft } from '../shadow/invoice-draft-mapping.js';
+import { PAYMENT_OPERATIONS } from '../shadow/payment-queue-plan.js';
 import type { ShadowAdapter, ShadowBinding, ShadowRecord } from '../shadow/types.js';
 
 export interface PreflightDeps {
   binding: ShadowBinding;
   adapterFor(operation: string): ShadowAdapter | undefined;
   resolveIdentity(resource: ShadowResourceKind, sourceId: string): ShadowIdentityResolution;
+  /** Read-only queue lookup; required to preflight invoice payments. */
+  getRecord?(id: string): ShadowRecord | undefined;
+  /** Read-only ordered queue records; required to preflight invoice payments. */
+  records?(): readonly ShadowRecord[];
   now(): number;
 }
 
@@ -60,6 +65,7 @@ export function preflightStagedCall(
       );
       return 'blocked' in result ? result.blocked : undefined;
     }
+    if (operation === 'createInvoicePayment') return preflightInvoicePayment(deps, payload);
   } catch (error) {
     return `Preflight failed (${error instanceof Error ? error.name : 'Error'})`;
   }
@@ -92,4 +98,95 @@ function preflightCustomer(
   // Satisfy it with placeholders and still report every other input error.
   const rerun = adapter.prepare(provisional({ ...source, Currency: 'SEK', VATType: 'SEVAT' }));
   return 'blocked' in rerun ? rerun.blocked : undefined;
+}
+
+const PAYMENT_INPUT_KEYS = new Set(['InvoiceNumber', 'Amount', 'PaymentDate', 'Source']);
+/**
+ * Input-only check of a planned customer invoice payment (NOX-211). The Fortnox response decides
+ * booking and voucher evidence later; here only what the arguments and the mirrored invoice say is
+ * judged. It deliberately covers no more than the payment mapping supports: the exact full payment
+ * of one mirrored strict invoice, once.
+ */
+function preflightInvoicePayment(
+  deps: PreflightDeps,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const unsupported = Object.keys(payload).filter((key) => !PAYMENT_INPUT_KEYS.has(key));
+  if (unsupported.length)
+    return `Unsupported payment input fields: ${unsupported.sort().join(', ')}`;
+  const { InvoiceNumber: number, Amount: amount, PaymentDate: date, Source: source } = payload;
+  if (typeof number !== 'number' || !Number.isSafeInteger(number) || number <= 0)
+    return 'InvoiceNumber must be a positive integer';
+  if (
+    typeof amount !== 'number' ||
+    !Number.isFinite(amount) ||
+    amount <= 0 ||
+    Math.round(amount * 100) / 100 !== amount
+  )
+    return 'Amount must be a positive amount in whole cents';
+  if (
+    typeof date !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) !== date
+  )
+    return 'PaymentDate must be a real date (YYYY-MM-DD)';
+  if (
+    source !== undefined &&
+    (typeof source !== 'string' ||
+      !source.trim() ||
+      source.length > 100 ||
+      /[\x00-\x1f]/.test(source))
+  )
+    return 'Source must be a short single-line text';
+  if (!deps.getRecord || !deps.records) return 'No invoice payment mapping is available';
+  const sourceInvoiceId = String(number);
+  const invoice = deps.resolveIdentity('invoice', sourceInvoiceId);
+  if (invoice.state !== 'ready')
+    return `Invoice ${sourceInvoiceId} is not mirrored (identity is ${invoice.state})`;
+  const creator = deps.getRecord(invoice.intentId);
+  if (!creator || creator.operation !== 'createInvoice' || creator.state !== 'applied')
+    return `Invoice ${sourceInvoiceId} has no applied strict invoice record`;
+  const mapped = mapInvoiceDraft(creator, deps.binding, (resource, id) =>
+    deps.resolveIdentity(resource, id),
+  );
+  if ('blocked' in mapped)
+    return `Invoice ${sourceInvoiceId} is not a supported strict invoice: ${mapped.blocked}`;
+  if (mapped.expected.currency !== 'SEK') return 'Only SEK invoice payments are supported';
+  if (amount !== mapped.expected.total)
+    return 'Only the exact full payment of the mirrored invoice is supported';
+  // One payment per invoice: any earlier payment-chain record (even a refused one) forbids another.
+  // Every identifier a payment record carries is compared independently (receipt, create args,
+  // update fields), so contradictory evidence cannot hide a match; a payment record whose invoice
+  // cannot be determined blocks every new payment until it is resolved.
+  let earlier: { id: string } | undefined;
+  for (const record of deps.records()) {
+    if (!PAYMENT_OPERATIONS.has(record.operation) || record.state === 'source_cancelled') continue;
+    const candidates: unknown[] = [];
+    const receipt = record.sourceResult;
+    if (receipt !== null && typeof receipt === 'object' && 'InvoiceNumber' in receipt)
+      candidates.push((receipt as Record<string, unknown>).InvoiceNumber);
+    for (const arg of Array.isArray(record.args) ? record.args : []) {
+      if (arg !== null && typeof arg === 'object' && 'InvoiceNumber' in arg)
+        candidates.push((arg as Record<string, unknown>).InvoiceNumber);
+    }
+    // A present InvoiceNumber, even null or undefined, is evidence and must be canonical.
+    const known = candidates;
+    if (known.length === 0)
+      return `Payment record ${record.id} names no invoice; resolve it before a new payment`;
+    const canonical = known.map((value) =>
+      typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+        ? String(value)
+        : typeof value === 'string' && /^[1-9]\d{0,15}$/.test(value)
+          ? value
+          : undefined,
+    );
+    if (canonical.some((value) => value === undefined) || new Set(canonical).size > 1)
+      return `Payment record ${record.id} has a malformed or ambiguous invoice number; resolve it before a new payment`;
+    if (canonical[0] === sourceInvoiceId) {
+      earlier = record;
+      break;
+    }
+  }
+  if (earlier) return `Invoice ${sourceInvoiceId} already has payment record ${earlier.id}`;
+  return undefined;
 }

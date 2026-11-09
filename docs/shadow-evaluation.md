@@ -438,6 +438,24 @@ The caller must not interpret idle as completion. Snapshot-based planning still
 uses the existing bounded canonical codec; large-history streaming and complete
 financial target mapping/readback remain separate acceptance work.
 
+### Offline payment mapping measurement (NOX-211)
+
+`npm run build` then `node scripts/measure-payment-mapping.mjs <export.json>` runs the booked
+invoice-payment source mapping over an offline export and prints **integer counts only** by fixed
+refusal reason (for example `payment-not-booked`, `voucher-missing-from-export`,
+`invoice-not-strict: currency`, or a mapping refusal such as "Only the exact full payment of this
+strict invoice is supported"). No export value reaches the output, there is no network access and
+nothing is written. The export is a JSON object with `InvoicePayments`, `Invoices` (full, with
+`InvoiceRows`) and `Vouchers` (full, with `VoucherRows`) arrays; anything else is counted as
+`export-shape-unsupported`.
+
+The expected target invoice is derived from the Fortnox invoice by an approximation (SEK, no
+rounding, 25 percent VAT, no discount; `AccountingMethod` must be `CASH` and `InvoiceType`
+`INVOICE` when the export carries them), and the financial-year id is taken from the voucher year.
+The export must be a root object; a bare array is `export-shape-unsupported`. `mapped` is
+therefore an upper bound on source-side support only; it does not replace the queue-backed
+`AccountedInvoicePaymentAdapter.prepare` check and authorizes nothing.
+
 ## Credit invoices (NOX-212): refused, API gap
 
 Credit invoices (`Credit` true, or a populated `CreditInvoiceReference`) are refused with

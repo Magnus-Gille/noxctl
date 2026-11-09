@@ -475,6 +475,8 @@ export async function createPilotHost(
           binding,
           adapterFor: (name) => host.adapterFor(name),
           resolveIdentity: (resource, sourceId) => host.queue.resolveIdentity(resource, sourceId),
+          getRecord: (id) => host.queue.get(id),
+          records: () => host.queue.snapshot().map(({ record }) => record),
           now,
         },
         operation,

@@ -82,7 +82,7 @@ function undispatched(record: ShadowRecord): boolean {
     record.paymentGroup === undefined
   );
 }
-function groupOf(
+export function groupOf(
   members: ShadowSnapshotEntry[],
   binding: ShadowBinding,
   paymentId: string,

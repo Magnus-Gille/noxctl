@@ -272,3 +272,34 @@ The queue itself cannot see the journal, so only the pilot commands (which run t
 against a forged `OPERATOR_REFUSED:` reason in the database; the payment-aware planner is unchanged.
 A refused `createCustomer` that already exists in Fortnox keeps claiming its CustomerNumber, so a
 later baseline of that customer is blocked as a competing identity source.
+
+## Invoice payments (NOX-211, first slice)
+
+Customer invoice payments are **not yet part of the pilot**. What exists:
+
+- `preflightStagedCall(deps, 'createInvoicePayment', args)` is the input-only check that a
+  staged `fortnox_create_invoice_payment` will run at prepare and again at execute. It refuses
+  any key other than `InvoiceNumber`, `Amount`, `PaymentDate` and `Source`; a non-positive-integer
+  invoice number; an amount that is not positive whole cents; a non-calendar date; an invoice
+  without an applied `createInvoice` record that maps as a strict SEK invoice; an amount other than
+  the mirrored invoice total (full payment only); and any invoice that already has a payment-chain
+  record, refused ones included. Every invoice number a payment record carries (receipt, create
+  args, update fields) is compared independently, so contradictory evidence cannot hide a match, and
+  a payment record that names no invoice (for example an unreceipted bookkeep), or one whose invoice
+  numbers are malformed (not a canonical positive integer) or disagree, blocks every new payment
+  until it is resolved. A host must pass `getRecord` and `records`, otherwise it refuses.
+- `createStagedServer({ enableInvoicePayments: true })` allows the tool. The default is off and
+  `createPilotHost` does not set it, so `staged_prepare` answers "Tool outside staged contract".
+  Reason: a payment record in the queue can currently be neither previewed, drained nor refused
+  (`refuse` rejects payment operations by design), so staging one would leave the pilot gate
+  refusing every later write. Do not enable it before the remaining work below.
+  Enabling it also requires a `preflight` and `serializedExecution: true`, the host's assertion
+  that every prepare/execute is serialized with all other pilot mutations (pilot.lock). Without
+  both, `createStagedServer` refuses to start, so a duplicate-payment preflight cannot race.
+- `measure:payments` reports a fixed message when the export cannot be opened, never the path.
+
+Remaining before payments can be enabled in the pilot: bookkeep staging (a created payment is
+unbooked until `bookkeepInvoicePayment`), a durable captured-voucher source for
+`AccountedInvoicePaymentAdapter`, a hash-bound payment variant of `preview` and `drain-one`
+over `drainPaymentAware` (with the dispatch journal written before the target request), operator
+refusal and reconciliation for payment groups, and gate handling of `deferred` payment records.

@@ -42,6 +42,17 @@ export interface CreateStagedServerOptions {
     operation: string;
     args: Readonly<Record<string, unknown>>;
   }) => string | undefined | Promise<string | undefined>;
+  /**
+   * Also stage `fortnox_create_invoice_payment`. Default false: a payment record cannot be
+   * refused by the operator, so a host enables this only together with a payment drain.
+   */
+  enableInvoicePayments?: boolean;
+  /**
+   * The host asserts that every staged_prepare/staged_execute is serialized with all other
+   * pilot mutations (the pilot host's pilot.lock), so an execute-time preflight cannot race.
+   * Required, together with `preflight`, when `enableInvoicePayments` is true.
+   */
+  serializedExecution?: boolean;
   now?: () => number;
 }
 export interface StagedServer {
@@ -60,10 +71,14 @@ interface PreparedCall {
   state: 'prepared' | 'executing' | 'unknown' | 'completed';
   result?: CallToolResult;
 }
-const allowed = new Map([
+const baseAllowed: ReadonlyArray<readonly [string, string]> = [
   ['fortnox_create_customer', 'createCustomer'],
   ['fortnox_create_invoice', 'createInvoice'],
-]);
+];
+/** Opt-in (NOX-211): off until the host can also drain, preview and reconcile payments. */
+const paymentAllowed: ReadonlyArray<readonly [string, string]> = [
+  ['fortnox_create_invoice_payment', 'createInvoicePayment'],
+];
 const copy = <T>(value: T): T => decode(canonicalEncode(value)) as T;
 function identity(value: string): void {
   if (typeof value !== 'string' || !value.trim() || value.length > 200 || /[\x00-\x1f]/.test(value))
@@ -124,6 +139,16 @@ export async function createStagedServer(
     revision: options.revision,
     maxPreparationAgeMs: options.maxPreparationAgeMs,
   });
+  if (
+    options.enableInvoicePayments === true &&
+    (typeof options.preflight !== 'function' || options.serializedExecution !== true)
+  )
+    throw new StagedHostError(
+      'Invoice payment staging requires a host preflight and serialized execution',
+    );
+  const allowed = new Map(
+    options.enableInvoicePayments === true ? [...baseAllowed, ...paymentAllowed] : baseAllowed,
+  );
   const authorize = options.authorize;
   const preflight = options.preflight;
   const clock = options.now ?? Date.now;
