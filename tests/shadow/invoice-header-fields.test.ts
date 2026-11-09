@@ -430,7 +430,6 @@ describe('invoice header allowlist', () => {
   });
 
   it.each([
-    'CreditInvoiceReference',
     'OfferReference',
     'TimeBasisReference',
     'ExternalInvoiceReference1',
@@ -466,6 +465,23 @@ describe('invoice header allowlist', () => {
     });
     for (const none of ['', null, 0, '0', false, []]) {
       expect('blocked' in map({ [field]: none })).toBe(false);
+    }
+  });
+
+  it('refuses a populated CreditInvoiceReference with its own code and treats none markers as neutral', () => {
+    expect(map({ CreditInvoiceReference: '55' })).toEqual({
+      blocked: expect.stringContaining(INVOICE_REFUSAL.creditReferenceUnsupported),
+    });
+    for (const none of ['', null, 0, '0', false, []]) {
+      expect('blocked' in map({ CreditInvoiceReference: none })).toBe(false);
+    }
+  });
+
+  it('refuses a credit invoice (Credit true) with its own code, even with a mirrored original', () => {
+    for (const credit of [true, 'true']) {
+      expect(map({ Credit: credit, CreditInvoiceReference: '55' })).toEqual({
+        blocked: expect.stringContaining(INVOICE_REFUSAL.creditInvoiceUnsupported),
+      });
     }
   });
 

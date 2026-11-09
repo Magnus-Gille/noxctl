@@ -37,6 +37,26 @@ describe('mapping preflight before every Fortnox write (NOX-215)', () => {
     await client.close();
   });
 
+  // The create tool schema has no Credit or CreditInvoiceReference input, so a credit invoice cannot
+  // even be staged through it; the mapping codes cover a credit that reaches the source result.
+  it.each([
+    ['Credit', { Credit: true }],
+    ['CreditInvoiceReference', { CreditInvoiceReference: '55' }],
+  ])('stops a credit invoice via %s before any Fortnox write (NOX-212)', async (_n, extra) => {
+    const h = await linked();
+    const client = await connect(h.host);
+    const before = h.host.queue.snapshot().length;
+    const result = await stagedCreate(client, 'fortnox_create_invoice', {
+      ...invoiceArgs(),
+      ...extra,
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/unrecognized_keys/);
+    expect(posts(h.synthetic.state.requests)).toEqual([]);
+    expect(h.host.queue.snapshot().length).toBe(before);
+    await client.close();
+  });
+
   it('refuses createCustomer with unsupported input fields (Currency, VATType)', async () => {
     for (const extra of [{ Currency: 'SEK' }, { VATType: 'SEVAT' }]) {
       const stderr: string[] = [];
