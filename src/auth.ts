@@ -607,27 +607,27 @@ export function buildAuthorizationUrl(
   return `${FORTNOX_AUTH_URL}?${params.toString()}`;
 }
 
-// Portal labels (Swedish, as shown in the Fortnox developer portal) for the
-// scopes noxctl can request. Unknown scopes are listed by name only.
+// Portal labels (Swedish / English) for the scopes noxctl can request, kept in
+// sync with the scope table in README.md. Unknown scopes are listed by name only.
 const SCOPE_PORTAL_LABELS: Record<string, string> = {
-  article: 'Artikel',
-  customer: 'Kund',
-  invoice: 'Faktura',
-  payment: 'Betalning',
-  supplier: 'Leverantör',
-  supplierinvoice: 'Leverantörsfaktura',
-  bookkeeping: 'Bokföring',
-  companyinformation: 'Företagsinformation',
-  settings: 'Inställningar',
-  project: 'Projekt',
-  costcenter: 'Kostnadsställe',
-  price: 'Pris',
+  article: 'Artikel / Article',
+  bookkeeping: 'Bokföring / Bookkeeping',
+  companyinformation: 'Företagsinformation / Company Information',
+  connectfile: 'File Connection',
+  costcenter: 'Kostnadsställe / Cost Center',
+  customer: 'Kund / Customer',
   inbox: 'Inbox',
-  connectfile: 'Koppla fil',
-  archive: 'Arkiv',
-  salary: 'Lön',
-  offer: 'Offert',
+  invoice: 'Faktura / Invoice',
+  payment: 'Betalning / Payment',
+  price: 'Priser / Price',
+  project: 'Projekt / Project',
+  settings: 'Inställningar / Settings',
+  supplier: 'Leverantör / Supplier',
+  supplierinvoice: 'Leverantörsfaktura / Supplier Invoice',
+  offer: 'Offert / Offer',
   order: 'Order',
+  salary: 'Lön / Salary',
+  archive: 'Arkivplats / File Archive',
 };
 
 /**
