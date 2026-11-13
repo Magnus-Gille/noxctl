@@ -56,10 +56,25 @@ describe('invalid_scope guidance', () => {
     const scopes = `${SCOPES} ${ARCHIVE_SCOPE}`;
     const p = runOAuthSetup(config, 'default', scopes);
     const rejected = expect(p).rejects.toThrow(/invalid_scope/);
+    // Wait for the pre-existing startup lines (manual-fallback URL) so that
+    // only output emitted in response to the error callback is inspected.
+    for (let i = 0; i < 50 && !logs.some((l) => l.includes('Waiting for authentication')); i++) {
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    const startupCount = logs.length;
+    const authUrl = logs.join('\n').match(/https:\/\/\S+/)?.[0];
+    expect(authUrl).toBeDefined();
+    const generatedState = new URL(authUrl!).searchParams.get('state');
+    expect(generatedState).toBeTruthy();
+
     await callbackFor('error=invalid_scope&error_description=unsupported&state=STATE123');
     await rejected;
 
-    const guidance = logs.filter((l) => !l.includes('paste this URL')).join('\n');
+    const guidance = logs.slice(startupCount).join('\n');
+    expect(guidance.length).toBeGreaterThan(0);
+    expect(guidance).not.toContain(generatedState!);
+    expect(guidance).not.toContain(authUrl!);
+    expect(guidance).not.toMatch(/https:\/\//);
     expect(guidance).toContain('archive');
     expect(guidance).toContain('costcenter');
     expect(guidance).not.toContain(SECRET);
