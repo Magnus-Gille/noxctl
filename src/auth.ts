@@ -607,6 +607,59 @@ export function buildAuthorizationUrl(
   return `${FORTNOX_AUTH_URL}?${params.toString()}`;
 }
 
+// Portal labels (Swedish, as shown in the Fortnox developer portal) for the
+// scopes noxctl can request. Unknown scopes are listed by name only.
+const SCOPE_PORTAL_LABELS: Record<string, string> = {
+  article: 'Artikel',
+  customer: 'Kund',
+  invoice: 'Faktura',
+  payment: 'Betalning',
+  supplier: 'Leverantör',
+  supplierinvoice: 'Leverantörsfaktura',
+  bookkeeping: 'Bokföring',
+  companyinformation: 'Företagsinformation',
+  settings: 'Inställningar',
+  project: 'Projekt',
+  costcenter: 'Kostnadsställe',
+  price: 'Pris',
+  inbox: 'Inbox',
+  connectfile: 'Koppla fil',
+  archive: 'Arkiv',
+  salary: 'Lön',
+  offer: 'Offert',
+  order: 'Order',
+};
+
+/**
+ * Actionable text for an `invalid_scope` callback. Contains only scope names and
+ * fixed advice — never the authorization URL, client secret, state or code.
+ */
+export function invalidScopeGuidance(
+  scopes: string,
+  redirectUri = 'http://localhost:9876/callback',
+): string {
+  const list = scopes
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((s) => {
+      const label = SCOPE_PORTAL_LABELS[s];
+      return label ? `  - ${s} (portal: ${label})` : `  - ${s}`;
+    })
+    .join('\n');
+  return [
+    'Fortnox rejected the request with invalid_scope. Fortnox associates this error with a',
+    'requested permission that is not enabled on the integration. Requested scopes:',
+    list,
+    '',
+    'Check in the Fortnox developer portal:',
+    '  1. The integration you edited is the one whose Client ID you entered in noxctl.',
+    '  2. Every permission listed above is enabled, then saved. Reload the page and confirm it persisted.',
+    `  3. Independently, the Redirect URI is set to ${redirectUri}.`,
+    '',
+    'Then re-run `noxctl init`. noxctl does not retry automatically and your existing credentials are unchanged.',
+  ].join('\n');
+}
+
 export async function runOAuthSetup(
   config: FortnoxAppConfig,
   profile: string = DEFAULT_PROFILE,
@@ -645,6 +698,9 @@ export async function runOAuthSetup(
             `<h1>Autentisering misslyckades</h1><p>${escapeHtml(error)}</p><p>${escapeHtml(errorDesc)}</p>`,
           );
           server.close();
+          if (error === 'invalid_scope') {
+            console.error(`\n${invalidScopeGuidance(scopes, REDIRECT_URI)}\n`);
+          }
           finish(new Error(`OAuth error: ${error}${errorDesc ? ` — ${errorDesc}` : ''}`));
           return;
         }
