@@ -21,8 +21,7 @@ done. Every PR was verified on its exact head before merge.
 - **NOX-212** (credit invoices in shadow mirroring) was skipped by request: it waits on
   the owner's choice between a draft credit path in the accounted fork and a mapping to
   Accounted `/credit`.
-- **Release.** `release/0.13.1` (#215) is stale against main. No tag, publish or GitHub
-  release was made; main now holds everything above under `[Unreleased]`.
+- **Release.** Release PR #236 (`release/0.14.0`) prepares 0.14.0 from main `6782501`: version sync, changelog promotion, and a changelog entry plus one reworded sentence in `docs/shadow-evaluation.md` for the shadow lane, which this release ships for the first time (`dist/shadow/**`; the pilot host stays excluded). Owner decision before tagging: ship the lane as experimental (as configured) or exclude it. #215 (`release/0.13.1`) is stale and superseded; it was not touched. Not done and not authorized: tag, `npm publish`, GitHub release.
 - Follow-up tickets: NOX-219 (invoices-v2), NOX-220 (offers-v2), NOX-221 (orders-v2),
   NOX-222 (articles-v2). Their map entries stay `missing` tracked gaps.
 
