@@ -39,7 +39,13 @@ const DESTRUCTIVE_TOOLS: ReadonlySet<string> = new Set([
   'fortnox_detach_document_attachment', // removes the link, like the delete_*_file_connection tools
   'fortnox_finish_contract', // ends the contract; no further invoices are created
   'fortnox_reset_scheduletime_day', // overwrites and resets one schedule day
+  'fortnox_send_invoice', // overwrites stored EmailSubject/EmailBody/EmailAddressBCC before sending
 ]);
+
+// An `overwrite` control lets a tool truncate an existing local file. That is
+// destructive even for a tool whose Fortnox effect is additive (for example the
+// PDF tools, which keep confirm/dryRun for markSent but can also save to disk).
+const LOCAL_OVERWRITE_FIELDS: ReadonlySet<string> = new Set(['overwrite']);
 
 const IDEMPOTENT_NAME_PATTERN = /^fortnox_(update|patch|replace)_/;
 
@@ -68,7 +74,10 @@ export function classifyTool(name: string, inputFields: readonly string[]): Tool
     access: 'potential-mutation',
     annotations: {
       readOnlyHint: false,
-      destructiveHint: DESTRUCTIVE_NAME_PATTERN.test(name) || DESTRUCTIVE_TOOLS.has(name),
+      destructiveHint:
+        DESTRUCTIVE_NAME_PATTERN.test(name) ||
+        DESTRUCTIVE_TOOLS.has(name) ||
+        inputFields.some((field) => LOCAL_OVERWRITE_FIELDS.has(field)),
       idempotentHint: IDEMPOTENT_NAME_PATTERN.test(name),
       openWorldHint,
     },

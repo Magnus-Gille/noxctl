@@ -18,7 +18,12 @@ const EXPECTED_EXPLICIT_DESTRUCTIVE_TOOLS = [
   'fortnox_get_inbox_file', // saves to a local path and can overwrite
   'fortnox_get_supplier_invoice_file', // saves to a local path and can overwrite
   'fortnox_get_voucher_file', // saves to a local path and can overwrite
+  'fortnox_invoice_pdf', // can overwrite a local file (and markSent mutates)
+  'fortnox_invoice_reminder_pdf', // can overwrite a local file
+  'fortnox_offer_pdf', // can overwrite a local file
+  'fortnox_order_pdf', // can overwrite a local file
   'fortnox_reset_scheduletime_day',
+  'fortnox_send_invoice', // overwrites stored email fields before sending
 ];
 const DESTRUCTIVE_BY_NAME = /^fortnox_(delete|cancel|update|patch|replace)_/;
 

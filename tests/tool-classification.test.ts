@@ -83,18 +83,37 @@ describe('classifyTool', () => {
       'fortnox_detach_document_attachment',
       'fortnox_finish_contract',
       'fortnox_reset_scheduletime_day',
+      'fortnox_send_invoice', // overwrites stored EmailSubject/EmailBody/EmailAddressBCC before sending
     ]) {
-      expect(classifyTool(name, ['confirm', 'dryRun']).annotations.destructiveHint).toBe(true);
+      expect(classifyTool(name, ['confirm', 'dryRun']).annotations.destructiveHint, name).toBe(
+        true,
+      );
     }
+  });
+
+  it('marks mutation tools that can overwrite a local file destructive', () => {
+    // The PDF tools keep confirm/dryRun (markSent is a mutation) but can also
+    // truncate an existing local file when `overwrite` is set.
+    for (const name of [
+      'fortnox_invoice_pdf',
+      'fortnox_invoice_reminder_pdf',
+      'fortnox_order_pdf',
+      'fortnox_offer_pdf',
+    ]) {
+      const fields = ['documentNumber', 'outputPath', 'overwrite', 'confirm', 'dryRun'];
+      expect(classifyTool(name, fields).annotations.destructiveHint, name).toBe(true);
+      expect(classifyTool(name, fields).access, name).toBe('potential-mutation');
+    }
+    // Without an overwrite control a confirm/dryRun create stays additive.
+    expect(
+      classifyTool('fortnox_create_invoice', ['CustomerNumber', 'confirm', 'dryRun']).annotations
+        .destructiveHint,
+    ).toBe(false);
   });
 
   it('keeps ordinary writes explicitly non-destructive', () => {
     expect(
       classifyTool('fortnox_create_invoice', ['CustomerNumber', 'confirm', 'dryRun']).annotations
-        .destructiveHint,
-    ).toBe(false);
-    expect(
-      classifyTool('fortnox_send_invoice', ['documentNumber', 'confirm', 'dryRun']).annotations
         .destructiveHint,
     ).toBe(false);
   });
