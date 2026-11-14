@@ -15,6 +15,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   recurring labels (`fortnox_list_recurring_labels`; CLI `recurrings list-labels`).
   Create and delete require `confirm` or `--yes` and support `dryRun` / `--dry-run`.
   The corresponding operations move to implemented in the API coverage map.
+- **MCP tool annotations and read-only server mode (NOX-199).** Every tool now
+  carries MCP annotations (`readOnlyHint`, explicit `destructiveHint` and
+  `idempotentHint` on mutations, `openWorldHint`) from one shared classification,
+  so clients can treat reads differently. `noxctl serve --read-only` (or
+  `NOXCTL_READ_ONLY=1`) registers no tool that can change Fortnox data, including
+  `fortnox_invoice_pdf` and the tools that save a file to a local path; an
+  unrecognized `NOXCTL_READ_ONLY` value makes `serve` exit with an error. The capability resource reports `mode`. See
+  "Read-only mode and tool annotations" in the README.
 - **Invoice-payment preflight and offline measurement (NOX-211, first slice).**
   The pilot preflight now checks a planned `createInvoicePayment` before any
   Fortnox write: exact keys (`InvoiceNumber`, `Amount`, `PaymentDate`, optional

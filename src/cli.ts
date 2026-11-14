@@ -1397,9 +1397,22 @@ keychain
 program
   .command('serve')
   .description('Start the MCP server (stdio transport)')
-  .action(async () => {
+  .option(
+    '--read-only',
+    'Expose only tools that cannot change Fortnox data (also: NOXCTL_READ_ONLY=1)',
+  )
+  .addHelpText(
+    'after',
+    `
+Read-only mode omits every tool that can create, update, send, book, or delete
+Fortnox data, and every tool that saves a file to the local disk (including
+fortnox_invoice_pdf and the file download tools). Set NOXCTL_READ_ONLY=1 to enable it
+without the flag; 0 or false (or unset) leaves it off. Any other value makes
+serve exit with an error instead of starting.`,
+  )
+  .action(async (opts: { readOnly?: boolean }) => {
     const { startMcpServer } = await import('./index.js');
-    await startMcpServer({ profile: resolvedProfileInfo.name });
+    await startMcpServer({ profile: resolvedProfileInfo.name, readOnly: opts.readOnly === true });
   });
 
 // --- invoices ---
