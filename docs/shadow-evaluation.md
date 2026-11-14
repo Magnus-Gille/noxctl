@@ -1,9 +1,10 @@
 # Local Fortnox-first shadow evaluation
 
-This is an opt-in development candidate, disabled by default. It has not been
-published or activated against a real account. Fortnox remains authoritative.
-No credentials or Accounted HTTP client are included. No live migration or
-financial-parity claim follows from an empty queue.
+This is an opt-in development candidate, disabled by default. It ships in the
+npm package for local evaluation only and has not been activated against a real
+account. Fortnox remains authoritative. No credentials or Accounted HTTP client
+are included. No live migration or financial-parity claim follows from an empty
+queue.
 
 ## Scope and coverage
 
