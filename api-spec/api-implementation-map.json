@@ -267,7 +267,7 @@
         ],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-222, so operations stay missing."
     },
     {
       "id": "fortnox-articleurlconnection",
@@ -887,7 +887,7 @@
         ],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-219, so operations stay missing."
     },
     {
       "id": "fortnox-labels",
@@ -1032,7 +1032,7 @@
         ],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-220, so operations stay missing."
     },
     {
       "id": "fortnox-orders",
@@ -1089,7 +1089,7 @@
         ],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-221, so operations stay missing."
     },
     {
       "id": "fortnox-predefinedaccounts",
@@ -1450,11 +1450,14 @@
     {
       "id": "fortnox-supplierinvoices",
       "tagHash": "31ec0738a8694709c83763b2f8ad4bd8d4447ed5f11c08df8a391344732505fe",
-      "classification": "partial",
+      "classification": "complete",
       "operations": {
         "implemented": [
           "18100a599f890b93ccbb48bfe318fa83bcc9b077227497d1dac3472a620e15bc",
           "22d6debafa805e0acebaca41c60c6db135a2054b457fc232323d5f73be9ab32e",
+          "2e3571105bd9db951392e7683f30e70f164ef184ae41ffe714e689d945ca154a",
+          "45781319212c3a266c4c95143b3d9146a7c7de5fa2c2759f6ec9e2ea994ff582",
+          "76979b5fee75177dd891132c26e13b4295bc2aaa95018d1d554ef4115055cab4",
           "8e038169759226e1781180e5fce3cc87caeede593956937c1cffa18b745c60ac",
           "9a0e1132227fc6d2551055bc76cb208f8c0775b259685114be2394d5f4497648",
           "ad48bf916ad2843e9e981f55510e51ca17d871c1085b7072bd33d225da9a49a2",
@@ -1463,28 +1466,41 @@
           "e0a247238206f49bb9b8da6943ac267a132ae8c03512a067fc23a3609b001179",
           "ea416c860704ac22f6a5329fdcf68c151a88a3823556e19f75ce2ce5f55542c5"
         ],
-        "missing": [
-          "2e3571105bd9db951392e7683f30e70f164ef184ae41ffe714e689d945ca154a",
-          "45781319212c3a266c4c95143b3d9146a7c7de5fa2c2759f6ec9e2ea994ff582",
-          "76979b5fee75177dd891132c26e13b4295bc2aaa95018d1d554ef4115055cab4"
-        ],
+        "missing": [],
         "excluded": []
       },
       "evidence": {
         "operationExports": [
-          "listSupplierInvoices"
+          "listSupplierInvoices",
+          "listSupplierInvoiceComments",
+          "createSupplierInvoiceComment",
+          "deleteSupplierInvoiceComment"
         ],
         "mcpTools": [
-          "fortnox_list_supplier_invoices"
+          "fortnox_list_supplier_invoices",
+          "fortnox_list_supplier_invoice_comments",
+          "fortnox_create_supplier_invoice_comment",
+          "fortnox_delete_supplier_invoice_comment"
         ],
         "cliCommands": [
           [
             "supplier-invoices",
             "list"
+          ],
+          [
+            "supplier-invoices",
+            "comments"
+          ],
+          [
+            "supplier-invoices",
+            "add-comment"
+          ],
+          [
+            "supplier-invoices",
+            "delete-comment"
           ]
         ]
-      },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      }
     },
     {
       "id": "fortnox-suppliers",
@@ -1887,15 +1903,28 @@
     {
       "id": "recurring-api-recurringlabels",
       "tagHash": "d481065cc7d21bf352cdee766fbf1d5eaf75e0e6563cddc789437ff2805a61de",
-      "classification": "partial",
+      "classification": "complete",
       "operations": {
-        "implemented": [],
-        "missing": [
+        "implemented": [
           "fc036f8769d5d333a219ab72e64a9c5e27d67ad5f6789040d5b20b57ca293b4b"
         ],
+        "missing": [],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "evidence": {
+        "operationExports": [
+          "listRecurringLabels"
+        ],
+        "mcpTools": [
+          "fortnox_list_recurring_labels"
+        ],
+        "cliCommands": [
+          [
+            "recurrings",
+            "list-labels"
+          ]
+        ]
+      }
     },
     {
       "id": "recurring-api-recurrings",

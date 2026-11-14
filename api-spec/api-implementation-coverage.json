@@ -102,8 +102,8 @@
       "implementedCount": 0,
       "missingCount": 6,
       "excludedCount": 0,
-      "stateHash": "a363d0a62a04a9dfee3eecd4675e703ae393ae04f69488136068f8ab3fb64b8b",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "stateHash": "116c0fc3880e216cfd81968f0da6c4f7c6e19f518db4b31af6ba2062ddaa8e67",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-222, so operations stay missing."
     },
     {
       "id": "fortnox-articleurlconnection",
@@ -341,8 +341,8 @@
       "implementedCount": 0,
       "missingCount": 15,
       "excludedCount": 0,
-      "stateHash": "9c70f27523296e0ec8a453fad15f457fc436e8fecf8777b8bd47c14503418b89",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "stateHash": "49fafbb4238e725f3ee9f31df099d604e44eb147c10fca62901fd2ccabc7251a",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-219, so operations stay missing."
     },
     {
       "id": "fortnox-labels",
@@ -399,8 +399,8 @@
       "implementedCount": 0,
       "missingCount": 11,
       "excludedCount": 0,
-      "stateHash": "8b69f62e967d029e7879c89fa70a3904666d23b05877a896b90f52b9e988cecb",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "stateHash": "20268aa9b7336d9f591af1fb5a9ca859ffd7ac6a047911dcf99bc902ec42df3a",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-220, so operations stay missing."
     },
     {
       "id": "fortnox-orders",
@@ -418,8 +418,8 @@
       "implementedCount": 0,
       "missingCount": 10,
       "excludedCount": 0,
-      "stateHash": "d43b6eb0db959333c220f958208bfa26ca3d32261bad65a6463bb1756d509adf",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "stateHash": "f42898363d483625f96641e2aeec89b330720394d710a2b747039509246ebd0f",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-221, so operations stay missing."
     },
     {
       "id": "fortnox-predefinedaccounts",
@@ -545,13 +545,12 @@
     },
     {
       "id": "fortnox-supplierinvoices",
-      "classification": "partial",
+      "classification": "complete",
       "publicOperationCount": 12,
-      "implementedCount": 9,
-      "missingCount": 3,
+      "implementedCount": 12,
+      "missingCount": 0,
       "excludedCount": 0,
-      "stateHash": "ff293a9d72effc71f363d1c24898a6ccf6a763d3d4f3e21a78d4d4ec5e606102",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "stateHash": "17f1b3be2a0e795fed90931190dfed9faf9678197f5e9e0334a9dc5adef00763"
     },
     {
       "id": "fortnox-suppliers",
@@ -709,13 +708,12 @@
     },
     {
       "id": "recurring-api-recurringlabels",
-      "classification": "partial",
+      "classification": "complete",
       "publicOperationCount": 1,
-      "implementedCount": 0,
-      "missingCount": 1,
+      "implementedCount": 1,
+      "missingCount": 0,
       "excludedCount": 0,
-      "stateHash": "420a29ceeca01d42d2d7ad88fc536f6fedafa3712e13de3c5aca53bdeebe0c9c",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+      "stateHash": "94c55a1b0f9cc3615632d9986e43f4aec28db14671054050ae4ae798ddf528f1"
     },
     {
       "id": "recurring-api-recurrings",

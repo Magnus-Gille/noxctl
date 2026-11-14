@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Supplier-invoice comment log and recurring labels (NOX-203).** Adds list,
+  create and delete for supplier-invoice comments (`fortnox_list_supplier_invoice_comments`,
+  `fortnox_create_supplier_invoice_comment`, `fortnox_delete_supplier_invoice_comment`;
+  CLI `supplier-invoices comments`, `add-comment`, `delete-comment`), and list for
+  recurring labels (`fortnox_list_recurring_labels`; CLI `recurrings list-labels`).
+  Create and delete require `confirm` or `--yes` and support `dryRun` / `--dry-run`.
+  The corresponding operations move to implemented in the API coverage map.
 - **Invoice-payment preflight and offline measurement (NOX-211, first slice).**
   The pilot preflight now checks a planned `createInvoicePayment` before any
   Fortnox write: exact keys (`InvoiceNumber`, `Amount`, `PaymentDate`, optional
@@ -29,10 +36,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Fortnox API drift refreshed (NOX-203, NOX-204).** The committed fingerprint,
   API coverage map and baseline, and tool-schema baseline now match the current
-  Fortnox specification. The new v2 document families, the recurring-labels
-  endpoint and the supplier-invoice comment log are recorded as tracked gaps and
-  are not implemented yet. The supplier-invoice payload gained one read-only
-  collection that stays a tracked gap; no tool arguments changed.
+  Fortnox specification. The new v2 document families are recorded as tracked
+  gaps and are not implemented yet; the supplier-invoice comment log and recurring
+  labels are now implemented (see Added). The supplier-invoice payload gained one
+  read-only collection that stays a tracked gap; no existing tool arguments changed.
 
 ### Fixed
 

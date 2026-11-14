@@ -421,6 +421,9 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl supplier-invoices bookkeep <givenNumber>` | `fortnox_bookkeep_supplier_invoice` | Bookkeep a supplier invoice (mutation) |
 | `noxctl supplier-invoices attachments <givenNumber>` | `fortnox_list_supplier_invoice_attachments` | List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too, read-only, default scopes only |
 | `noxctl supplier-invoices file <fileId> [-f <path>]` | `fortnox_get_supplier_invoice_file` | Download a file attached to a supplier invoice (get `fileId` from `supplier-invoices attachments`) — read-only, default scopes only |
+| `noxctl supplier-invoices comments <givenNumber>` | `fortnox_list_supplier_invoice_comments` | List the comment log of a supplier invoice — read-only |
+| `noxctl supplier-invoices add-comment <givenNumber> <comment>` | `fortnox_create_supplier_invoice_comment` | Add a comment to a supplier invoice's comment log (mutation) |
+| `noxctl supplier-invoices delete-comment <givenNumber> <commentId>` | `fortnox_delete_supplier_invoice_comment` | Delete a comment from a supplier invoice's comment log (mutation) |
 
 ### Supplier invoice payments (utbetalningar)
 

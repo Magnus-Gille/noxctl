@@ -952,6 +952,25 @@
       "stateHash": "51641d71ff3e43b1c455c957214b4decff484585d6c884def4fc8982dbe012e9"
     },
     {
+      "id": "supplier-invoice-comment-create",
+      "declaredPropertyCount": 5,
+      "specificationPropertyCount": 1,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 2,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 1,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "8a25f1890dfa5b1a8b9abdb367b6ba7b69e711457d45aafc298fb5dbd8895645"
+    },
+    {
       "id": "supplier-invoice-create",
       "declaredPropertyCount": 12,
       "specificationPropertyCount": 27,

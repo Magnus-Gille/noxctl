@@ -98,6 +98,40 @@ describe('recurring tools', () => {
     expect(JSON.parse(init.body ?? 'null')).toEqual(input);
   });
 
+  it('lists recurring labels as a read-only tool', async () => {
+    mockFetch([{ id: 'label-1', name: 'Kategori', value: 'Drift' }]);
+    const tools = await client();
+    const listed = (await tools.listTools()).tools.find(
+      ({ name }) => name === 'fortnox_list_recurring_labels',
+    );
+    expect(Object.keys(listed?.inputSchema.properties ?? {})).not.toContain('confirm');
+    expect(Object.keys(listed?.inputSchema.properties ?? {})).not.toContain('dryRun');
+
+    const result = await tools.callTool({
+      name: 'fortnox_list_recurring_labels',
+      arguments: { recurringId: '550e8400-e29b-41d4-a716-446655440000' },
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(textOf(result)).toContain('Kategori');
+    expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain(
+      '/recurrings-v1/550e8400-e29b-41d4-a716-446655440000/labels',
+    );
+  });
+
+  it('rejects dryRun on the read-only recurring labels tool', async () => {
+    global.fetch = vi.fn();
+    const result = await (
+      await client()
+    ).callTool({
+      name: 'fortnox_list_recurring_labels',
+      arguments: { recurringId: '550e8400-e29b-41d4-a716-446655440000', dryRun: true },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('rejects unknown fields in structured JSON Patch operations', async () => {
     const result = await (
       await client()
