@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { execFileSync, type ExecFileSyncOptions } from 'node:child_process';
+import { execFileSync, spawnSync, type ExecFileSyncOptions } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -198,6 +198,86 @@ describe('CLI smoke tests', () => {
       execOpts,
     ) as string;
     expect(output).toContain('--year');
+  });
+
+  it('noxctl vouchers --help lists the bulk read and attachment overview commands', () => {
+    const output = execFileSync('node', [CLI_PATH, 'vouchers', '--help'], execOpts) as string;
+    expect(output).toContain('get-many');
+    expect(output).toContain('attachment-overview');
+  });
+
+  it('noxctl vouchers get-many --help documents refs, period options and an example', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'vouchers', 'get-many', '--help'],
+      execOpts,
+    ) as string;
+    for (const flag of ['--ref', '--series', '--from', '--to', '--period', '--year', '--limit']) {
+      expect(output).toContain(flag);
+    }
+    expect(output).toContain('Examples:');
+    expect(output).toContain('noxctl vouchers get-many --ref A/12');
+  });
+
+  it('noxctl vouchers get-many rejects a malformed --ref before any request', () => {
+    const run = (args: string[]) =>
+      spawnSync('node', [CLI_PATH, 'vouchers', 'get-many', ...args], {
+        ...execOpts,
+        encoding: 'utf-8',
+      });
+
+    for (const bad of ['bogus', 'A', 'A/', '/12', 'A/12/3', 'A/x']) {
+      const result = run(['--ref', bad]);
+      expect(result.status, bad).not.toBe(0);
+      expect(result.stderr, bad).toContain('Expected <series>/<number>');
+    }
+    // One bad ref among good ones is still rejected.
+    const mixed = run(['--ref', 'A/1', '--ref', 'oops']);
+    expect(mixed.status).not.toBe(0);
+    expect(mixed.stderr).toContain('oops');
+  });
+
+  it('noxctl vouchers get-many needs exactly one mode, before any request', () => {
+    const run = (args: string[]) =>
+      spawnSync('node', [CLI_PATH, 'vouchers', 'get-many', ...args], {
+        ...execOpts,
+        encoding: 'utf-8',
+      });
+
+    const neither = run([]);
+    expect(neither.status).toBe(2);
+    expect(neither.stderr).toContain('requires --ref');
+    const halfPeriod = run(['--from', '2026-10-01']);
+    expect(halfPeriod.status).toBe(2);
+    expect(halfPeriod.stderr).toContain('complete period');
+    const both = run(['--ref', 'A/1', '--period', 'last-month']);
+    expect(both.status).toBe(2);
+    expect(both.stderr).toContain('mutually exclusive');
+    const withLimit = run(['--ref', 'A/1', '--limit', '5']);
+    expect(withLimit.status).toBe(2);
+    expect(withLimit.stderr).toContain('mutually exclusive');
+  });
+
+  it('noxctl vouchers attachment-overview --help shows its options and the scope note', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'vouchers', 'attachment-overview', '--help'],
+      execOpts,
+    ) as string;
+    for (const flag of ['--series', '--from', '--to', '--period', '--year', '--only-missing']) {
+      expect(output).toContain(flag);
+    }
+    expect(output).toContain('archive');
+    expect(output).toContain('Examples:');
+  });
+
+  it('noxctl vouchers attachment-overview requires a period', () => {
+    const result = spawnSync('node', [CLI_PATH, 'vouchers', 'attachment-overview'], {
+      ...execOpts,
+      encoding: 'utf-8',
+    });
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('requires a period');
   });
 
   it('noxctl vouchers file --help shows the file option', () => {

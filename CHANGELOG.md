@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Bulk voucher read and per-period attachment overview (NOX-199).** A read workflow
+  such as "go through last month's vouchers" no longer needs one `fortnox_get_voucher`
+  call, and one approval prompt, per voucher. `fortnox_get_vouchers` /
+  `noxctl vouchers get-many` return vouchers with their rows in one call, either for an
+  explicit list of 1 to 50 `series/number` references or for a whole period
+  (`fromDate`/`toDate`, optional `series`). In period mode rows are fetched for the first
+  `limit` vouchers (default 100, maximum 200); a larger period is flagged with
+  `truncated` and `totalInPeriod`. Vouchers are fetched one at a time, and one that fails
+  is reported in `errors` instead of failing the whole call.
+  `fortnox_get_voucher_attachment_overview` / `noxctl vouchers attachment-overview` show
+  which vouchers in a period have or lack attached files (`onlyMissing` lists just the
+  latter) from two list calls, not one request per voucher; at most 500 vouchers are
+  listed while the counts cover the whole period. The overview reads Fortnox file
+  connections, so it needs the `connectfile` scope (in the default set) and, for
+  connections into the file archive, possibly the `archive` scope
+  (`noxctl init --with-archive`); a missing scope makes Fortnox answer with an
+  authorization error. Both tools are read-only.
 - **Invoice-payment preflight and offline measurement (NOX-211, first slice).**
   The pilot preflight now checks a planned `createInvoicePayment` before any
   Fortnox write: exact keys (`InvoiceNumber`, `Amount`, `PaymentDate`, optional

@@ -56,6 +56,120 @@ export interface VoucherFileContent {
   buffer: Buffer;
 }
 
+/** Explicit-list mode accepts at most this many vouchers per call. */
+export const MAX_VOUCHERS_PER_BULK_READ = 50;
+/** Period mode fetches rows for this many vouchers unless `limit` says otherwise. */
+export const DEFAULT_PERIOD_VOUCHER_LIMIT = 100;
+/** Hard ceiling for `limit` in period mode: each voucher is one rate-limited request. */
+export const MAX_PERIOD_VOUCHER_LIMIT = 200;
+/** The attachment overview returns at most this many voucher rows (counts stay exact). */
+export const MAX_ATTACHMENT_OVERVIEW_VOUCHERS = 500;
+
+export interface VoucherReference {
+  series: string;
+  number: string;
+}
+
+export interface GetVouchersParams {
+  /** Explicit mode: 1..50 series/number pairs. Mutually exclusive with the period fields. */
+  vouchers?: VoucherReference[];
+  /** Period mode: both dates required (YYYY-MM-DD). */
+  fromDate?: string;
+  toDate?: string;
+  /** Period mode only: restrict the period to one voucher series. */
+  series?: string;
+  /** Both modes. Voucher numbers restart every financial year. */
+  financialYear?: number;
+  /** Period mode only: how many vouchers get their rows fetched (default 100, max 200). */
+  limit?: number;
+}
+
+export interface VoucherFetchError extends VoucherReference {
+  error: string;
+}
+
+export interface GetVouchersResult {
+  vouchers: Record<string, unknown>[];
+  errors: VoucherFetchError[];
+  /** Period mode only, present (true) when the period held more vouchers than were fetched. */
+  truncated?: boolean;
+  /** Period mode only, present together with `truncated`: how many vouchers the period holds. */
+  totalInPeriod?: number;
+}
+
+export interface VoucherAttachmentOverviewParams {
+  fromDate: string;
+  toDate: string;
+  series?: string;
+  financialYear?: number;
+  /** List only vouchers without attachments (the counts still cover the whole period). */
+  onlyMissing?: boolean;
+}
+
+export interface VoucherAttachmentOverviewRow {
+  series: string;
+  number: string;
+  transactionDate: string;
+  description: string;
+  attachmentCount: number;
+  fileNames: string[];
+}
+
+export interface VoucherAttachmentOverview {
+  period: { fromDate: string; toDate: string; series?: string; financialYear?: number };
+  totalVouchers: number;
+  withAttachments: number;
+  withoutAttachments: number;
+  vouchers: VoucherAttachmentOverviewRow[];
+  /** Present (true) when `vouchers` was capped; the counts above still cover the whole period. */
+  truncated?: boolean;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+// A real calendar date, not just something shaped like one: round-trip the parsed
+// value so overflow dates such as 2026-02-30 are rejected.
+function assertIsoDate(name: string, value: unknown): string {
+  const parsed = typeof value === 'string' ? Date.parse(`${value}T00:00:00.000Z`) : Number.NaN;
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(parsed) ||
+    new Date(parsed).toISOString().slice(0, 10) !== value
+  ) {
+    throw new Error(
+      `Invalid "${name}": ${JSON.stringify(value)} is not a real date in YYYY-MM-DD format.`,
+    );
+  }
+  return value;
+}
+
+function assertPeriod(fromDate: unknown, toDate: unknown): { fromDate: string; toDate: string } {
+  if (fromDate === undefined || toDate === undefined) {
+    throw new Error('A period needs both "fromDate" and "toDate" (YYYY-MM-DD).');
+  }
+  const from = assertIsoDate('fromDate', fromDate);
+  const to = assertIsoDate('toDate', toDate);
+  if (to < from) {
+    throw new Error(`Invalid period: "toDate" (${to}) is before "fromDate" (${from}).`);
+  }
+  return { fromDate: from, toDate: to };
+}
+
+function assertFinancialYear(financialYear: number | undefined): void {
+  if (financialYear !== undefined && (!Number.isInteger(financialYear) || financialYear <= 0)) {
+    throw new Error(`Invalid "financialYear": ${financialYear} is not a positive integer.`);
+  }
+}
+
+// The financial year a list item belongs to (`Year`), when Fortnox reports one.
+function listItemYear(item: Record<string, unknown>): number | undefined {
+  const year = Number(item.Year);
+  return Number.isInteger(year) && year > 0 ? year : undefined;
+}
+
 export function createVoucherOperations(transport: FortnoxTransport) {
   const { listFinancialYears } = createFinancialYearOperations(transport);
 
@@ -317,9 +431,186 @@ export function createVoucherOperations(transport: FortnoxTransport) {
     return { fileId, contentType, buffer };
   }
 
+  // Fetch the rows of many vouchers sequentially (the transport rate-limits, so
+  // there is deliberately no concurrency). One failing voucher must not hide the
+  // others: its error is collected next to the ones that succeeded.
+  interface FetchTarget extends VoucherReference {
+    year?: number;
+    listError?: string;
+  }
+
+  async function fetchVoucherTargets(
+    targets: FetchTarget[],
+  ): Promise<Pick<GetVouchersResult, 'vouchers' | 'errors'>> {
+    const vouchers: Record<string, unknown>[] = [];
+    const errors: VoucherFetchError[] = [];
+    for (const target of targets) {
+      const { series, number } = target;
+      if (target.listError) {
+        errors.push({ series, number, error: target.listError });
+        continue;
+      }
+      try {
+        const voucher = await getVoucher(series, number, target.year);
+        if (!voucher) throw new Error('Fortnox returned no voucher');
+        vouchers.push(voucher);
+      } catch (err) {
+        errors.push({ series, number, error: errorMessage(err) });
+      }
+    }
+    return { vouchers, errors };
+  }
+
+  // Bulk read of vouchers WITH rows (the list endpoint has none): either an explicit
+  // series/number list, or every voucher of a period. Cross-field validation lives
+  // here because the MCP layer only accepts plain Zod shapes.
+  async function getVouchers(params: GetVouchersParams): Promise<GetVouchersResult> {
+    const { vouchers: refs, fromDate, toDate, series, financialYear, limit } = params;
+    const periodRequested = fromDate !== undefined || toDate !== undefined;
+
+    if (refs !== undefined && (periodRequested || series !== undefined || limit !== undefined)) {
+      throw new Error(
+        'Specify either "vouchers" or a period ("fromDate"/"toDate", optionally "series" and "limit"), not both: the two modes are mutually exclusive.',
+      );
+    }
+    if (refs === undefined && !periodRequested) {
+      throw new Error(
+        'Specify either "vouchers" (1 to 50 series/number pairs) or "fromDate" and "toDate" (a period).',
+      );
+    }
+    assertFinancialYear(financialYear);
+
+    if (refs !== undefined) {
+      if (!Array.isArray(refs) || refs.length === 0) {
+        throw new Error('"vouchers" must contain 1 to 50 series/number pairs.');
+      }
+      if (refs.length > MAX_VOUCHERS_PER_BULK_READ) {
+        throw new Error(
+          `"vouchers" must contain at most ${MAX_VOUCHERS_PER_BULK_READ} items (got ${refs.length}). Split the request, or use "fromDate"/"toDate" to read a whole period.`,
+        );
+      }
+      refs.forEach((ref, index) => {
+        try {
+          voucherSeriesSegment(ref.series);
+          pathSegment('voucher number', ref.number);
+        } catch (err) {
+          throw new Error(`vouchers[${index}]: ${errorMessage(err)}`);
+        }
+      });
+      return fetchVoucherTargets(
+        refs.map((ref) => ({ series: ref.series, number: ref.number, year: financialYear })),
+      );
+    }
+
+    const period = assertPeriod(fromDate, toDate);
+    if (series !== undefined) voucherSeriesSegment(series);
+    if (
+      limit !== undefined &&
+      (!Number.isInteger(limit) || limit < 1 || limit > MAX_PERIOD_VOUCHER_LIMIT)
+    ) {
+      throw new Error(
+        `Invalid "limit": ${limit} must be an integer from 1 to ${MAX_PERIOD_VOUCHER_LIMIT} (default ${DEFAULT_PERIOD_VOUCHER_LIMIT}).`,
+      );
+    }
+    const cap = limit ?? DEFAULT_PERIOD_VOUCHER_LIMIT;
+
+    const listed = await listVouchers({ all: true, series, financialYear, ...period });
+    const items = listed.Vouchers ?? [];
+    const targets: FetchTarget[] = items.slice(0, cap).map((item) => {
+      const itemSeries = String(item.VoucherSeries ?? '');
+      const itemNumber = String(item.VoucherNumber ?? '');
+      const listError =
+        !itemSeries || !itemNumber
+          ? 'List item has no VoucherSeries/VoucherNumber, so its rows cannot be fetched.'
+          : undefined;
+      return {
+        series: itemSeries,
+        number: itemNumber,
+        // Voucher numbers restart every financial year, so pin the year when it is known.
+        year: financialYear ?? listItemYear(item),
+        listError,
+      };
+    });
+
+    const result = await fetchVoucherTargets(targets);
+    return items.length > cap
+      ? { ...result, truncated: true, totalInPeriod: items.length }
+      : result;
+  }
+
+  // Which vouchers of a period have / lack attached files. Two list calls and an
+  // in-memory join; never one request per voucher.
+  async function getVoucherAttachmentOverview(
+    params: VoucherAttachmentOverviewParams,
+  ): Promise<VoucherAttachmentOverview> {
+    const { series, financialYear, onlyMissing = false } = params;
+    const period = assertPeriod(params.fromDate, params.toDate);
+    assertFinancialYear(financialYear);
+    if (series !== undefined) voucherSeriesSegment(series);
+
+    const listed = await listVouchers({ all: true, series, financialYear, ...period });
+    // Narrow the connection list server-side where the endpoint allows it. It has no
+    // date filter, so a period inside a larger financial year still reads all of that
+    // year's connections and is narrowed by the join below.
+    const { items: connections } = await transport.fetchAllPages<Record<string, unknown>>(
+      'voucherfileconnections',
+      'VoucherFileConnections',
+      { voucherseries: series, voucheryear: financialYear },
+    );
+
+    const bySeriesAndNumber = new Map<string, Record<string, unknown>[]>();
+    for (const connection of connections) {
+      const key = `${String(connection.VoucherSeries)}\u0000${String(connection.VoucherNumber)}`;
+      const group = bySeriesAndNumber.get(key);
+      if (group) group.push(connection);
+      else bySeriesAndNumber.set(key, [connection]);
+    }
+
+    const rows: VoucherAttachmentOverviewRow[] = (listed.Vouchers ?? []).map((voucher) => {
+      const voucherSeries = String(voucher.VoucherSeries ?? '');
+      const voucherNumber = String(voucher.VoucherNumber ?? '');
+      const year = listItemYear(voucher);
+      // Voucher numbers restart each financial year: compare the year too, but only
+      // when both sides actually report one.
+      const matches = (
+        bySeriesAndNumber.get(`${voucherSeries}\u0000${voucherNumber}`) ?? []
+      ).filter((connection) => {
+        const connectionYear = Number(connection.VoucherYear);
+        return year === undefined || !Number.isInteger(connectionYear) || connectionYear === year;
+      });
+      return {
+        series: voucherSeries,
+        number: voucherNumber,
+        transactionDate: String(voucher.TransactionDate ?? ''),
+        description: String(voucher.Description ?? ''),
+        attachmentCount: matches.length,
+        fileNames: matches.map((connection) => String(connection.Name ?? '')).filter(Boolean),
+      };
+    });
+
+    const withAttachments = rows.filter((row) => row.attachmentCount > 0).length;
+    const shown = onlyMissing ? rows.filter((row) => row.attachmentCount === 0) : rows;
+    const capped = shown.length > MAX_ATTACHMENT_OVERVIEW_VOUCHERS;
+
+    return {
+      period: {
+        ...period,
+        ...(series !== undefined ? { series } : {}),
+        ...(financialYear !== undefined ? { financialYear } : {}),
+      },
+      totalVouchers: rows.length,
+      withAttachments,
+      withoutAttachments: rows.length - withAttachments,
+      vouchers: capped ? shown.slice(0, MAX_ATTACHMENT_OVERVIEW_VOUCHERS) : shown,
+      ...(capped ? { truncated: true } : {}),
+    };
+  }
+
   return {
     listVouchers,
     getVoucher,
+    getVouchers,
+    getVoucherAttachmentOverview,
     createVoucher,
     uploadInboxFile,
     createVoucherFileConnection,
@@ -335,6 +626,8 @@ export function createVoucherOperations(transport: FortnoxTransport) {
 export const {
   listVouchers,
   getVoucher,
+  getVouchers,
+  getVoucherAttachmentOverview,
   createVoucher,
   uploadInboxFile,
   createVoucherFileConnection,

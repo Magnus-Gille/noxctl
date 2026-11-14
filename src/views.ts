@@ -531,6 +531,22 @@ export const voucherAttachmentColumns: Column[] = [
   { key: 'voucherYear', header: 'Year', width: 5, align: 'right' },
 ];
 
+// Per-period overview: which vouchers have attached files (VoucherAttachmentOverviewRow).
+// 6 + 2 + 6 + 2 + 10 + 2 + 20 + 2 + 5 + 2 + 23 = 80
+export const voucherAttachmentOverviewColumns: Column[] = [
+  { key: 'series', header: 'Series', width: 6 },
+  { key: 'number', header: 'Number', width: 6, align: 'right' },
+  { key: 'transactionDate', header: 'Date', width: 10 },
+  { key: 'description', header: 'Description', width: 20 },
+  { key: 'attachmentCount', header: 'Files', width: 5, align: 'right' },
+  {
+    key: 'fileNames',
+    header: 'File names',
+    width: 23,
+    format: (value) => (Array.isArray(value) ? value.join(', ') : ''),
+  },
+];
+
 // --- Invoice file attachment views ---
 
 export const invoiceAttachmentColumns: Column[] = [

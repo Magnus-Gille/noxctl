@@ -10,12 +10,14 @@ import {
   voucherRowColumns,
 } from '../views.js';
 import {
+  confirmationResponse,
   detailResponse,
   dryRunResponse,
   listResponse,
   requireConfirmation,
   textResponse,
 } from '../tool-output.js';
+import { formatVoucherAttachmentOverview, formatVouchersWithRows } from '../voucher-text.js';
 
 // The full writable VoucherRow field set (Fortnox `VoucherRowSinglePayloadItem`).
 // The MCP SDK strips any key the schema does not declare, so an undeclared field
@@ -92,6 +94,8 @@ export function registerBookkeepingTools(
     deleteAccount,
     listVouchers,
     getVoucher,
+    getVouchers,
+    getVoucherAttachmentOverview,
     createVoucher,
     attachVoucherFiles,
     listVoucherAttachments,
@@ -150,6 +154,98 @@ export function registerBookkeepingTools(
       const headerText = (header.content as { type: string; text: string }[])[0].text;
       const rowText = (rowTable.content as { type: string; text: string }[])[0].text;
       return { content: [{ type: 'text' as const, text: `${headerText}\n\nRows:\n${rowText}` }] };
+    },
+  );
+
+  server.tool(
+    'fortnox_get_vouchers',
+    'Hämta flera verifikationer MED rader i ett enda anrop, i stället för ett fortnox_get_voucher-anrop per verifikation. Skrivskyddad. Två lägen som inte kan kombineras: (1) "vouchers" — 1 till 50 par av {series, number}; (2) period — "fromDate" och "toDate" (båda krävs, YYYY-MM-DD), valfritt "series". I periodläget listas perioden först och raderna hämtas därefter en verifikation i taget för de första "limit" verifikationerna (standard 100, max 200); har perioden fler flaggas truncated och totalInPeriod anges. Ange "financialYear" för ett annat räkenskapsår än det nuvarande — verifikationsnummer återanvänds mellan räkenskapsår. En verifikation som inte kan hämtas ger en post i errors men stoppar inte de övriga. Makulerade rader (Removed) märks med [REMOVED] och ska inte räknas med.',
+    {
+      vouchers: z
+        .array(
+          z.strictObject({
+            series: z.string().describe('Verifikationsserie (t.ex. "A")'),
+            number: z.string().describe('Verifikationsnummer'),
+          }),
+        )
+        .min(1)
+        .max(50)
+        .optional()
+        .describe(
+          'Lista-läge: 1–50 verifikationer att hämta. Kan inte kombineras med fromDate/toDate/series/limit.',
+        ),
+      fromDate: z
+        .string()
+        .optional()
+        .describe('Periodläge: från datum (YYYY-MM-DD). Kräver även toDate.'),
+      toDate: z
+        .string()
+        .optional()
+        .describe('Periodläge: till datum (YYYY-MM-DD). Kräver även fromDate.'),
+      series: z.string().optional().describe('Periodläge: begränsa till en verifikationsserie'),
+      financialYear: z
+        .number()
+        .optional()
+        .describe(
+          'Räkenskapsår (default: nuvarande, eller verifikationens eget år i periodläge). Rekommenderas för tidigare år — verifikationsnummer återanvänds mellan räkenskapsår.',
+        ),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe(
+          'Periodläge: max antal verifikationer vars rader hämtas, i listordning (standard 100, max 200)',
+        ),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ vouchers, fromDate, toDate, series, financialYear, limit, includeRaw }) => {
+      const result = await getVouchers({
+        vouchers,
+        fromDate,
+        toDate,
+        series,
+        financialYear,
+        limit,
+      });
+      return confirmationResponse(formatVouchersWithRows(result), result, undefined, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_get_voucher_attachment_overview',
+    'Visa vilka verifikationer i en period som har respektive saknar bifogade filer (kvitton/underlag) i ett enda anrop, i stället för ett fortnox_list_voucher_attachments-anrop per verifikation. Skrivskyddad. Kräver "fromDate" och "toDate" (YYYY-MM-DD); valfritt "series" och "financialYear". Returnerar antal verifikationer totalt/med/utan bilagor samt per verifikation: serie, nummer, datum, beskrivning, antal bilagor och filnamn. Med onlyMissing listas bara verifikationer utan bilagor (räknarna gäller ändå hela perioden). Högst 500 verifikationer listas. Kräver Fortnox-behörigheten "connectfile" (ingår i standardbehörigheterna); filkopplingar mot filarkivet kan även kräva behörigheten "archive" (noxctl init --with-archive). Saknas behörigheten svarar Fortnox med ett behörighetsfel (403).',
+    {
+      fromDate: z.string().describe('Från datum (YYYY-MM-DD)'),
+      toDate: z.string().describe('Till datum (YYYY-MM-DD)'),
+      series: z.string().optional().describe('Begränsa till en verifikationsserie (t.ex. "A")'),
+      financialYear: z
+        .number()
+        .optional()
+        .describe(
+          'Räkenskapsår (default: nuvarande). Rekommenderas för tidigare år — verifikationsnummer återanvänds mellan räkenskapsår.',
+        ),
+      onlyMissing: z
+        .boolean()
+        .optional()
+        .describe('Lista bara verifikationer utan bilagor (default: false)'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ fromDate, toDate, series, financialYear, onlyMissing, includeRaw }) => {
+      const overview = await getVoucherAttachmentOverview({
+        fromDate,
+        toDate,
+        series,
+        financialYear,
+        onlyMissing,
+      });
+      return confirmationResponse(
+        formatVoucherAttachmentOverview(overview),
+        overview,
+        undefined,
+        includeRaw,
+      );
     },
   );
 
