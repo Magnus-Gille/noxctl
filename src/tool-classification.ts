@@ -24,9 +24,13 @@ const MUTATION_CONTROLS: ReadonlySet<string> = new Set(['confirm', 'dryRun']);
 // readOnlyHint and a read-only server does not register it.
 const LOCAL_WRITE_FIELDS: ReadonlySet<string> = new Set(['outputPath']);
 
-const DESTRUCTIVE_NAME_PATTERN = /^fortnox_(delete|cancel)_/;
+// MCP: destructiveHint false means the tool only performs additive updates. A
+// delete or cancel removes data, and an update, patch or replace overwrites
+// existing values (a JSON Patch can also remove them), so all of these are
+// destructive. Only creates and state-advancing calls are additive.
+const DESTRUCTIVE_NAME_PATTERN = /^fortnox_(delete|cancel|update|patch|replace)_/;
 
-// Irreversible or overwriting tools that are not covered by the name pattern.
+// Irreversible or overwriting tools that the name pattern does not cover.
 // Adding a tool here (or a delete/cancel name) must be a conscious decision;
 // tests/mcp-tool-annotations.test.ts pins the exact set.
 const DESTRUCTIVE_TOOLS: ReadonlySet<string> = new Set([
@@ -34,7 +38,6 @@ const DESTRUCTIVE_TOOLS: ReadonlySet<string> = new Set([
   'fortnox_credit_supplier_invoice', // closes the supplier invoice with a credit note
   'fortnox_detach_document_attachment', // removes the link, like the delete_*_file_connection tools
   'fortnox_finish_contract', // ends the contract; no further invoices are created
-  'fortnox_replace_recurring', // overwrites the whole recurring definition
   'fortnox_reset_scheduletime_day', // overwrites and resets one schedule day
 ]);
 

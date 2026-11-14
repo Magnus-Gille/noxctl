@@ -5,44 +5,22 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createFortnoxClient } from '../src/fortnox-client.js';
 import { createServer, type OperationObserver } from '../src/index.js';
 
-// Every destructive tool must be a conscious decision: adding a delete-like
-// tool without listing it here fails the exact-set assertion below.
-const EXPECTED_DESTRUCTIVE_TOOLS = [
-  'fortnox_cancel_invoice',
-  'fortnox_cancel_offer',
-  'fortnox_cancel_order',
-  'fortnox_cancel_supplier_invoice',
+// Destructive tools are a conscious decision. delete_*, cancel_*, update_*,
+// patch_* and replace_* are destructive by name (they remove or overwrite
+// data). Everything else that is destructive must be listed here, so a new
+// overwriting or irreversible tool without such a name fails the exact-set test.
+const EXPECTED_EXPLICIT_DESTRUCTIVE_TOOLS = [
   'fortnox_credit_invoice',
   'fortnox_credit_supplier_invoice',
-  'fortnox_delete_absencetransaction',
-  'fortnox_delete_account',
-  'fortnox_delete_archive_entry',
-  'fortnox_delete_archive_path',
-  'fortnox_delete_article',
-  'fortnox_delete_attendancetransaction',
-  'fortnox_delete_contract_accrual',
-  'fortnox_delete_costcenter',
-  'fortnox_delete_customer',
-  'fortnox_delete_inbox_entry',
-  'fortnox_delete_invoice_accrual',
-  'fortnox_delete_invoice_payment',
-  'fortnox_delete_price',
-  'fortnox_delete_project',
-  'fortnox_delete_salarytransaction',
-  'fortnox_delete_supplier_invoice_accrual',
-  'fortnox_delete_supplier_invoice_file_connection',
-  'fortnox_delete_supplier_invoice_payment',
-  'fortnox_delete_taxreduction',
-  'fortnox_delete_voucher_file_connection',
   'fortnox_detach_document_attachment',
   'fortnox_finish_contract',
   'fortnox_get_archive_entry', // saves to a local path and can overwrite
   'fortnox_get_inbox_file', // saves to a local path and can overwrite
   'fortnox_get_supplier_invoice_file', // saves to a local path and can overwrite
   'fortnox_get_voucher_file', // saves to a local path and can overwrite
-  'fortnox_replace_recurring',
   'fortnox_reset_scheduletime_day',
 ];
+const DESTRUCTIVE_BY_NAME = /^fortnox_(delete|cancel|update|patch|replace)_/;
 
 const LOCAL_ONLY_TOOLS = ['fortnox_shadow_status'];
 
@@ -132,7 +110,11 @@ describe('MCP tool annotations', () => {
       .filter((tool) => tool.annotations?.destructiveHint === true)
       .map((tool) => tool.name)
       .sort();
-    expect(destructive).toEqual([...EXPECTED_DESTRUCTIVE_TOOLS].sort());
+    const byName = tools
+      .filter((tool) => DESTRUCTIVE_BY_NAME.test(tool.name))
+      .map((tool) => tool.name);
+    expect(byName.length).toBeGreaterThan(40);
+    expect(destructive).toEqual([...byName, ...EXPECTED_EXPLICIT_DESTRUCTIVE_TOOLS].sort());
   });
 
   it('marks update, patch and replace mutations idempotent and other mutations not', async () => {

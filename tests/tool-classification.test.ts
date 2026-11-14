@@ -63,13 +63,25 @@ describe('classifyTool', () => {
     ).toBe(true);
   });
 
+  it('marks update, patch and replace tools destructive because they overwrite data', () => {
+    for (const name of [
+      'fortnox_update_customer',
+      'fortnox_patch_recurring',
+      'fortnox_replace_recurring',
+      'fortnox_update_scheduletime',
+    ]) {
+      expect(classifyTool(name, ['confirm', 'dryRun']).annotations.destructiveHint, name).toBe(
+        true,
+      );
+    }
+  });
+
   it('marks explicitly listed irreversible tools destructive', () => {
     for (const name of [
       'fortnox_credit_invoice',
       'fortnox_credit_supplier_invoice',
       'fortnox_detach_document_attachment',
       'fortnox_finish_contract',
-      'fortnox_replace_recurring',
       'fortnox_reset_scheduletime_day',
     ]) {
       expect(classifyTool(name, ['confirm', 'dryRun']).annotations.destructiveHint).toBe(true);
