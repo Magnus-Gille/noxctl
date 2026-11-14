@@ -1,5 +1,50 @@
 # Project Status
 
+## Night sprint — 2026-11-13/14 (Plane cycle "Nattsprint 13–14 nov: MCP-ergonomi och API-drift")
+
+Endpoint chosen by the owner: one branch and PR per ticket, independent cross-model
+review and green CI, then a guarded squash-merge. No tag, npm publish or release was
+done. Every PR was verified on its exact head before merge.
+
+### Merged to main
+
+| Ticket | PR | Main commit | What |
+|---|---|---|---|
+| NOX-223 | #230 | `5811b85` | `overrides` pin `hono` 4.13.16 and `@hono/node-server` 2.1.6; `npm audit` was failing and turned every PR red. Revert the squash commit to roll back. |
+| NOX-199 (annotations, read-only) | #232 | `606d3da` | MCP annotations on every tool from one classification module; `noxctl serve --read-only` / `NOXCTL_READ_ONLY` (fail-closed). Embedded API unchanged on purpose. |
+| NOX-203, NOX-204 | #233 | `e273b47` | Refreshed opaque drift baselines; supplier-invoice comment log (list/add/delete) and recurring labels list as ops, tools and CLI. NOX-204: only a read-only `CommentLog` array was added to the supplier-invoice schema, so the write tools are unchanged. |
+| NOX-199 (bulk read, attachment view) | #234 | `0418a4e` | `fortnox_get_vouchers` / `vouchers get-many` (list of 1-50 or a period, cap 100/200) and `fortnox_get_voucher_attachment_overview` / `vouchers attachment-overview`. Both read-only. |
+| NOX-205 | #229 | `6782501` | `noxctl init` explains `invalid_scope`: each requested permission with its Fortnox portal label, plus what to check (Client ID matches the edited integration, permissions enabled and saved, redirect URI). The earlier-session duplicate #228 was merged to main (`5783064`) while #229's CI ran; the owner then chose to replace it, so #229's `src/auth.ts` and `tests/auth-invalid-scope.test.ts` supersede it (byte-identical to the reviewed head). Real Fortnox `invalid_scope` redirect not exercised. |
+| Release prep (NOX-199, 203, 204, 205, 223) | #236 | `4766ba9` | Release 0.14.0 prepared: changelog promoted, version synced in `package.json`, `package-lock.json`, `server.json`, `src/version.ts`; the shadow lane ships as experimental (owner decision 2026-11-14). Merged only; nothing tagged or published. Revert the squash commit to roll back. |
+
+### Waiting on the owner
+
+- **NOX-212** (credit invoices in shadow mirroring) was skipped by request: it waits on
+  the owner's choice between a draft credit path in the accounted fork and a mapping to
+  Accounted `/credit`.
+- **Release.** Release PR #236 merged 2026-11-14 as `4766ba9` (guarded squash on head `28fd15a`, parent `6782501`); `main` now reads 0.14.0 and the shadow lane ships in it as experimental (`dist/shadow/**`; the pilot host stays excluded). Tag `v0.14.0` (annotated, object `cf7ebb4`, on `4766ba9`) was pushed on the owner's go-ahead; no workflow reacts to tags. **`noxctl@0.14.0` is published** on npm (2026-11-14 22:05:48Z, `latest` = 0.14.0, maintainer account `magnusgille`; not by this session's own `npm publish`, which failed with 404 at 21:59 while the npm login was missing and later with "cannot publish over" once the version existed). Verified: registry shasum `24c75a2a9830d81304f3a4e479df714fe590a857`, 485 files, byte-identical to a local `npm pack` of `4766ba9` (`diff -r` of both tarballs); a clean install in an isolated scratch directory runs (`noxctl --version` = 0.14.0, `noxctl/embedded` imports, `dist/shadow` 88 entries, no `dist/pilot`). **Not done and not authorized:** `gh release create v0.14.0` (needs the owner's go-ahead) and closing the stale #215. #215 (`release/0.13.1`) is stale and superseded; it was not touched and can be closed once the owner agrees.
+- Follow-up tickets: NOX-219 (invoices-v2), NOX-220 (offers-v2), NOX-221 (orders-v2),
+  NOX-222 (articles-v2). Their map entries stay `missing` tracked gaps.
+
+### Review and delegation evidence
+
+- Independent reviewer for every PR: Codex, requested `gpt-6.1-sol`, xhigh, read-only,
+  ephemeral, frozen export. The tool does not report the runtime model, so it is
+  recorded as unknown. Findings were treated as hypotheses; grounded ones were fixed with
+  regression tests (NOX-205: weak test assertions; NOX-199 annotations: three rounds, local
+  file writers, update/patch/replace/send_invoice and `overwrite` tools marked destructive;
+  NOX-203: delete tests lacked an empty 204 body). NOX-223 and NOX-199b: no findings.
+- Implementer leaves (requested model / result): haiku for NOX-199 annotations
+  (partial: conductor corrected the classification), NOX-203/204 baselines (pass) and
+  comment log + recurring labels (pass, after the conductor fixed a type and merge
+  conflicts); sonnet for NOX-199 bulk read + attachment view (pass). Runtime model
+  identity of the leaves was not observed.
+- Not verified against live Fortnox (no credentials used): NOX-199b field names and the
+  `Year` = financial-year-id assumption; NOX-203 response envelopes were checked against the
+  local spec cache only.
+
+---
+
 ## Backlog sprint — 2026-09-26 (hard stop 18:03 CEST)
 
 Worktree: `/tmp/noxctl-sprint-20260926`; branch `feat/backlog-sprint-20260926`.
