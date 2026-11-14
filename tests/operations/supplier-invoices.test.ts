@@ -169,4 +169,73 @@ describe('supplier invoice operations', () => {
       await expect(getSupplierInvoiceFile('missing')).rejects.toThrow(/not found/);
     });
   });
+
+  describe('supplier invoice comment log', () => {
+    it('lists comments from the commentlog path and unwraps the array', async () => {
+      mockFetch({
+        SupplierInvoiceCommentLog: [{ Id: 'c-1', Comment: 'Kontrollerad', UserId: 3 }],
+      });
+      const { listSupplierInvoiceComments } =
+        await import('../../src/operations/supplier-invoices.js');
+
+      const comments = await listSupplierInvoiceComments('7');
+
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+        string,
+        { method?: string } | undefined,
+      ];
+      expect(url).toBe('https://api.fortnox.se/3/supplierinvoices/7/commentlog');
+      expect(init?.method ?? 'GET').toBe('GET');
+      expect(comments).toEqual([{ Id: 'c-1', Comment: 'Kontrollerad', UserId: 3 }]);
+    });
+
+    it('creates a comment with only the Comment field in the body', async () => {
+      mockFetch({ SupplierInvoiceCommentLog: { Id: 'c-2', Comment: 'Hej' } });
+      const { createSupplierInvoiceComment } =
+        await import('../../src/operations/supplier-invoices.js');
+
+      const created = await createSupplierInvoiceComment('7', { Comment: 'Hej' });
+
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+        string,
+        { method?: string; body?: string },
+      ];
+      expect(url).toBe('https://api.fortnox.se/3/supplierinvoices/7/commentlog');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body ?? 'null')).toEqual({
+        SupplierInvoiceCommentLog: { Comment: 'Hej' },
+      });
+      expect(created).toEqual({ Id: 'c-2', Comment: 'Hej' });
+    });
+
+    it('deletes one comment by encoded id and accepts an empty 204 body', async () => {
+      // Fortnox answers a comment delete with 204 and no body at all.
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        text: () => Promise.resolve(''),
+        json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+      });
+      const { deleteSupplierInvoiceComment } =
+        await import('../../src/operations/supplier-invoices.js');
+
+      await expect(deleteSupplierInvoiceComment('7', 'c 1/x')).resolves.toBeUndefined();
+
+      const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+        string,
+        { method?: string },
+      ];
+      expect(url).toBe('https://api.fortnox.se/3/supplierinvoices/7/commentlog/c%201%2Fx');
+      expect(init.method).toBe('DELETE');
+    });
+
+    it('refuses dot-segment comment ids before calling Fortnox', async () => {
+      mockFetch({});
+      const { deleteSupplierInvoiceComment } =
+        await import('../../src/operations/supplier-invoices.js');
+
+      await expect(deleteSupplierInvoiceComment('7', '..')).rejects.toThrow(/comment ID/);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+  });
 });

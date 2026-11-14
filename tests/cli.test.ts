@@ -367,6 +367,41 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('bookkeep');
   });
 
+  it('noxctl supplier-invoices comment commands document confirmation and dry-run', () => {
+    for (const sub of ['comments', 'add-comment', 'delete-comment']) {
+      const output = execFileSync(
+        'node',
+        [CLI_PATH, 'supplier-invoices', sub, '--help'],
+        execOpts,
+      ) as string;
+      expect(output).toContain('Example:');
+    }
+    const addHelp = execFileSync(
+      'node',
+      [CLI_PATH, 'supplier-invoices', 'add-comment', '--help'],
+      execOpts,
+    ) as string;
+    expect(addHelp).toContain('--dry-run');
+    expect(addHelp).toContain('--yes');
+    const deleteHelp = execFileSync(
+      'node',
+      [CLI_PATH, 'supplier-invoices', 'delete-comment', '--help'],
+      execOpts,
+    ) as string;
+    expect(deleteHelp).toContain('--dry-run');
+    expect(deleteHelp).toContain('--yes');
+  });
+
+  it('noxctl recurrings list-labels --help shows a recurring ID example', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'recurrings', 'list-labels', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('Example:');
+    expect(output).toContain('recurringId');
+  });
+
   it('noxctl supplier-invoices file --help requires explicit overwrite opt-in', () => {
     const output = execFileSync(
       'node',

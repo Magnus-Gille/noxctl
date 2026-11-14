@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Supplier-invoice comment log and recurring labels (NOX-203).** Adds list,
+  create and delete for supplier-invoice comments (`fortnox_list_supplier_invoice_comments`,
+  `fortnox_create_supplier_invoice_comment`, `fortnox_delete_supplier_invoice_comment`;
+  CLI `supplier-invoices comments`, `add-comment`, `delete-comment`), and list for
+  recurring labels (`fortnox_list_recurring_labels`; CLI `recurrings list-labels`).
+  Create and delete require `confirm` or `--yes` and support `dryRun` / `--dry-run`.
+  The corresponding operations move to implemented in the API coverage map.
+- **MCP tool annotations and read-only server mode (NOX-199).** Every tool now
+  carries MCP annotations (`readOnlyHint`, explicit `destructiveHint` and
+  `idempotentHint` on mutations, `openWorldHint`) from one shared classification,
+  so clients can treat reads differently. `noxctl serve --read-only` (or
+  `NOXCTL_READ_ONLY=1`) registers no tool that can change Fortnox data, including
+  `fortnox_invoice_pdf` and the tools that save a file to a local path; an
+  unrecognized `NOXCTL_READ_ONLY` value makes `serve` exit with an error. The capability resource reports `mode`. See
+  "Read-only mode and tool annotations" in the README.
 - **Bulk voucher read and per-period attachment overview (NOX-199).** A read workflow
   such as "go through last month's vouchers" no longer needs one `fortnox_get_voucher`
   call, and one approval prompt, per voucher. `fortnox_get_vouchers` /
@@ -41,6 +56,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and the existing header mapping carries them to Accounted `notes`,
   `your_reference` and `our_reference` and verifies them on readback. Other
   header input such as `YourOrderNumber` is still refused.
+
+### Changed
+
+- **Fortnox API drift refreshed (NOX-203, NOX-204).** The committed fingerprint,
+  API coverage map and baseline, and tool-schema baseline now match the current
+  Fortnox specification. The new v2 document families are recorded as tracked
+  gaps and are not implemented yet; the supplier-invoice comment log and recurring
+  labels are now implemented (see Added). The supplier-invoice payload gained one
+  read-only collection that stays a tracked gap; no existing tool arguments changed.
 
 ### Fixed
 

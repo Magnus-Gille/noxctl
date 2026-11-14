@@ -158,6 +158,45 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
     });
   }
 
+  // Supplier-invoice comment log (kommentarer). Fortnox keys the log by the
+  // invoice's GivenNumber; each entry is addressed by its string Id.
+  interface SupplierInvoiceCommentListResponse {
+    SupplierInvoiceCommentLog: Record<string, unknown>[];
+  }
+  interface SupplierInvoiceCommentResponse {
+    SupplierInvoiceCommentLog: Record<string, unknown>;
+  }
+
+  async function listSupplierInvoiceComments(
+    givenNumber: string,
+  ): Promise<Record<string, unknown>[]> {
+    const data = await transport.request<SupplierInvoiceCommentListResponse>(
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}/commentlog`,
+    );
+    return data.SupplierInvoiceCommentLog ?? [];
+  }
+
+  async function createSupplierInvoiceComment(
+    givenNumber: string,
+    comment: { Comment: string },
+  ): Promise<Record<string, unknown>> {
+    const data = await transport.request<SupplierInvoiceCommentResponse>(
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}/commentlog`,
+      { method: 'POST', body: { SupplierInvoiceCommentLog: comment } },
+    );
+    return data.SupplierInvoiceCommentLog;
+  }
+
+  async function deleteSupplierInvoiceComment(
+    givenNumber: string,
+    commentId: string,
+  ): Promise<void> {
+    await transport.request(
+      `supplierinvoices/${pathSegment('supplier invoice number', givenNumber)}/commentlog/${pathSegment('comment ID', commentId)}`,
+      { method: 'DELETE' },
+    );
+  }
+
   // List the files attached to a supplier invoice — the read counterpart that
   // was missing: vouchers and customer invoices both had a read path, but a
   // supplier invoice's original document (the scanned/emailed invoice itself)
@@ -206,6 +245,9 @@ export function createSupplierInvoiceOperations(transport: FortnoxTransport) {
     createSupplierInvoiceFileConnection,
     deleteSupplierInvoiceFileConnection,
     getSupplierInvoiceFile,
+    listSupplierInvoiceComments,
+    createSupplierInvoiceComment,
+    deleteSupplierInvoiceComment,
   };
 }
 
@@ -224,4 +266,7 @@ export const {
   createSupplierInvoiceFileConnection,
   deleteSupplierInvoiceFileConnection,
   getSupplierInvoiceFile,
+  listSupplierInvoiceComments,
+  createSupplierInvoiceComment,
+  deleteSupplierInvoiceComment,
 } = createSupplierInvoiceOperations(defaultFortnoxTransport);

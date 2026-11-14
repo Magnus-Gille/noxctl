@@ -5,6 +5,7 @@ import {
   invoiceRequestDetailColumns,
   invoiceRequestListColumns,
   recurringDetailColumns,
+  recurringLabelColumns,
   recurringListColumns,
 } from '../views.js';
 import {
@@ -50,6 +51,7 @@ export function registerRecurringTools(
     getRecurringDeviation,
     listInvoiceRequests,
     listRecurringDeviations,
+    listRecurringLabels,
     listRecurrings,
     patchRecurring,
     replaceRecurring,
@@ -169,6 +171,16 @@ export function registerRecurringTools(
     async ({ recurringId, deviationId, includeRaw }) => {
       const data = await getRecurringDeviation(recurringId, deviationId);
       return detailResponse(data, recurringDetailColumns, data, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_list_recurring_labels',
+    'Lista etiketter (labels) för en återkommande fakturering.',
+    { recurringId, includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox') },
+    async ({ recurringId, includeRaw }) => {
+      const data = await listRecurringLabels(recurringId);
+      return listResponse(data, recurringLabelColumns, data, undefined, includeRaw);
     },
   );
 
