@@ -202,6 +202,13 @@ export const supplierInvoiceAttachmentColumns: Column[] = [
   { key: 'fileId', header: 'File ID', width: 36 },
 ];
 
+export const supplierInvoiceCommentColumns: Column[] = [
+  { key: 'Id', header: 'ID', width: 12 },
+  { key: 'CreatedAt', header: 'Created', width: 20 },
+  { key: 'UserName', header: 'User', width: 20 },
+  { key: 'Comment', header: 'Comment', width: 40 },
+];
+
 // --- Invoice payment views (target ≤80 cols) ---
 
 // 8 + 2 + 10 + 2 + 10 + 2 + 12 + 2 + 10 + 2 + 10 = 70
@@ -484,6 +491,12 @@ export const recurringListColumns: Column[] = [
   { key: 'status', header: 'Status', width: 12 },
   { key: 'invoice_handling', header: 'Handling', width: 12 },
   { key: 'created_at', header: 'Created', width: 20 },
+];
+
+export const recurringLabelColumns: Column[] = [
+  { key: 'name', header: 'Name', width: 20 },
+  { key: 'value', header: 'Value', width: 24 },
+  { key: 'id', header: 'ID', width: 36 },
 ];
 
 export const recurringDetailColumns: Column[] = [

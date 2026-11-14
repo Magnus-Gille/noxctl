@@ -51,6 +51,8 @@ import {
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
   supplierInvoiceAttachmentColumns,
+  supplierInvoiceCommentColumns,
+  recurringLabelColumns,
   invoicePaymentListColumns,
   invoicePaymentDetailColumns,
   supplierInvoicePaymentListColumns,
@@ -2946,6 +2948,70 @@ supplierInvoices
     });
   });
 
+supplierInvoices
+  .command('comments <givenNumber>')
+  .description('List the comment log of a supplier invoice')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl supplier-invoices comments 1`,
+  )
+  .action(async (givenNumber: string) => {
+    const { listSupplierInvoiceComments } = defaultFortnoxOperations;
+    const comments = await listSupplierInvoiceComments(givenNumber);
+    outputList(comments, supplierInvoiceCommentColumns, json(), comments);
+  });
+supplierInvoices
+  .command('add-comment <givenNumber> <comment>')
+  .description('Add a comment to a supplier invoice comment log')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl supplier-invoices add-comment 1 "Kontrollerad" --dry-run`,
+  )
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (givenNumber: string, comment: string, opts) => {
+    const { createSupplierInvoiceComment } = defaultFortnoxOperations;
+    const payload = { SupplierInvoiceCommentLog: { Comment: comment } };
+    if (!(await confirmMutation(`Add comment to supplier invoice ${givenNumber}`, opts, payload)))
+      return;
+    const data = await createSupplierInvoiceComment(givenNumber, { Comment: comment });
+    outputDetail(data, supplierInvoiceCommentColumns, json(), 'SupplierInvoiceCommentLog');
+  });
+supplierInvoices
+  .command('delete-comment <givenNumber> <commentId>')
+  .description('Delete a comment from a supplier invoice comment log')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl supplier-invoices delete-comment 1 c-1 --dry-run`,
+  )
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without deleting')
+  .action(async (givenNumber: string, commentId: string, opts) => {
+    const { deleteSupplierInvoiceComment } = defaultFortnoxOperations;
+    if (
+      !(await confirmMutation(
+        `Delete comment ${commentId} from supplier invoice ${givenNumber}`,
+        opts,
+      ))
+    )
+      return;
+    await deleteSupplierInvoiceComment(givenNumber, commentId);
+    outputConfirmation(
+      `Comment ${commentId} deleted from supplier invoice ${givenNumber}.`,
+      json(),
+      {
+        Id: commentId,
+        deleted: true,
+      },
+    );
+  });
+
 // --- general-ledger ---
 const generalLedger = program
   .command('general-ledger')
@@ -5029,6 +5095,21 @@ recurrings
     const { getRecurringDeviation } = defaultFortnoxOperations;
     const data = await getRecurringDeviation(recurringId, deviationId);
     outputDetail(data, recurringDetailColumns, json(), 'Recurring deviation');
+  });
+
+recurrings
+  .command('list-labels <recurringId>')
+  .description('List labels for a recurring billing contract')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl recurrings list-labels 550e8400-e29b-41d4-a716-446655440000`,
+  )
+  .action(async (recurringId: string) => {
+    const { listRecurringLabels } = defaultFortnoxOperations;
+    const data = await listRecurringLabels(recurringId);
+    outputList(data, recurringLabelColumns, json(), data);
   });
 
 recurrings
