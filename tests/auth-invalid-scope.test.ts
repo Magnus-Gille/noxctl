@@ -21,12 +21,12 @@ import { runOAuthSetup, invalidScopeGuidance, SCOPES, ARCHIVE_SCOPE } from '../s
 const SECRET = 'super-secret-value-xyz';
 const config = { clientId: 'client-abc', clientSecret: SECRET };
 
-async function callbackFor(query: string): Promise<void> {
+async function callbackFor(query: string): Promise<string> {
   // Retry until the callback server is listening.
   for (let i = 0; i < 50; i++) {
     try {
-      await fetch(`http://localhost:9876/callback?${query}`);
-      return;
+      const res = await fetch(`http://localhost:9876/callback?${query}`);
+      return await res.text();
     } catch {
       await new Promise((r) => setTimeout(r, 20));
     }
@@ -44,6 +44,37 @@ describe('invalid_scope guidance', () => {
     expect(text).toMatch(/redirect/i);
     expect(text).toContain('http://localhost:9876/callback');
     expect(text).not.toMatch(/https?:\/\/apps\.fortnox/);
+  });
+
+  it('pairs every requested scope with its Fortnox portal label', () => {
+    const text = invalidScopeGuidance(`${SCOPES} ${ARCHIVE_SCOPE}`);
+    // Each requested scope renders as "scope (Portal label)" so the owner can
+    // match it against the permission names shown in the developer portal.
+    const lines = text.split('\n').filter((line) => line.startsWith('  - '));
+    const requested = `${SCOPES} ${ARCHIVE_SCOPE}`.split(' ');
+    expect(lines).toHaveLength(requested.length);
+    for (const line of lines) expect(line).toMatch(/^ {2}- [a-z]+ \(.+\)$/);
+    expect(text).toContain('  - costcenter (Cost Center)');
+    expect(text).toContain('  - archive (Archive)');
+    expect(text).toContain('  - connectfile (File Connection)');
+    expect(text).toContain('  - supplierinvoice (Supplier Invoice)');
+  });
+
+  it('tells the owner to match the integration, reload and verify saved permissions', () => {
+    const text = invalidScopeGuidance(`${SCOPES} ${ARCHIVE_SCOPE}`);
+    expect(text).toMatch(/integration whose Client ID matches the Client ID you entered/);
+    expect(text).toMatch(/similar name, is not the same app/);
+    expect(text).toMatch(/Reload the integration page/);
+    expect(text).toMatch(/enabled and saved/);
+    expect(text).toMatch(/Independently verify that the redirect URI is exactly/);
+    expect(text).toMatch(/run noxctl init again/);
+  });
+
+  it('falls back to the bare scope name when no portal label is known', () => {
+    const text = invalidScopeGuidance('costcenter brand_new_scope');
+    expect(text).toContain('  - costcenter (Cost Center)');
+    expect(text).toContain('  - brand_new_scope\n');
+    expect(text).not.toContain('brand_new_scope (');
   });
 
   it('prints guidance on an invalid_scope callback and preserves credentials', async () => {
@@ -67,16 +98,27 @@ describe('invalid_scope guidance', () => {
     const generatedState = new URL(authUrl!).searchParams.get('state');
     expect(generatedState).toBeTruthy();
 
-    await callbackFor('error=invalid_scope&error_description=unsupported&state=STATE123');
+    const body = await callbackFor(
+      'error=invalid_scope&error_description=unsupported&state=STATE123',
+    );
     await rejected;
+
+    expect(body).toContain('<pre>');
+    expect(body).toContain('costcenter (Cost Center)');
+    expect(body).toContain('archive (Archive)');
+    expect(body).toContain('enabled and saved');
+    expect(body).not.toContain(SECRET);
+    expect(body).not.toContain(generatedState!);
+    expect(body).not.toContain('STATE123');
 
     const guidance = logs.slice(startupCount).join('\n');
     expect(guidance.length).toBeGreaterThan(0);
     expect(guidance).not.toContain(generatedState!);
     expect(guidance).not.toContain(authUrl!);
     expect(guidance).not.toMatch(/https:\/\//);
-    expect(guidance).toContain('archive');
-    expect(guidance).toContain('costcenter');
+    expect(guidance).toContain('archive (Archive)');
+    expect(guidance).toContain('costcenter (Cost Center)');
+    expect(guidance).toContain('enabled and saved');
     expect(guidance).not.toContain(SECRET);
     expect(guidance).not.toContain('STATE123');
     expect(guidance).not.toMatch(/client_id=/);

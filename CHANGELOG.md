@@ -59,6 +59,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **`noxctl init` explains `invalid_scope` errors (NOX-205).** When Fortnox
+  redirects back with `invalid_scope`, the terminal and the callback page now list
+  each requested permission with its Fortnox portal label and say what to check:
+  the integration whose Client ID matches the one entered, that every listed
+  permission is enabled and saved, and that the redirect URI is
+  `http://localhost:9876/callback`. The error text, retry behaviour and saved
+  credentials are unchanged, and the OAuth scope serialization is intentionally
+  unchanged.
 - **Fortnox API drift refreshed (NOX-203, NOX-204).** The committed fingerprint,
   API coverage map and baseline, and tool-schema baseline now match the current
   Fortnox specification. The new v2 document families are recorded as tracked
