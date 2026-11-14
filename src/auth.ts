@@ -607,6 +607,57 @@ export function buildAuthorizationUrl(
   return `${FORTNOX_AUTH_URL}?${params.toString()}`;
 }
 
+// Portal names for each requested scope, from Fortnox's scope table ("Scope Name"
+// column). Used only for human-readable invalid_scope guidance.
+const SCOPE_PORTAL_LABELS: Record<string, string> = {
+  article: 'Article',
+  customer: 'Customer',
+  invoice: 'Invoice',
+  payment: 'Payments',
+  supplier: 'Supplier',
+  supplierinvoice: 'Supplier Invoice',
+  bookkeeping: 'Bookkeeping',
+  companyinformation: 'Company Information',
+  settings: 'Settings',
+  project: 'Project',
+  costcenter: 'Cost Center',
+  price: 'Price',
+  inbox: 'Inbox',
+  connectfile: 'File Connection',
+  archive: 'Archive',
+  salary: 'Salary',
+  offer: 'Offer',
+  order: 'Order',
+};
+
+/**
+ * Plain-text guidance printed when Fortnox redirects back with `invalid_scope`.
+ * Takes the space-separated scope string that was requested. Never includes the
+ * client secret, the Client ID value, the state, or any URL besides the redirect URI.
+ */
+export function invalidScopeGuidance(requestedScopes: string): string {
+  const scopes = requestedScopes.split(/\s+/).filter(Boolean);
+  return [
+    'Fortnox returned invalid_scope. Fortnox associates this error with a requested',
+    'permission that is not enabled on the integration.',
+    '',
+    'Requested permissions (scope (Portal label)):',
+    ...scopes.map((scope) => {
+      const label = SCOPE_PORTAL_LABELS[scope];
+      return label ? `  - ${scope} (${label})` : `  - ${scope}`;
+    }),
+    '',
+    'Check in the Fortnox developer portal:',
+    '  1. Edit the integration whose Client ID matches the Client ID you entered in noxctl.',
+    '     Another integration, even one with a similar name, is not the same app.',
+    '  2. Reload the integration page and verify that every permission listed above',
+    '     is enabled and saved.',
+    '  3. Independently verify that the redirect URI is exactly http://localhost:9876/callback.',
+    '',
+    'Then run noxctl init again.',
+  ].join('\n');
+}
+
 export async function runOAuthSetup(
   config: FortnoxAppConfig,
   profile: string = DEFAULT_PROFILE,
@@ -640,9 +691,12 @@ export async function runOAuthSetup(
 
         if (error) {
           const errorDesc = url.searchParams.get('error_description') || '';
+          const scopeGuidance = error === 'invalid_scope' ? invalidScopeGuidance(scopes) : null;
+          if (scopeGuidance) console.error(`\n${scopeGuidance}\n`);
           res.writeHead(400, { 'Content-Type': 'text/html; charset=utf-8' });
           res.end(
-            `<h1>Autentisering misslyckades</h1><p>${escapeHtml(error)}</p><p>${escapeHtml(errorDesc)}</p>`,
+            `<h1>Autentisering misslyckades</h1><p>${escapeHtml(error)}</p><p>${escapeHtml(errorDesc)}</p>` +
+              (scopeGuidance ? `<pre>${escapeHtml(scopeGuidance)}</pre>` : ''),
           );
           server.close();
           finish(new Error(`OAuth error: ${error}${errorDesc ? ` — ${errorDesc}` : ''}`));
