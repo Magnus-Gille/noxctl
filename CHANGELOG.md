@@ -42,6 +42,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   connections into the file archive, possibly the `archive` scope
   (`noxctl init --with-archive`); a missing scope makes Fortnox answer with an
   authorization error. Both tools are read-only.
+- **Local shadow evaluation lane (experimental, disabled by default).** The
+  package now ships an opt-in, durable Fortnox-first queue and a restricted
+  Accounted adapter for customers and invoice drafts, reachable through the
+  embedded staged server (`noxctl/embedded`). Nothing is enabled automatically,
+  no credentials or Accounted HTTP client are included, Fortnox remains
+  authoritative, and it has not been activated against a real account. Host-only
+  baseline links (`baselineCustomer`, `baselineArticle`, NOX-213) link customers
+  and articles that existed before shadowing started without a fabricated create
+  receipt, and a customer's `OurReference`, `WWW` and visiting address are
+  mirrored into Accounted `notes` (NOX-210). The bounded pilot host stays
+  unpublished and outside the npm tarball. Scope, failure handling and the host
+  contract are in `docs/shadow-evaluation.md`.
 - **Invoice-payment preflight and offline measurement (NOX-211, first slice).**
   The pilot preflight now checks a planned `createInvoicePayment` before any
   Fortnox write: exact keys (`InvoiceNumber`, `Amount`, `PaymentDate`, optional
