@@ -517,8 +517,14 @@ describe('supplier invoice tools', () => {
       expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('deletes a comment with confirm', async () => {
-      mockFetch({}, true, 204);
+    it('deletes a comment with confirm and accepts an empty 204 body', async () => {
+      // Fortnox answers a comment delete with 204 and no body at all.
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        text: () => Promise.resolve(''),
+        json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+      });
       const { client } = await setupClientServer();
 
       const result = await client.callTool({

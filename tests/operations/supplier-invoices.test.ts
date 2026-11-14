@@ -208,12 +208,18 @@ describe('supplier invoice operations', () => {
       expect(created).toEqual({ Id: 'c-2', Comment: 'Hej' });
     });
 
-    it('deletes one comment by encoded id', async () => {
-      mockFetch({}, true, 204);
+    it('deletes one comment by encoded id and accepts an empty 204 body', async () => {
+      // Fortnox answers a comment delete with 204 and no body at all.
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        text: () => Promise.resolve(''),
+        json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+      });
       const { deleteSupplierInvoiceComment } =
         await import('../../src/operations/supplier-invoices.js');
 
-      await deleteSupplierInvoiceComment('7', 'c 1/x');
+      await expect(deleteSupplierInvoiceComment('7', 'c 1/x')).resolves.toBeUndefined();
 
       const [url, init] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
         string,
