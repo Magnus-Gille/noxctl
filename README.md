@@ -152,6 +152,7 @@ So you control the credentials, the scopes, and which company is connected end t
 
    Missing scopes surface as `403 Forbidden` with a hint naming the scope (e.g.
    `Missing "payment" scope`); match that token against the **Scope** column above.
+   If `noxctl init` reports `invalid_scope`, it prints each requested scope with its portal label; check that every one is enabled and saved on the integration whose Client ID you entered.
 
    **Two scope groups are opt-in, because they depend on a Fortnox licence** the default
    set does not require. Requesting a scope the _company_ is not licensed for fails the
