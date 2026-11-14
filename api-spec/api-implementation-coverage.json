@@ -96,6 +96,16 @@
       "stateHash": "18686839471e941a55debff61fa5d01580afe23c23740fab97ebe704ca988782"
     },
     {
+      "id": "fortnox-articlesv2",
+      "classification": "partial",
+      "publicOperationCount": 6,
+      "implementedCount": 0,
+      "missingCount": 6,
+      "excludedCount": 0,
+      "stateHash": "a363d0a62a04a9dfee3eecd4675e703ae393ae04f69488136068f8ab3fb64b8b",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+    },
+    {
       "id": "fortnox-articleurlconnection",
       "classification": "excluded",
       "publicOperationCount": 4,
@@ -325,6 +335,16 @@
       "rationale": "Warehouse lifecycle transitions are outside the core accounting boundary."
     },
     {
+      "id": "fortnox-invoicesv2",
+      "classification": "partial",
+      "publicOperationCount": 15,
+      "implementedCount": 0,
+      "missingCount": 15,
+      "excludedCount": 0,
+      "stateHash": "9c70f27523296e0ec8a453fad15f457fc436e8fecf8777b8bd47c14503418b89",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+    },
+    {
       "id": "fortnox-labels",
       "classification": "excluded",
       "publicOperationCount": 4,
@@ -373,6 +393,16 @@
       "stateHash": "8d190386c51b6ce7a978456349daffc7b38f6b641b484053a2da73221656e548"
     },
     {
+      "id": "fortnox-offersv2",
+      "classification": "partial",
+      "publicOperationCount": 11,
+      "implementedCount": 0,
+      "missingCount": 11,
+      "excludedCount": 0,
+      "stateHash": "8b69f62e967d029e7879c89fa70a3904666d23b05877a896b90f52b9e988cecb",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+    },
+    {
       "id": "fortnox-orders",
       "classification": "complete",
       "publicOperationCount": 10,
@@ -380,6 +410,16 @@
       "missingCount": 0,
       "excludedCount": 0,
       "stateHash": "44704519d04cd799d72234f6fd425214c9f4384b7c19bd9654c9943d80de5986"
+    },
+    {
+      "id": "fortnox-ordersv2",
+      "classification": "partial",
+      "publicOperationCount": 10,
+      "implementedCount": 0,
+      "missingCount": 10,
+      "excludedCount": 0,
+      "stateHash": "d43b6eb0db959333c220f958208bfa26ca3d32261bad65a6463bb1756d509adf",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
     },
     {
       "id": "fortnox-predefinedaccounts",
@@ -505,12 +545,13 @@
     },
     {
       "id": "fortnox-supplierinvoices",
-      "classification": "complete",
-      "publicOperationCount": 9,
+      "classification": "partial",
+      "publicOperationCount": 12,
       "implementedCount": 9,
-      "missingCount": 0,
+      "missingCount": 3,
       "excludedCount": 0,
-      "stateHash": "d2942627bb05ff9d05d5b0e15ebaad60255579b68f99c5f599d71b3dd44c6cfe"
+      "stateHash": "ff293a9d72effc71f363d1c24898a6ccf6a763d3d4f3e21a78d4d4ec5e606102",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
     },
     {
       "id": "fortnox-suppliers",
@@ -665,6 +706,16 @@
       "missingCount": 0,
       "excludedCount": 0,
       "stateHash": "d77065ffa0a86d1ab04433cd71600b6f24710736db451d68499e57a125f63a5a"
+    },
+    {
+      "id": "recurring-api-recurringlabels",
+      "classification": "partial",
+      "publicOperationCount": 1,
+      "implementedCount": 0,
+      "missingCount": 1,
+      "excludedCount": 0,
+      "stateHash": "420a29ceeca01d42d2d7ad88fc536f6fedafa3712e13de3c5aca53bdeebe0c9c",
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
     },
     {
       "id": "recurring-api-recurrings",

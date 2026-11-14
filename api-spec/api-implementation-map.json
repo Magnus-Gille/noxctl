@@ -252,6 +252,24 @@
       }
     },
     {
+      "id": "fortnox-articlesv2",
+      "tagHash": "c06e9bdc1a1984017b59612bec6c53007f97f74cfadc1ec3e333c63e515dc8fc",
+      "classification": "partial",
+      "operations": {
+        "implemented": [],
+        "missing": [
+          "50b4bbd6923befea0ed9c378cac6efe049d9da4b77c4cc3de668fdb0a07029df",
+          "5a9ecfb7dc72d45662b49dded698ae18e92bd2e04a2acb0b908b51db208791db",
+          "9bb3738654e78fcf270a48afc3907eeb4228c38be56dc345d7ac1b450fd90713",
+          "af195053fbfea6dec555c2155fce00c08cb362d8bfbd1c3b49bf0a2112ba8448",
+          "cd6c54f92c3c344b02cc0c1d2975d1814224c4b9f56b7cc1b67a19897766038d",
+          "f5e9aa0a90c6de0f1698cb5de96716fefe1b8d0b0acf96601627107e0b4b051d"
+        ],
+        "excluded": []
+      },
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+    },
+    {
       "id": "fortnox-articleurlconnection",
       "tagHash": "ec636e332b6bd39bd46c3cb70a4458b5ac089d738efe14d9d801db088974a8e7",
       "classification": "excluded",
@@ -845,6 +863,33 @@
       "rationale": "Warehouse lifecycle transitions are outside the core accounting boundary."
     },
     {
+      "id": "fortnox-invoicesv2",
+      "tagHash": "89c8b321dbd7cb78fc48c1ec3963fbfbe41aa905d60918533b1df98c26438e65",
+      "classification": "partial",
+      "operations": {
+        "implemented": [],
+        "missing": [
+          "07ad58d0373b09541fd05e67f2f7a9cfb7bdf5503f734d9da9048079f5098ee8",
+          "090465e494f08a049d9f38226beb6b49369339cbbb1e23fccf95e4be27cd9f23",
+          "243d2631c5a50492295f4ec902e753cfa352ea3ddbe64e74eab4fe0782820150",
+          "280b658088ebd4d126925babff96361e4119416d200abccd9011ef465890c3ac",
+          "3368ab838cb18dd03b90a7a1908ebd985b5bee383d4888a51bd0f05633bea409",
+          "342707b36335b713b8b2630bda97f7919890e8864f6a5dcc53ff2a64540bf996",
+          "699bc8a63d84a6b00e4197a067f8ecddccba676c2766040d0c3a5c5fe654c567",
+          "8c96f9dc37a130d0be3719d2c7b82286d65c612dac3d36499f2ae87e84ff5c49",
+          "a32207ede534766aeabac59b9d988b554c629fae3c7f53c099d8ea82abcc8de6",
+          "b5a6601f811d2dc5e77f94e60ebf56b5bd17f68d57a5b18e55e36c00211c15ae",
+          "b8456c47add225f2756e0b264c2c1d74e83b762eff791d94ee1781e11d3fc046",
+          "bb36dda10a82d9f3e38c83e05dfd0ab2ec96a87c21b13a47dc4e9f27b5f29918",
+          "d19558b07db7996acbcf354a0471417cbeb9ac3e9b2caee237f5d0a03f8e2a43",
+          "ddd22c118c6eda363789b7700695a01ac94bec0c3f21cf594a71f0f967fae614",
+          "f9ce36ab6671b2a340f943fd7dd24b148c7027d6592262bfcbb0b509e240de8e"
+        ],
+        "excluded": []
+      },
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+    },
+    {
       "id": "fortnox-labels",
       "tagHash": "ea4801a5d0fe0369833d0058daeb89eeed1d16cbeae93a84844085a4a5630b00",
       "classification": "excluded",
@@ -967,6 +1012,29 @@
       }
     },
     {
+      "id": "fortnox-offersv2",
+      "tagHash": "a4884ee4d4d48840419e8cf6d52d76c3176be63c6403ba00fe7d5dbc323d5f4d",
+      "classification": "partial",
+      "operations": {
+        "implemented": [],
+        "missing": [
+          "041f0e1f4efb45a5163cab69ab948f0bd2f0fe6b2545d8c3dae8c346f5b4a18a",
+          "21cf938de5b4f7ffd6778f44fa524489d4d90e2bde8c3d0ba847849283a67630",
+          "4cb58a0dbe8bd0167cc21760fa8071e966788abf5e4be8aacb56545edd280de2",
+          "928271aac437bde5ec6c21710df5125b8390a375cd25b479578390ce5d9485ae",
+          "99d1df4c3e835b456db867550deb6f2954939f8b9de0e780befa01f107cfb322",
+          "a5a59ad3e63ceb106774c671b0a3b59fe64b050eac34790c5d2197f91e365a3c",
+          "a5c44a290817f5fad6c5d706cbd14d26cfaf363e222c2006a0f1abf2c3e44ab7",
+          "b1f569be9fde616a783fb347492f5901e436679dd65e70073fa82176fbe72082",
+          "bb7897b8db7060be6953b7449cab248d8022ee07751cdbb04844b4a4d6b88acc",
+          "d679b74be1595275982d14c5545d9bd3a24a24b2efc9743cca646d70d0b1ba25",
+          "ee59d47492af76c0fb247f24106818afb4b66f799c3f4c03dd8e984252241323"
+        ],
+        "excluded": []
+      },
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
+    },
+    {
       "id": "fortnox-orders",
       "tagHash": "462139acb32b1a34b7deb902a8588246743f8f37e942a014da492b00d46d78bc",
       "classification": "complete",
@@ -1000,6 +1068,28 @@
           ]
         ]
       }
+    },
+    {
+      "id": "fortnox-ordersv2",
+      "tagHash": "cd0572805fd72f738cc6adaf519b21cfef7d09ca9cab253e1a7d52da36cdda3e",
+      "classification": "partial",
+      "operations": {
+        "implemented": [],
+        "missing": [
+          "0685e3e6ab0815f5a9d4a4204086c16536d1bd70458cf7ce8486be590bcdfd2c",
+          "1baa895d88dac1470d0c0a60cfbe6e34e6922388a93179fe08b68f5a511185ed",
+          "4410c9a75752d1a074276d431311d3aa48b48c6d0935a82309b729c483a7fb17",
+          "4e78afe83361368ac98393d3e2c0d77247165d0e78e92c2af51c6e14a80ebf42",
+          "5350bdac89d0dd7e860bb3210c2a05cefd1d71c565c60f1fdb1f76bc70f63d78",
+          "60082813be1c2a3e3c09fdf9496dd302fd1e57fee1547156abae3b975c3cb2f3",
+          "9902e1803af5ad5c1722aa22d55ddab70ba538dd06eea4685630f31a4318db82",
+          "af2c5ab4d66d85df335a953796b8e098470f1c40970c45cce7c52087c11e3283",
+          "e1f01983944d92fa08e4cd6c47e7c09bde9acb6487abaf2d71434862f7845a95",
+          "ecba6dac4fba3d83de265d251d0521acafd822e93dd3cc9b02f69f33c52786f5"
+        ],
+        "excluded": []
+      },
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
     },
     {
       "id": "fortnox-predefinedaccounts",
@@ -1360,7 +1450,7 @@
     {
       "id": "fortnox-supplierinvoices",
       "tagHash": "31ec0738a8694709c83763b2f8ad4bd8d4447ed5f11c08df8a391344732505fe",
-      "classification": "complete",
+      "classification": "partial",
       "operations": {
         "implemented": [
           "18100a599f890b93ccbb48bfe318fa83bcc9b077227497d1dac3472a620e15bc",
@@ -1373,7 +1463,11 @@
           "e0a247238206f49bb9b8da6943ac267a132ae8c03512a067fc23a3609b001179",
           "ea416c860704ac22f6a5329fdcf68c151a88a3823556e19f75ce2ce5f55542c5"
         ],
-        "missing": [],
+        "missing": [
+          "2e3571105bd9db951392e7683f30e70f164ef184ae41ffe714e689d945ca154a",
+          "45781319212c3a266c4c95143b3d9146a7c7de5fa2c2759f6ec9e2ea994ff582",
+          "76979b5fee75177dd891132c26e13b4295bc2aaa95018d1d554ef4115055cab4"
+        ],
         "excluded": []
       },
       "evidence": {
@@ -1389,7 +1483,8 @@
             "list"
           ]
         ]
-      }
+      },
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
     },
     {
       "id": "fortnox-suppliers",
@@ -1788,6 +1883,19 @@
           ]
         ]
       }
+    },
+    {
+      "id": "recurring-api-recurringlabels",
+      "tagHash": "d481065cc7d21bf352cdee766fbf1d5eaf75e0e6563cddc789437ff2805a61de",
+      "classification": "partial",
+      "operations": {
+        "implemented": [],
+        "missing": [
+          "fc036f8769d5d333a219ab72e64a9c5e27d67ad5f6789040d5b20b57ca293b4b"
+        ],
+        "excluded": []
+      },
+      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); not implemented yet, so operations stay missing."
     },
     {
       "id": "recurring-api-recurrings",

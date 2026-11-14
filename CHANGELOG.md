@@ -25,6 +25,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   `your_reference` and `our_reference` and verifies them on readback. Other
   header input such as `YourOrderNumber` is still refused.
 
+### Changed
+
+- **Fortnox API drift refreshed (NOX-203, NOX-204).** The committed fingerprint,
+  API coverage map and baseline, and tool-schema baseline now match the current
+  Fortnox specification. The new v2 document families, the recurring-labels
+  endpoint and the supplier-invoice comment log are recorded as tracked gaps and
+  are not implemented yet. The supplier-invoice payload gained one read-only
+  collection that stays a tracked gap; no tool arguments changed.
+
 ### Fixed
 
 - **Shadow mirroring refuses credit invoices with explicit codes.** `Credit` true now
