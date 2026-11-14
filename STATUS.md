@@ -22,7 +22,7 @@ done. Every PR was verified on its exact head before merge.
 - **NOX-212** (credit invoices in shadow mirroring) was skipped by request: it waits on
   the owner's choice between a draft credit path in the accounted fork and a mapping to
   Accounted `/credit`.
-- **Release.** Release PR #236 merged 2026-11-14 as `4766ba9` (guarded squash on head `28fd15a`, parent `6782501`); `main` now reads 0.14.0 and the shadow lane ships in it as experimental (`dist/shadow/**`; the pilot host stays excluded). **Not done and not authorized:** tag `v0.14.0`, `npm publish` (browser passkey), registry verification, `gh release create` (CONTRIBUTING.md "Releasing"); each needs an explicit go-ahead. #215 (`release/0.13.1`) is stale and superseded; it was not touched and can be closed once the owner agrees.
+- **Release.** Release PR #236 merged 2026-11-14 as `4766ba9` (guarded squash on head `28fd15a`, parent `6782501`); `main` now reads 0.14.0 and the shadow lane ships in it as experimental (`dist/shadow/**`; the pilot host stays excluded). Tag `v0.14.0` (annotated, object `cf7ebb4`, on `4766ba9`) was pushed on the owner's go-ahead; no workflow reacts to tags. **Not done and not authorized:** `npm publish` (browser passkey), registry verification, `gh release create` (CONTRIBUTING.md "Releasing"); each needs an explicit go-ahead. #215 (`release/0.13.1`) is stale and superseded; it was not touched and can be closed once the owner agrees.
 - Follow-up tickets: NOX-219 (invoices-v2), NOX-220 (offers-v2), NOX-221 (orders-v2),
   NOX-222 (articles-v2). Their map entries stay `missing` tracked gaps.
 
