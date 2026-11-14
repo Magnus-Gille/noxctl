@@ -48,8 +48,9 @@ function isToolShape(value: unknown): value is ToolShape {
  * rather than silently falling back to the SDK default.
  *
  * Every tool also gets MCP annotations from the shared classification module.
- * In read-only mode, tools that can change Fortnox data are not registered at
- * all, so they are absent from the server, the inventory, and the capabilities.
+ * In read-only mode, tools that can change Fortnox data or write local files
+ * are not registered at all, so they are absent from the server, the inventory,
+ * and the capabilities.
  */
 export function createStrictMcpServer(
   serverInfo: Implementation,
@@ -70,7 +71,7 @@ export function createStrictMcpServer(
     }
 
     const classification = classifyTool(name, Object.keys(shape));
-    if (readOnly && classification.access === 'potential-mutation') return undefined;
+    if (readOnly && classification.access !== 'read') return undefined;
 
     const inputSchema = z.strictObject(shape);
     const registeredTool = server.registerTool(

@@ -270,12 +270,12 @@ claude mcp add fortnox-staging  -e NOXCTL_PROFILE=staging -- npx noxctl serve
 
 Every MCP tool carries [MCP tool annotations](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-annotations) that describe what it does:
 
-- `readOnlyHint: true` marks a tool that only reads. Tools with a `confirm` or `dryRun` input can change Fortnox data, so they are marked `readOnlyHint: false`. This includes `fortnox_invoice_pdf`, whose read mode can also flag an invoice as sent (`markSent`).
+- `readOnlyHint: true` marks a tool that only reads. Tools with a `confirm` or `dryRun` input can change Fortnox data, so they are marked `readOnlyHint: false`. This includes `fortnox_invoice_pdf`, whose read mode can also flag an invoice as sent (`markSent`). Tools that save a downloaded file to a path you choose (`outputPath`, optionally `overwrite`), such as `fortnox_get_voucher_file`, write to the local disk. They are also `readOnlyHint: false` and `destructiveHint: true`, because they can overwrite an existing file.
 - `destructiveHint` is set explicitly on every mutation. It is `true` for delete and cancel tools and for a few tools that close or overwrite data (`fortnox_credit_invoice`, `fortnox_credit_supplier_invoice`, `fortnox_finish_contract`, `fortnox_replace_recurring`, `fortnox_reset_scheduletime_day`, `fortnox_detach_document_attachment`).
 - `idempotentHint` is `true` for `update`, `patch`, and `replace` tools.
 - `openWorldHint: true` means the tool calls Fortnox. The only exception is the host-only `fortnox_shadow_status`, which reads local state.
 
-These hints are advisory. The MCP client decides whether to ask for approval before a call, and a server cannot force that behaviour. Read-only mode is the enforced control: the server does not register any tool that can change Fortnox data, so the client cannot call one.
+These hints are advisory. The MCP client decides whether to ask for approval before a call, and a server cannot force that behaviour. Read-only mode is the enforced control: the server does not register any tool that can change Fortnox data or write a local file, so the client cannot call one.
 
 Start a read-only server with `noxctl serve --read-only`, or set `NOXCTL_READ_ONLY=1` (`true` works too, in any case). `0`, `false`, or an unset variable leave it off. Any other value makes `serve` exit with an error instead of starting a writable server. The flag can only turn read-only mode on. The capability resource (`noxctl://capabilities`) reports `"mode": "read-only"` or `"mode": "full"`.
 
@@ -303,7 +303,7 @@ Or in Claude Desktop's `claude_desktop_config.json`:
 }
 ```
 
-Read-only mode omits every tool that can change Fortnox data, including `fortnox_invoice_pdf`. To download an invoice PDF in read-only sessions, use the CLI, which still previews it: `noxctl invoices pdf <docNumber>`. Only `--mark-sent` writes.
+Read-only mode omits every tool that can change Fortnox data or save a local file, including `fortnox_invoice_pdf` and the file download tools (`fortnox_get_voucher_file`, `fortnox_get_supplier_invoice_file`, `fortnox_get_inbox_file`, `fortnox_get_archive_entry`). To download a file in read-only sessions, use the CLI, for example `noxctl invoices pdf <docNumber>`, which previews the invoice. Only `--mark-sent` writes to Fortnox.
 
 ### Embedded and hosted runtimes
 

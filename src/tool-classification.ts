@@ -1,11 +1,12 @@
 import type { ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * Single source of truth for whether a tool can change Fortnox data. The
+ * Single source of truth for whether a tool can change Fortnox data or the
+ * local machine. The
  * capability resource and the MCP annotations both read from here, so they
  * cannot disagree about which tools are mutations.
  */
-export type ToolAccess = 'read' | 'potential-mutation';
+export type ToolAccess = 'read' | 'potential-mutation' | 'local-write';
 
 export interface ToolClassification {
   access: ToolAccess;
@@ -16,6 +17,12 @@ export interface ToolClassification {
 // dry-run control. This also catches read modes with an optional mutation flag
 // (for example fortnox_invoice_pdf with markSent).
 const MUTATION_CONTROLS: ReadonlySet<string> = new Set(['confirm', 'dryRun']);
+
+// A read tool that can choose where to save a file writes to the local
+// filesystem (and can overwrite an existing file with `overwrite`). It does not
+// change Fortnox data, but it is not read-only either, so it never gets
+// readOnlyHint and a read-only server does not register it.
+const LOCAL_WRITE_FIELDS: ReadonlySet<string> = new Set(['outputPath']);
 
 const DESTRUCTIVE_NAME_PATTERN = /^fortnox_(delete|cancel)_/;
 
@@ -39,7 +46,19 @@ const LOCAL_ONLY_TOOLS: ReadonlySet<string> = new Set(['fortnox_shadow_status'])
 /** Classify a registered tool from its name and top-level input field names. */
 export function classifyTool(name: string, inputFields: readonly string[]): ToolClassification {
   const openWorldHint = !LOCAL_ONLY_TOOLS.has(name);
-  if (!inputFields.some((field) => MUTATION_CONTROLS.has(field))) {
+  const mutatesFortnox = inputFields.some((field) => MUTATION_CONTROLS.has(field));
+  if (!mutatesFortnox && inputFields.some((field) => LOCAL_WRITE_FIELDS.has(field))) {
+    return {
+      access: 'local-write',
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true, // may overwrite an existing file
+        idempotentHint: false,
+        openWorldHint,
+      },
+    };
+  }
+  if (!mutatesFortnox) {
     return { access: 'read', annotations: { readOnlyHint: true, openWorldHint } };
   }
   return {

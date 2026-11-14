@@ -22,6 +22,25 @@ describe('classifyTool', () => {
     });
   });
 
+  it('classifies a download tool with an output path as a local write, not a read', () => {
+    expect(classifyTool('fortnox_get_voucher_file', ['fileId', 'outputPath', 'overwrite'])).toEqual(
+      {
+        access: 'local-write',
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
+      },
+    );
+  });
+
+  it('keeps a confirm-gated tool with an output path a potential mutation', () => {
+    const result = classifyTool('fortnox_invoice_pdf', ['outputPath', 'confirm', 'dryRun']);
+    expect(result.access).toBe('potential-mutation');
+  });
+
   it('classifies a read mode with an optional mutation flag as a potential mutation', () => {
     const result = classifyTool('fortnox_invoice_pdf', [
       'documentNumber',

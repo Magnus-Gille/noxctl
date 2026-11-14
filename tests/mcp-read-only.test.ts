@@ -26,6 +26,9 @@ describe('read-only MCP server mode', () => {
       for (const tool of tools) {
         expect(mutationFields(tool.inputSchema), tool.name).toEqual([]);
         expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+        const properties = (tool.inputSchema as { properties?: Record<string, unknown> })
+          .properties;
+        expect(Object.keys(properties ?? {}), tool.name).not.toContain('outputPath');
       }
     } finally {
       await close();
@@ -54,6 +57,9 @@ describe('read-only MCP server mode', () => {
       );
       expect(readOnlyNames).not.toContain('fortnox_create_invoice');
       expect(readOnlyNames).not.toContain('fortnox_invoice_pdf');
+      // File downloads write to a local path and can overwrite, so they are not read-only.
+      expect(readOnlyNames).not.toContain('fortnox_get_voucher_file');
+      expect(readOnlyNames).not.toContain('fortnox_get_inbox_file');
     } finally {
       await full.close();
       await readOnly.close();

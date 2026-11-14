@@ -55,7 +55,7 @@ export function registerCapabilityResource(
           mutations: readOnly
             ? {
                 confirmation:
-                  'Servern körs i skrivskyddat läge. Skrivande verktyg är inte registrerade och kan inte anropas.',
+                  'Servern körs i skrivskyddat läge. Skrivande verktyg och verktyg som sparar filer lokalt är inte registrerade och kan inte anropas.',
                 dryRun:
                   'Skrivskyddat läge innehåller inga skrivande verktyg, så dryRun finns inte här.',
               }

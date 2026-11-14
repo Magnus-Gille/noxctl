@@ -36,6 +36,10 @@ const EXPECTED_DESTRUCTIVE_TOOLS = [
   'fortnox_delete_voucher_file_connection',
   'fortnox_detach_document_attachment',
   'fortnox_finish_contract',
+  'fortnox_get_archive_entry', // saves to a local path and can overwrite
+  'fortnox_get_inbox_file', // saves to a local path and can overwrite
+  'fortnox_get_supplier_invoice_file', // saves to a local path and can overwrite
+  'fortnox_get_voucher_file', // saves to a local path and can overwrite
   'fortnox_replace_recurring',
   'fortnox_reset_scheduletime_day',
 ];
@@ -82,13 +86,14 @@ describe('MCP tool annotations', () => {
     }
   });
 
-  it('marks exactly the tools with confirm or dryRun inputs as mutations', async () => {
+  it('marks exactly the tools with confirm, dryRun or outputPath inputs as not read-only', async () => {
     const tools = await listAnnotatedTools();
     for (const tool of tools) {
       const fields = Object.keys(
         (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {},
       );
-      const mutation = fields.includes('confirm') || fields.includes('dryRun');
+      const mutation =
+        fields.includes('confirm') || fields.includes('dryRun') || fields.includes('outputPath');
       expect(tool.annotations?.readOnlyHint, tool.name).toBe(!mutation);
       if (mutation) {
         expect(typeof tool.annotations?.destructiveHint, tool.name).toBe('boolean');
@@ -106,6 +111,13 @@ describe('MCP tool annotations', () => {
       .map((tool) => tool.name);
     const unusual = reads.filter((name) => !/^fortnox_(get|list)_/.test(name)).sort();
     expect(unusual).toEqual([...EXPECTED_NON_GET_LIST_READ_TOOLS].sort());
+    // A read tool must not be able to choose a local output path.
+    for (const tool of tools.filter((t) => t.annotations?.readOnlyHint === true)) {
+      const fields = Object.keys(
+        (tool.inputSchema as { properties?: Record<string, unknown> }).properties ?? {},
+      );
+      expect(fields, tool.name).not.toContain('outputPath');
+    }
     // Verbs that change Fortnox data must never be classified as reads.
     for (const name of reads) {
       expect(name, name).not.toMatch(

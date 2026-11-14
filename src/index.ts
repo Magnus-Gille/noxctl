@@ -216,7 +216,9 @@ export async function startMcpServer(options: StartMcpServerOptions = {}): Promi
     throw err;
   }
   if (readOnly) {
-    process.stderr.write('[read-only: tools that can change Fortnox data are not registered]\n');
+    process.stderr.write(
+      '[read-only: tools that can change Fortnox data or write local files are not registered]\n',
+    );
   }
   const server = createServer({ readOnly });
   const transport = new StdioServerTransport();
