@@ -27,6 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Dependency audit is clean again (NOX-223).** Pinned `hono` 4.13.16 and
+  `@hono/node-server` 2.1.6 through `overrides` to clear new advisories in the
+  MCP SDK's dependency tree. The `npm audit` gate itself is unchanged.
 - **Shadow mirroring refuses credit invoices with explicit codes.** `Credit` true now
   yields `INVOICE_CREDIT_UNSUPPORTED` and a populated `CreditInvoiceReference`
   `INVOICE_CREDIT_REFERENCE_UNSUPPORTED` instead of a generic or linked-document
