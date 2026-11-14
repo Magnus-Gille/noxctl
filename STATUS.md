@@ -14,12 +14,10 @@ done. Every PR was verified on its exact head before merge.
 | NOX-199 (annotations, read-only) | #232 | `606d3da` | MCP annotations on every tool from one classification module; `noxctl serve --read-only` / `NOXCTL_READ_ONLY` (fail-closed). Embedded API unchanged on purpose. |
 | NOX-203, NOX-204 | #233 | `e273b47` | Refreshed opaque drift baselines; supplier-invoice comment log (list/add/delete) and recurring labels list as ops, tools and CLI. NOX-204: only a read-only `CommentLog` array was added to the supplier-invoice schema, so the write tools are unchanged. |
 | NOX-199 (bulk read, attachment view) | #234 | `0418a4e` | `fortnox_get_vouchers` / `vouchers get-many` (list of 1-50 or a period, cap 100/200) and `fortnox_get_voucher_attachment_overview` / `vouchers attachment-overview`. Both read-only. |
+| NOX-205 | #229 | `6782501` | `noxctl init` explains `invalid_scope`: each requested permission with its Fortnox portal label, plus what to check (Client ID matches the edited integration, permissions enabled and saved, redirect URI). The earlier-session duplicate #228 was merged to main (`5783064`) while #229's CI ran; the owner then chose to replace it, so #229's `src/auth.ts` and `tests/auth-invalid-scope.test.ts` supersede it (byte-identical to the reviewed head). Real Fortnox `invalid_scope` redirect not exercised. |
 
 ### Waiting on the owner
 
-- **NOX-205: duplicate PRs.** #229 (`feat/nox-205-invalid-scope-diagnostics`, this sprint, green CI,
-  reviewed) and #228 (`claude/nox-205`, earlier session, head `97787e6`). #229 is held
-  unmerged until the owner picks one; neither was closed or modified.
 - **NOX-212** (credit invoices in shadow mirroring) was skipped by request: it waits on
   the owner's choice between a draft credit path in the accounted fork and a mapping to
   Accounted `/credit`.
