@@ -15,13 +15,14 @@ done. Every PR was verified on its exact head before merge.
 | NOX-203, NOX-204 | #233 | `e273b47` | Refreshed opaque drift baselines; supplier-invoice comment log (list/add/delete) and recurring labels list as ops, tools and CLI. NOX-204: only a read-only `CommentLog` array was added to the supplier-invoice schema, so the write tools are unchanged. |
 | NOX-199 (bulk read, attachment view) | #234 | `0418a4e` | `fortnox_get_vouchers` / `vouchers get-many` (list of 1-50 or a period, cap 100/200) and `fortnox_get_voucher_attachment_overview` / `vouchers attachment-overview`. Both read-only. |
 | NOX-205 | #229 | `6782501` | `noxctl init` explains `invalid_scope`: each requested permission with its Fortnox portal label, plus what to check (Client ID matches the edited integration, permissions enabled and saved, redirect URI). The earlier-session duplicate #228 was merged to main (`5783064`) while #229's CI ran; the owner then chose to replace it, so #229's `src/auth.ts` and `tests/auth-invalid-scope.test.ts` supersede it (byte-identical to the reviewed head). Real Fortnox `invalid_scope` redirect not exercised. |
+| Release prep (NOX-199, 203, 204, 205, 223) | #236 | `4766ba9` | Release 0.14.0 prepared: changelog promoted, version synced in `package.json`, `package-lock.json`, `server.json`, `src/version.ts`; the shadow lane ships as experimental (owner decision 2026-11-14). Merged only; nothing tagged or published. Revert the squash commit to roll back. |
 
 ### Waiting on the owner
 
 - **NOX-212** (credit invoices in shadow mirroring) was skipped by request: it waits on
   the owner's choice between a draft credit path in the accounted fork and a mapping to
   Accounted `/credit`.
-- **Release.** Release PR #236 (`release/0.14.0`) prepares 0.14.0 from main `6782501`: version sync, changelog promotion, and a changelog entry plus one reworded sentence in `docs/shadow-evaluation.md` for the shadow lane, which this release ships for the first time (`dist/shadow/**`; the pilot host stays excluded). Owner decided 2026-11-14: ship the lane as experimental, so `files`/`exports` stay as configured. #236 is CI-green and clean on head `28fd15a`; merging it needs the owner's go-ahead. #215 (`release/0.13.1`) is stale and superseded; it was not touched. Not done and not authorized: tag, `npm publish`, GitHub release.
+- **Release.** Release PR #236 merged 2026-11-14 as `4766ba9` (guarded squash on head `28fd15a`, parent `6782501`); `main` now reads 0.14.0 and the shadow lane ships in it as experimental (`dist/shadow/**`; the pilot host stays excluded). **Not done and not authorized:** tag `v0.14.0`, `npm publish` (browser passkey), registry verification, `gh release create` (CONTRIBUTING.md "Releasing"); each needs an explicit go-ahead. #215 (`release/0.13.1`) is stale and superseded; it was not touched and can be closed once the owner agrees.
 - Follow-up tickets: NOX-219 (invoices-v2), NOX-220 (offers-v2), NOX-221 (orders-v2),
   NOX-222 (articles-v2). Their map entries stay `missing` tracked gaps.
 
