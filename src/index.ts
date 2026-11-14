@@ -39,6 +39,7 @@ import { registerAccrualTools } from './tools/accruals.js';
 import { registerFileTools } from './tools/files.js';
 import { createStrictMcpServer } from './strict-mcp-server.js';
 import { registerCapabilityResource } from './capability-resource.js';
+import { InvalidReadOnlyEnvError, parseReadOnlyEnv, READ_ONLY_ENV } from './read-only-mode.js';
 import type { OperationObserver } from './shadow/types.js';
 import { registerShadowStatusTool } from './tools/shadow.js';
 
@@ -50,16 +51,22 @@ export interface CreateServerOptions {
   transport?: FortnoxTransport;
   /** Host-owned observer, allowed only with an explicit tenant transport. */
   observer?: OperationObserver;
+  /** Register only tools that cannot change Fortnox data. */
+  readOnly?: boolean;
 }
 
 export function createServer(options: CreateServerOptions = {}): McpServer {
   if (options.observer && !options.transport) {
     throw new Error('An operation observer requires an explicit tenant-bound transport.');
   }
-  const server = createStrictMcpServer({
-    name: 'fortnox-mcp',
-    version: VERSION,
-  });
+  const readOnly = options.readOnly === true;
+  const server = createStrictMcpServer(
+    {
+      name: 'fortnox-mcp',
+      version: VERSION,
+    },
+    { readOnly },
+  );
   const operations = options.transport
     ? createFortnoxOperations(options.transport, options.observer)
     : defaultFortnoxOperations;
@@ -98,7 +105,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
   registerReferenceDataTools(server, operations);
   registerAccrualTools(server, operations);
   registerFileTools(server, operations);
-  registerCapabilityResource(server);
+  registerCapabilityResource(server, { readOnly });
   if (options.observer) registerShadowStatusTool(server, options.observer);
 
   return server;
@@ -111,6 +118,12 @@ export interface StartMcpServerOptions {
    * already resolved via its preAction hook so a `--profile` flag isn't lost.
    */
   profile?: string;
+  /**
+   * Expose only tools that cannot change Fortnox data. This flag can only turn
+   * read-only mode on; NOXCTL_READ_ONLY is honored too, and an invalid value
+   * fails startup.
+   */
+  readOnly?: boolean;
 }
 
 // Thrown by resolveStartupProfile when the profile cannot be resolved
@@ -188,16 +201,24 @@ export async function bindStartupProfile(options: StartMcpServerOptions = {}): P
 }
 
 export async function startMcpServer(options: StartMcpServerOptions = {}): Promise<void> {
+  let readOnly: boolean;
   try {
+    // Parse the env var even when the flag is set, so a typo always fails closed.
+    const envReadOnly = parseReadOnlyEnv(process.env[READ_ONLY_ENV]);
+    readOnly = options.readOnly === true || envReadOnly;
     await bindStartupProfile(options);
   } catch (err) {
-    if (err instanceof StartupProfileError) {
+    if (err instanceof StartupProfileError || err instanceof InvalidReadOnlyEnvError) {
       process.stderr.write(`${err.message}\n`);
       process.exit(2);
+      return;
     }
     throw err;
   }
-  const server = createServer();
+  if (readOnly) {
+    process.stderr.write('[read-only: tools that can change Fortnox data are not registered]\n');
+  }
+  const server = createServer({ readOnly });
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

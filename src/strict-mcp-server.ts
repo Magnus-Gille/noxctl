@@ -5,8 +5,14 @@ import {
 } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { Implementation } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
+import { classifyTool } from './tool-classification.js';
 
 type ToolShape = Record<string, z.ZodType>;
+
+export interface StrictMcpServerOptions {
+  /** Register only tools that cannot change Fortnox data. */
+  readOnly?: boolean;
+}
 
 export interface StrictToolInventoryEntry {
   name: string;
@@ -40,8 +46,16 @@ function isToolShape(value: unknown): value is ToolShape {
  * The narrow overload is deliberate: every noxctl tool follows this convention,
  * and a future registration style must choose its object policy explicitly
  * rather than silently falling back to the SDK default.
+ *
+ * Every tool also gets MCP annotations from the shared classification module.
+ * In read-only mode, tools that can change Fortnox data are not registered at
+ * all, so they are absent from the server, the inventory, and the capabilities.
  */
-export function createStrictMcpServer(serverInfo: Implementation): McpServer {
+export function createStrictMcpServer(
+  serverInfo: Implementation,
+  options: StrictMcpServerOptions = {},
+): McpServer {
+  const readOnly = options.readOnly === true;
   const server = new McpServer(serverInfo);
   const inventory: StrictToolInventoryEntry[] = [];
   toolInventories.set(server, inventory);
@@ -55,10 +69,13 @@ export function createStrictMcpServer(serverInfo: Implementation): McpServer {
       );
     }
 
+    const classification = classifyTool(name, Object.keys(shape));
+    if (readOnly && classification.access === 'potential-mutation') return undefined;
+
     const inputSchema = z.strictObject(shape);
     const registeredTool = server.registerTool(
       name,
-      { description, inputSchema },
+      { description, inputSchema, annotations: classification.annotations },
       callback as ToolCallback<typeof inputSchema>,
     ) as RegisteredTool;
     inventory.push({ name, description, inputFields: Object.keys(shape) });
