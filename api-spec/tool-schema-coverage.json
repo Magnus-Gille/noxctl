@@ -952,13 +952,32 @@
       "stateHash": "51641d71ff3e43b1c455c957214b4decff484585d6c884def4fc8982dbe012e9"
     },
     {
+      "id": "supplier-invoice-comment-create",
+      "declaredPropertyCount": 5,
+      "specificationPropertyCount": 1,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 2,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 0,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 1,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "8a25f1890dfa5b1a8b9abdb367b6ba7b69e711457d45aafc298fb5dbd8895645"
+    },
+    {
       "id": "supplier-invoice-create",
       "declaredPropertyCount": 12,
-      "specificationPropertyCount": 26,
-      "missingPropertyCount": 17,
+      "specificationPropertyCount": 27,
+      "missingPropertyCount": 18,
       "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 17,
+        "field": 18,
         "nesting": 0,
         "requiredness": 1,
         "type": 1,
@@ -968,7 +987,7 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "5d90f65b5f9e1164687bb25b00d6137fac67dffa08c264559c94dd2bcc94779a"
+      "stateHash": "b75e23d2096ba5e29ff17bc47008566c6f0426ae66184aabff1d05ff87fe9994"
     },
     {
       "id": "supplier-invoice-file-connection-create",
@@ -1049,11 +1068,11 @@
     {
       "id": "supplier-invoice-update",
       "declaredPropertyCount": 13,
-      "specificationPropertyCount": 26,
-      "missingPropertyCount": 17,
+      "specificationPropertyCount": 27,
+      "missingPropertyCount": 18,
       "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 17,
+        "field": 18,
         "nesting": 0,
         "requiredness": 1,
         "type": 1,
@@ -1063,7 +1082,7 @@
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "cc9b9e3e2072eb588a70a9ad55257c152ddc55bf1bbd22d17c689a78b94f625c"
+      "stateHash": "64979997e793d05e627ba3e0226a478ef72d74e49e00cf357adea886e7e365f7"
     },
     {
       "id": "supplier-update",

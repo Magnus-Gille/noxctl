@@ -2,7 +2,7 @@
 
 import { Command, Option } from 'commander';
 import { configureCliHelp } from './cli-help.js';
-import { parsePositiveInteger } from './cli-validators.js';
+import { parsePositiveInteger, parseVoucherReference } from './cli-validators.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import {
@@ -28,6 +28,7 @@ import { applyPeriod } from './date-periods.js';
 import { DEFAULT_PROFILE, InvalidProfileNameError } from './profile-name.js';
 import { formatMissingProfileGuidance, shouldShowProfileBanner } from './profile-suggestions.js';
 import { VERSION } from './version.js';
+import { formatVoucherAttachmentOverview, formatVouchersWithRows } from './voucher-text.js';
 import { defaultFortnoxOperations } from './operations/index.js';
 import { prepareAccrualFields } from './operations/accruals.js';
 import {
@@ -51,6 +52,8 @@ import {
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
   supplierInvoiceAttachmentColumns,
+  supplierInvoiceCommentColumns,
+  recurringLabelColumns,
   invoicePaymentListColumns,
   invoicePaymentDetailColumns,
   supplierInvoicePaymentListColumns,
@@ -1395,9 +1398,22 @@ keychain
 program
   .command('serve')
   .description('Start the MCP server (stdio transport)')
-  .action(async () => {
+  .option(
+    '--read-only',
+    'Expose only tools that cannot change Fortnox data (also: NOXCTL_READ_ONLY=1)',
+  )
+  .addHelpText(
+    'after',
+    `
+Read-only mode omits every tool that can create, update, send, book, or delete
+Fortnox data, and every tool that saves a file to the local disk (including
+fortnox_invoice_pdf and the file download tools). Set NOXCTL_READ_ONLY=1 to enable it
+without the flag; 0 or false (or unset) leaves it off. Any other value makes
+serve exit with an error instead of starting.`,
+  )
+  .action(async (opts: { readOnly?: boolean }) => {
     const { startMcpServer } = await import('./index.js');
-    await startMcpServer({ profile: resolvedProfileInfo.name });
+    await startMcpServer({ profile: resolvedProfileInfo.name, readOnly: opts.readOnly === true });
   });
 
 // --- invoices ---
@@ -2724,6 +2740,86 @@ vouchers
   });
 
 vouchers
+  .command('get-many')
+  .description('Get several vouchers with rows in one call (a ref list or a whole period)')
+  .option(
+    '--ref <series/number...>',
+    'Voucher reference such as A/12; repeat the option or list several (1-50). Mutually exclusive with --from/--to/--period/--series/--limit.',
+    (value: string, previous: { series: string; number: string }[] = []) => [
+      ...previous,
+      parseVoucherReference(value),
+    ],
+  )
+  .option('--series <series>', 'Period mode: only this voucher series (e.g. "A")')
+  .option('--from <date>', 'Period mode: from date (YYYY-MM-DD)')
+  .option('--to <date>', 'Period mode: to date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Period mode, natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
+  .option(
+    '--year <number>',
+    'Financial year (recommended for past years — voucher numbers reset between financial years)',
+    parsePositiveInteger,
+  )
+  .option(
+    '--limit <number>',
+    'Period mode: max vouchers whose rows are fetched (default 100, max 200)',
+    parsePositiveInteger,
+  )
+  .addHelpText(
+    'after',
+    `
+Replaces one "vouchers get" per voucher. Rows are fetched one voucher at a time; a
+voucher that fails is reported in the errors list and does not stop the others.
+If the period holds more vouchers than --limit, the output says so (truncated).
+
+Examples:
+  noxctl vouchers get-many --ref A/12 --ref A/13 --year 4
+  noxctl vouchers get-many --period last-month --series A
+  noxctl vouchers get-many --from 2026-10-01 --to 2026-10-31 --limit 200 --output json`,
+  )
+  .action(
+    async (opts: {
+      ref?: { series: string; number: string }[];
+      series?: string;
+      from?: string;
+      to?: string;
+      period?: string;
+      year?: number;
+      limit?: number;
+    }) => {
+      const { getVouchers } = defaultFortnoxOperations;
+      const range = fromToParams(opts);
+      if (opts.ref) {
+        if (range.fromDate || range.toDate || opts.series || opts.limit !== undefined) {
+          fail(
+            'vouchers get-many: --ref cannot be combined with --from/--to/--period/--series/--limit (explicit list and period are mutually exclusive).',
+            2,
+          );
+        }
+      } else if (!range.fromDate || !range.toDate) {
+        fail(
+          'vouchers get-many requires --ref <series/number...> or a complete period (--from and --to, or --period).',
+          2,
+        );
+      }
+      const result = await getVouchers({
+        vouchers: opts.ref,
+        series: opts.series,
+        ...range,
+        financialYear: opts.year,
+        limit: opts.limit,
+      });
+      if (json()) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        console.log(formatVouchersWithRows(result));
+      }
+    },
+  );
+
+vouchers
   .command('create')
   .description('Create a voucher')
   .requiredOption('--input <file>', 'Voucher data as JSON file (or - for stdin)')
@@ -2821,6 +2917,67 @@ vouchers
       );
     }
   });
+
+vouchers
+  .command('attachment-overview')
+  .description('Show which vouchers in a period have or lack attached files')
+  .option('--series <series>', 'Only this voucher series (e.g. "A")')
+  .option('--from <date>', 'From date (YYYY-MM-DD)')
+  .option('--to <date>', 'To date (YYYY-MM-DD)')
+  .option(
+    '--period <period>',
+    'Natural period (calendar-year): Q1, 2025-Q3, march/mars, this-quarter, last-quarter, this-month, last-month, ytd, this-year, last-year, or a bare year. Mutually exclusive with --from/--to.',
+  )
+  .option(
+    '--year <number>',
+    'Financial year (recommended for past years — voucher numbers reset between financial years)',
+    parsePositiveInteger,
+  )
+  .option(
+    '--only-missing',
+    'List only vouchers without attachments (counts cover the whole period)',
+  )
+  .addHelpText(
+    'after',
+    `
+Two list calls and an in-memory join — not one request per voucher. At most 500
+vouchers are listed; the counts always cover the whole period.
+Needs the Fortnox "connectfile" scope (in the default set); file connections that point
+into the file archive may also need "archive" (run \`noxctl init --with-archive\`).
+A missing scope makes Fortnox answer with an authorization error (403).
+
+Examples:
+  noxctl vouchers attachment-overview --period last-month
+  noxctl vouchers attachment-overview --from 2026-10-01 --to 2026-10-31 --series A --only-missing`,
+  )
+  .action(
+    async (opts: {
+      series?: string;
+      from?: string;
+      to?: string;
+      period?: string;
+      year?: number;
+      onlyMissing?: boolean;
+    }) => {
+      const { getVoucherAttachmentOverview } = defaultFortnoxOperations;
+      const range = fromToParams(opts);
+      if (!range.fromDate || !range.toDate) {
+        fail('vouchers attachment-overview requires a period: --from/--to or --period.', 2);
+      }
+      const overview = await getVoucherAttachmentOverview({
+        fromDate: range.fromDate,
+        toDate: range.toDate,
+        series: opts.series,
+        financialYear: opts.year,
+        onlyMissing: opts.onlyMissing,
+      });
+      if (json()) {
+        console.log(JSON.stringify(overview, null, 2));
+      } else {
+        console.log(formatVoucherAttachmentOverview(overview));
+      }
+    },
+  );
 
 vouchers
   .command('file <fileId>')
@@ -2931,6 +3088,70 @@ supplierInvoices
       FileId: fileId,
       detached: true,
     });
+  });
+
+supplierInvoices
+  .command('comments <givenNumber>')
+  .description('List the comment log of a supplier invoice')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl supplier-invoices comments 1`,
+  )
+  .action(async (givenNumber: string) => {
+    const { listSupplierInvoiceComments } = defaultFortnoxOperations;
+    const comments = await listSupplierInvoiceComments(givenNumber);
+    outputList(comments, supplierInvoiceCommentColumns, json(), comments);
+  });
+supplierInvoices
+  .command('add-comment <givenNumber> <comment>')
+  .description('Add a comment to a supplier invoice comment log')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl supplier-invoices add-comment 1 "Kontrollerad" --dry-run`,
+  )
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .action(async (givenNumber: string, comment: string, opts) => {
+    const { createSupplierInvoiceComment } = defaultFortnoxOperations;
+    const payload = { SupplierInvoiceCommentLog: { Comment: comment } };
+    if (!(await confirmMutation(`Add comment to supplier invoice ${givenNumber}`, opts, payload)))
+      return;
+    const data = await createSupplierInvoiceComment(givenNumber, { Comment: comment });
+    outputDetail(data, supplierInvoiceCommentColumns, json(), 'SupplierInvoiceCommentLog');
+  });
+supplierInvoices
+  .command('delete-comment <givenNumber> <commentId>')
+  .description('Delete a comment from a supplier invoice comment log')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl supplier-invoices delete-comment 1 c-1 --dry-run`,
+  )
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview without deleting')
+  .action(async (givenNumber: string, commentId: string, opts) => {
+    const { deleteSupplierInvoiceComment } = defaultFortnoxOperations;
+    if (
+      !(await confirmMutation(
+        `Delete comment ${commentId} from supplier invoice ${givenNumber}`,
+        opts,
+      ))
+    )
+      return;
+    await deleteSupplierInvoiceComment(givenNumber, commentId);
+    outputConfirmation(
+      `Comment ${commentId} deleted from supplier invoice ${givenNumber}.`,
+      json(),
+      {
+        Id: commentId,
+        deleted: true,
+      },
+    );
   });
 
 // --- general-ledger ---
@@ -5016,6 +5237,21 @@ recurrings
     const { getRecurringDeviation } = defaultFortnoxOperations;
     const data = await getRecurringDeviation(recurringId, deviationId);
     outputDetail(data, recurringDetailColumns, json(), 'Recurring deviation');
+  });
+
+recurrings
+  .command('list-labels <recurringId>')
+  .description('List labels for a recurring billing contract')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl recurrings list-labels 550e8400-e29b-41d4-a716-446655440000`,
+  )
+  .action(async (recurringId: string) => {
+    const { listRecurringLabels } = defaultFortnoxOperations;
+    const data = await listRecurringLabels(recurringId);
+    outputList(data, recurringLabelColumns, json(), data);
   });
 
 recurrings

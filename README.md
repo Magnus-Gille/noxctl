@@ -124,26 +124,26 @@ So you control the credentials, the scopes, and which company is connected end t
    - Copy your **Client ID** and **Client Secret**
 4. On the **Integration** tab, enable these scopes under **Behörigheter** / **Permissions**:
 
-   | Scope                | Swedish (SV)         | English (EN)        | Fortnox licence needed      | Needed for                                     |
-   |----------------------|----------------------|---------------------|-----------------------------|------------------------------------------------|
-   | `article`            | Artikel              | Article             | Order or Kundfaktura        | Articles                                       |
-   | `bookkeeping`        | Bokföring            | Bookkeeping         | Bokföring or Kundfaktura    | Vouchers, accounts, financial reports, financial years |
-   | `companyinformation` | Företagsinformation  | Company Information | Any                         | Company info                                   |
-   | `connectfile`        | —                    | File Connection     | Bokföring/Anläggning/Arkivplats | Attaching uploaded files to vouchers       |
-   | `costcenter`         | Kostnadsställe       | Cost Center         | Bokföring, Order or Kundfaktura | Cost centers                               |
-   | `customer`           | Kund                 | Customer            | Kundfaktura or Order        | Customers                                      |
-   | `inbox`              | —                    | Inbox               | Any                         | Uploading receipt/attachment files             |
-   | `invoice`            | Faktura              | Invoice             | Order or Kundfaktura        | Invoices, tax reductions                       |
-   | `payment`            | Betalning            | Payment             | Bokföring, Order or Kundfaktura | Invoice payments, supplier invoice payments |
-   | `price`              | Priser               | Price               | Order or Kundfaktura        | Price lists, prices                            |
-   | `project`            | Projekt              | Project             | Bokföring, Order or Kundfaktura | Projects                                   |
-   | `settings`           | Inställningar        | Settings            | Any                         | Locked period                                  |
-   | `supplier`           | Leverantör           | Supplier            | Bokföring                   | Suppliers                                      |
-   | `supplierinvoice`    | Leverantörsfaktura   | Supplier Invoice    | Bokföring                   | Supplier invoices                              |
-   | `offer`              | Offert               | Offer               | **Order**                   | Offers — **opt-in**, see below                 |
-   | `order`              | Order                | Order               | **Order**                   | Orders — **opt-in**, see below                 |
-   | `salary`             | Lön                  | Salary              | **Lön**                     | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
-   | `archive`            | Arkivplats           | File Archive        | **Arkivplats**              | Attaching files to customer invoices — **opt-in**, see below |
+   | Scope                | Swedish (SV)        | English (EN)        | Fortnox licence needed          | Needed for                                                                                         |
+   | -------------------- | ------------------- | ------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------- |
+   | `article`            | Artikel             | Article             | Order or Kundfaktura            | Articles                                                                                           |
+   | `bookkeeping`        | Bokföring           | Bookkeeping         | Bokföring or Kundfaktura        | Vouchers, accounts, financial reports, financial years                                             |
+   | `companyinformation` | Företagsinformation | Company Information | Any                             | Company info                                                                                       |
+   | `connectfile`        | —                   | File Connection     | Bokföring/Anläggning/Arkivplats | Attaching uploaded files to vouchers                                                               |
+   | `costcenter`         | Kostnadsställe      | Cost Center         | Bokföring, Order or Kundfaktura | Cost centers                                                                                       |
+   | `customer`           | Kund                | Customer            | Kundfaktura or Order            | Customers                                                                                          |
+   | `inbox`              | —                   | Inbox               | Any                             | Uploading receipt/attachment files                                                                 |
+   | `invoice`            | Faktura             | Invoice             | Order or Kundfaktura            | Invoices, tax reductions                                                                           |
+   | `payment`            | Betalning           | Payment             | Bokföring, Order or Kundfaktura | Invoice payments, supplier invoice payments                                                        |
+   | `price`              | Priser              | Price               | Order or Kundfaktura            | Price lists, prices                                                                                |
+   | `project`            | Projekt             | Project             | Bokföring, Order or Kundfaktura | Projects                                                                                           |
+   | `settings`           | Inställningar       | Settings            | Any                             | Locked period                                                                                      |
+   | `supplier`           | Leverantör          | Supplier            | Bokföring                       | Suppliers                                                                                          |
+   | `supplierinvoice`    | Leverantörsfaktura  | Supplier Invoice    | Bokföring                       | Supplier invoices                                                                                  |
+   | `offer`              | Offert              | Offer               | **Order**                       | Offers — **opt-in**, see below                                                                     |
+   | `order`              | Order               | Order               | **Order**                       | Orders — **opt-in**, see below                                                                     |
+   | `salary`             | Lön                 | Salary              | **Lön**                         | Payroll: employees, salary/attendance/absence transactions, schedule times — **opt-in**, see below |
+   | `archive`            | Arkivplats          | File Archive        | **Arkivplats**                  | Attaching files to customer invoices — **opt-in**, see below                                       |
 
    Enable every non-opt-in scope. noxctl requests that exact set at authorize time, and
    Fortnox rejects the whole authorization if the app has not been granted a scope that
@@ -154,7 +154,7 @@ So you control the credentials, the scopes, and which company is connected end t
    `Missing "payment" scope`); match that token against the **Scope** column above.
 
    **Two scope groups are opt-in, because they depend on a Fortnox licence** the default
-   set does not require. Requesting a scope the *company* is not licensed for fails the
+   set does not require. Requesting a scope the _company_ is not licensed for fails the
    whole authorization, so asking for these unconditionally would lock out companies that
    simply do not have the module:
 
@@ -266,6 +266,45 @@ claude mcp add fortnox-prod     -- npx noxctl serve
 claude mcp add fortnox-staging  -e NOXCTL_PROFILE=staging -- npx noxctl serve
 ```
 
+### Read-only mode and tool annotations
+
+Every MCP tool carries [MCP tool annotations](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-annotations) that describe what it does:
+
+- `readOnlyHint: true` marks a tool that only reads. Tools with a `confirm` or `dryRun` input can change Fortnox data, so they are marked `readOnlyHint: false`. This includes `fortnox_invoice_pdf`, whose read mode can also flag an invoice as sent (`markSent`). Tools that save a downloaded file to a path you choose (`outputPath`, optionally `overwrite`), such as `fortnox_get_voucher_file`, write to the local disk. They are also `readOnlyHint: false` and `destructiveHint: true`, because they can overwrite an existing file.
+- `destructiveHint` is set explicitly on every mutation. Following the MCP definition (`false` means only additive changes), it is `true` for delete, cancel, update, patch and replace tools, which remove or overwrite existing data, and for a few tools that close or overwrite data under other names (`fortnox_credit_invoice`, `fortnox_credit_supplier_invoice`, `fortnox_finish_contract`, `fortnox_reset_scheduletime_day`, `fortnox_detach_document_attachment`), for `fortnox_send_invoice` (it overwrites the stored e-mail subject, body and BCC before sending), and for every tool with an `overwrite` option, such as the invoice, reminder, order and offer PDF tools, which can truncate an existing local file. Create tools and other state-advancing calls such as bookkeep are `false`.
+- `idempotentHint` is `true` for `update`, `patch`, and `replace` tools.
+- `openWorldHint: true` means the tool calls Fortnox. The only exception is the host-only `fortnox_shadow_status`, which reads local state.
+
+These hints are advisory. The MCP client decides whether to ask for approval before a call, and a server cannot force that behaviour. Read-only mode is the enforced control: the server does not register any tool that can change Fortnox data or write a local file, so the client cannot call one.
+
+Start a read-only server with `noxctl serve --read-only`, or set `NOXCTL_READ_ONLY=1` (`true` works too, in any case). `0`, `false`, or an unset variable leave it off. Any other value makes `serve` exit with an error instead of starting a writable server. The flag can only turn read-only mode on. The capability resource (`noxctl://capabilities`) reports `"mode": "read-only"` or `"mode": "full"`.
+
+Run a read-only server next to a full one by giving each its own name:
+
+```bash
+claude mcp add fortnox-readonly -e NOXCTL_READ_ONLY=1 -- npx noxctl serve
+claude mcp add fortnox         -- npx noxctl serve
+```
+
+Or in Claude Desktop's `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "fortnox-readonly": {
+      "command": "npx",
+      "args": ["noxctl", "serve", "--read-only"]
+    },
+    "fortnox": {
+      "command": "npx",
+      "args": ["noxctl", "serve"]
+    }
+  }
+}
+```
+
+Read-only mode omits every tool that can change Fortnox data or save a local file, including `fortnox_invoice_pdf` and the file download tools (`fortnox_get_voucher_file`, `fortnox_get_supplier_invoice_file`, `fortnox_get_inbox_file`, `fortnox_get_archive_entry`). To download a file in read-only sessions, use the CLI, for example `noxctl invoices pdf <docNumber>`, which previews the invoice. Only `--mark-sent` writes to Fortnox.
+
 ### Embedded and hosted runtimes
 
 Applications that supply their own authenticated Fortnox tenant context can use the supported `noxctl/embedded` package entry point. It provides an isolated client, typed operation set, and MCP server factory without exporting the local profile, keychain, or CLI startup APIs. See the [embedded runtime API and host responsibility boundary](docs/embedded.md).
@@ -352,7 +391,7 @@ security delete-keychain ~/Library/Keychains/fortnox-mcp.keychain-db
 rm ~/.fortnox-mcp/keychain-challenge
 ```
 
-If you *have* sealed, re-run `noxctl init` to re-authenticate from scratch.
+If you _have_ sealed, re-run `noxctl init` to re-authenticate from scratch.
 
 ## Tools
 
@@ -360,186 +399,191 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Customers
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl customers list [--search <term>]` | `fortnox_list_customers` | List/search customers |
-| `noxctl customers get <number>` | `fortnox_get_customer` | Get a single customer |
-| `noxctl customers create --name <name>` | `fortnox_create_customer` | Create a customer (mutation) |
+| CLI                                               | MCP tool                  | Description                  |
+| ------------------------------------------------- | ------------------------- | ---------------------------- |
+| `noxctl customers list [--search <term>]`         | `fortnox_list_customers`  | List/search customers        |
+| `noxctl customers get <number>`                   | `fortnox_get_customer`    | Get a single customer        |
+| `noxctl customers create --name <name>`           | `fortnox_create_customer` | Create a customer (mutation) |
 | `noxctl customers update <number> --input <file>` | `fortnox_update_customer` | Update a customer (mutation) |
 
 ### Suppliers
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl suppliers list [--search <term>]` | `fortnox_list_suppliers` | List/search suppliers |
-| `noxctl suppliers get <number>` | `fortnox_get_supplier` | Get a single supplier |
-| `noxctl suppliers create --name <name>` | `fortnox_create_supplier` | Create a supplier (mutation) |
+| CLI                                               | MCP tool                  | Description                  |
+| ------------------------------------------------- | ------------------------- | ---------------------------- |
+| `noxctl suppliers list [--search <term>]`         | `fortnox_list_suppliers`  | List/search suppliers        |
+| `noxctl suppliers get <number>`                   | `fortnox_get_supplier`    | Get a single supplier        |
+| `noxctl suppliers create --name <name>`           | `fortnox_create_supplier` | Create a supplier (mutation) |
 | `noxctl suppliers update <number> --input <file>` | `fortnox_update_supplier` | Update a supplier (mutation) |
 
 ### Articles
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl articles list [--search <term>]` | `fortnox_list_articles` | List/search articles |
-| `noxctl articles get <number>` | `fortnox_get_article` | Get a single article |
-| `noxctl articles create --description <text>` | `fortnox_create_article` | Create an article (mutation) |
+| CLI                                              | MCP tool                 | Description                  |
+| ------------------------------------------------ | ------------------------ | ---------------------------- |
+| `noxctl articles list [--search <term>]`         | `fortnox_list_articles`  | List/search articles         |
+| `noxctl articles get <number>`                   | `fortnox_get_article`    | Get a single article         |
+| `noxctl articles create --description <text>`    | `fortnox_create_article` | Create an article (mutation) |
 | `noxctl articles update <number> --input <file>` | `fortnox_update_article` | Update an article (mutation) |
 
 ### Invoices
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl invoices list [--filter <status>] [--customer <number>]` | `fortnox_list_invoices` | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked` |
-| `noxctl invoices get <docNumber>` | `fortnox_get_invoice` | Get a single invoice |
-| `noxctl invoices preflight <docNumber>` | `fortnox_preflight_invoice` | Read-only e-invoice draft checks with explicit unknown/unsupported readiness ([details](docs/einvoice-readiness.md)) |
-| `noxctl invoices create --customer <number> --input <file>` | `fortnox_create_invoice` | Create an invoice (mutation) |
-| `noxctl invoices update <docNumber> --input <file>` | `fortnox_update_invoice` | Update an invoice that has not been bookkeept (mutation) |
-| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice` | Send via email (default), print, or e-invoice (mutation) |
-| `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]` | `fortnox_invoice_pdf` | Download the invoice PDF (via `/preview`, no side effect). `--mark-sent` also flags it as sent afterwards (mutation) |
-| `noxctl invoices bookkeep <docNumber>` | `fortnox_bookkeep_invoice` | Bookkeep an invoice (mutation) |
-| `noxctl invoices credit <docNumber>` | `fortnox_credit_invoice` | Credit an invoice (mutation) |
-| `noxctl invoices attach <docNumber> <file...> [--no-include-on-send]` | `fortnox_attach_invoice_files` | Upload receipt/underlag files and attach them to a customer invoice (mutation; needs the Fortnox **archive** scope — `noxctl init --with-archive`) |
-| `noxctl invoices attachments <docNumber>` | `fortnox_list_invoice_attachments` | List files currently attached to a customer invoice |
+| CLI                                                                                                               | MCP tool                           | Description                                                                                                                                        |
+| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noxctl invoices list [--filter <status>] [--customer <number>]`                                                  | `fortnox_list_invoices`            | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked`                                                     |
+| `noxctl invoices get <docNumber>`                                                                                 | `fortnox_get_invoice`              | Get a single invoice                                                                                                                               |
+| `noxctl invoices preflight <docNumber>`                                                                           | `fortnox_preflight_invoice`        | Read-only e-invoice draft checks with explicit unknown/unsupported readiness ([details](docs/einvoice-readiness.md))                               |
+| `noxctl invoices create --customer <number> --input <file>`                                                       | `fortnox_create_invoice`           | Create an invoice (mutation)                                                                                                                       |
+| `noxctl invoices update <docNumber> --input <file>`                                                               | `fortnox_update_invoice`           | Update an invoice that has not been bookkeept (mutation)                                                                                           |
+| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice`             | Send via email (default), print, or e-invoice (mutation)                                                                                           |
+| `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]`                                                | `fortnox_invoice_pdf`              | Download the invoice PDF (via `/preview`, no side effect). `--mark-sent` also flags it as sent afterwards (mutation)                               |
+| `noxctl invoices bookkeep <docNumber>`                                                                            | `fortnox_bookkeep_invoice`         | Bookkeep an invoice (mutation)                                                                                                                     |
+| `noxctl invoices credit <docNumber>`                                                                              | `fortnox_credit_invoice`           | Credit an invoice (mutation)                                                                                                                       |
+| `noxctl invoices attach <docNumber> <file...> [--no-include-on-send]`                                             | `fortnox_attach_invoice_files`     | Upload receipt/underlag files and attach them to a customer invoice (mutation; needs the Fortnox **archive** scope — `noxctl init --with-archive`) |
+| `noxctl invoices attachments <docNumber>`                                                                         | `fortnox_list_invoice_attachments` | List files currently attached to a customer invoice                                                                                                |
 
 ### Invoice payments (inbetalningar)
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl invoice-payments list [--invoice <number>]` / alias `noxctl ip list` | `fortnox_list_invoice_payments` | List invoice payments |
-| `noxctl invoice-payments get <number>` | `fortnox_get_invoice_payment` | Get a single invoice payment |
-| `noxctl invoice-payments create --invoice <n> --amount <a> --date <date>` | `fortnox_create_invoice_payment` | Register a payment against an invoice (mutation) |
-| `noxctl invoice-payments bookkeep <number>` | — | Bookkeep an invoice payment (mutation) |
-| `noxctl invoice-payments delete <number>` | `fortnox_delete_invoice_payment` | Delete an invoice payment (mutation) |
+| CLI                                                                          | MCP tool                         | Description                                      |
+| ---------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------ |
+| `noxctl invoice-payments list [--invoice <number>]` / alias `noxctl ip list` | `fortnox_list_invoice_payments`  | List invoice payments                            |
+| `noxctl invoice-payments get <number>`                                       | `fortnox_get_invoice_payment`    | Get a single invoice payment                     |
+| `noxctl invoice-payments create --invoice <n> --amount <a> --date <date>`    | `fortnox_create_invoice_payment` | Register a payment against an invoice (mutation) |
+| `noxctl invoice-payments bookkeep <number>`                                  | —                                | Bookkeep an invoice payment (mutation)           |
+| `noxctl invoice-payments delete <number>`                                    | `fortnox_delete_invoice_payment` | Delete an invoice payment (mutation)             |
 
 ### Supplier invoices (leverantörsfakturor)
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl supplier-invoices list [--filter <status>] [--supplier <number>]` / alias `si list` | `fortnox_list_supplier_invoices` | List/filter supplier invoices |
-| `noxctl supplier-invoices get <givenNumber>` | `fortnox_get_supplier_invoice` | Get a single supplier invoice |
-| `noxctl supplier-invoices create --supplier <n> --input <file>` | `fortnox_create_supplier_invoice` | Create a supplier invoice (mutation) |
-| `noxctl supplier-invoices bookkeep <givenNumber>` | `fortnox_bookkeep_supplier_invoice` | Bookkeep a supplier invoice (mutation) |
-| `noxctl supplier-invoices attachments <givenNumber>` | `fortnox_list_supplier_invoice_attachments` | List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too, read-only, default scopes only |
-| `noxctl supplier-invoices file <fileId> [-f <path>]` | `fortnox_get_supplier_invoice_file` | Download a file attached to a supplier invoice (get `fileId` from `supplier-invoices attachments`) — read-only, default scopes only |
+| CLI                                                                                         | MCP tool                                    | Description                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noxctl supplier-invoices list [--filter <status>] [--supplier <number>]` / alias `si list` | `fortnox_list_supplier_invoices`            | List/filter supplier invoices                                                                                                                                    |
+| `noxctl supplier-invoices get <givenNumber>`                                                | `fortnox_get_supplier_invoice`              | Get a single supplier invoice                                                                                                                                    |
+| `noxctl supplier-invoices create --supplier <n> --input <file>`                             | `fortnox_create_supplier_invoice`           | Create a supplier invoice (mutation)                                                                                                                             |
+| `noxctl supplier-invoices bookkeep <givenNumber>`                                           | `fortnox_bookkeep_supplier_invoice`         | Bookkeep a supplier invoice (mutation)                                                                                                                           |
+| `noxctl supplier-invoices attachments <givenNumber>`                                        | `fortnox_list_supplier_invoice_attachments` | List files (e.g. the scanned/received invoice) attached to a supplier invoice — works for unbooked/authorizepending invoices too, read-only, default scopes only |
+| `noxctl supplier-invoices file <fileId> [-f <path>]`                                        | `fortnox_get_supplier_invoice_file`         | Download a file attached to a supplier invoice (get `fileId` from `supplier-invoices attachments`) — read-only, default scopes only                              |
+| `noxctl supplier-invoices comments <givenNumber>`                                           | `fortnox_list_supplier_invoice_comments`    | List the comment log of a supplier invoice — read-only                                                                                                           |
+| `noxctl supplier-invoices add-comment <givenNumber> <comment>`                              | `fortnox_create_supplier_invoice_comment`   | Add a comment to a supplier invoice's comment log (mutation)                                                                                                     |
+| `noxctl supplier-invoices delete-comment <givenNumber> <commentId>`                         | `fortnox_delete_supplier_invoice_comment`   | Delete a comment from a supplier invoice's comment log (mutation)                                                                                                |
 
 ### Supplier invoice payments (utbetalningar)
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl supplier-invoice-payments list [--invoice <number>]` / alias `sip list` | `fortnox_list_supplier_invoice_payments` | List supplier invoice payments |
-| `noxctl supplier-invoice-payments get <number>` | `fortnox_get_supplier_invoice_payment` | Get a single supplier invoice payment |
+| CLI                                                                                | MCP tool                                  | Description                                              |
+| ---------------------------------------------------------------------------------- | ----------------------------------------- | -------------------------------------------------------- |
+| `noxctl supplier-invoice-payments list [--invoice <number>]` / alias `sip list`    | `fortnox_list_supplier_invoice_payments`  | List supplier invoice payments                           |
+| `noxctl supplier-invoice-payments get <number>`                                    | `fortnox_get_supplier_invoice_payment`    | Get a single supplier invoice payment                    |
 | `noxctl supplier-invoice-payments create --invoice <n> --amount <a> --date <date>` | `fortnox_create_supplier_invoice_payment` | Register a payment against a supplier invoice (mutation) |
-| `noxctl supplier-invoice-payments delete <number>` | `fortnox_delete_supplier_invoice_payment` | Delete a supplier invoice payment (mutation) |
+| `noxctl supplier-invoice-payments delete <number>`                                 | `fortnox_delete_supplier_invoice_payment` | Delete a supplier invoice payment (mutation)             |
 
 ### Offers (offerter)
 
 > **Requires the `offer` scope**, which is **opt-in** and needs the Fortnox **Order** licence. Run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1`), which requests `offer` and `order` together. Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl offers list [--filter <status>] [--customer <number>]` | `fortnox_list_offers` | List/filter offers. Filters: `cancelled`, `expired`, `ordercreated`, `invoicecreated` |
-| `noxctl offers get <docNumber>` | `fortnox_get_offer` | Get a single offer |
-| `noxctl offers create --customer <number> --input <file>` | `fortnox_create_offer` | Create an offer (mutation) |
-| `noxctl offers update <docNumber> --input <file>` | `fortnox_update_offer` | Update an offer (mutation) |
-| `noxctl offers create-invoice <docNumber>` | `fortnox_create_invoice_from_offer` | Convert offer → invoice (mutation) |
-| `noxctl offers create-order <docNumber>` | `fortnox_create_order_from_offer` | Convert offer → order (mutation) |
+| CLI                                                            | MCP tool                            | Description                                                                           |
+| -------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------- |
+| `noxctl offers list [--filter <status>] [--customer <number>]` | `fortnox_list_offers`               | List/filter offers. Filters: `cancelled`, `expired`, `ordercreated`, `invoicecreated` |
+| `noxctl offers get <docNumber>`                                | `fortnox_get_offer`                 | Get a single offer                                                                    |
+| `noxctl offers create --customer <number> --input <file>`      | `fortnox_create_offer`              | Create an offer (mutation)                                                            |
+| `noxctl offers update <docNumber> --input <file>`              | `fortnox_update_offer`              | Update an offer (mutation)                                                            |
+| `noxctl offers create-invoice <docNumber>`                     | `fortnox_create_invoice_from_offer` | Convert offer → invoice (mutation)                                                    |
+| `noxctl offers create-order <docNumber>`                       | `fortnox_create_order_from_offer`   | Convert offer → order (mutation)                                                      |
 
 ### Orders (ordrar)
 
 > **Requires the `order` scope**, which is **opt-in** and needs the Fortnox **Order** licence. Run `noxctl init --with-orders` (or set `FORTNOX_WITH_ORDERS=1`), which requests `offer` and `order` together. Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl orders list [--filter <status>] [--customer <number>]` | `fortnox_list_orders` | List/filter orders. Filters: `cancelled`, `invoicecreated`, `invoicenotcreated` |
-| `noxctl orders get <docNumber>` | `fortnox_get_order` | Get a single order |
-| `noxctl orders create --customer <number> --input <file>` | `fortnox_create_order` | Create an order (mutation) |
-| `noxctl orders update <docNumber> --input <file>` | `fortnox_update_order` | Update an order (mutation) |
-| `noxctl orders create-invoice <docNumber>` | `fortnox_create_invoice_from_order` | Convert order → invoice (mutation) |
+| CLI                                                            | MCP tool                            | Description                                                                     |
+| -------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------- |
+| `noxctl orders list [--filter <status>] [--customer <number>]` | `fortnox_list_orders`               | List/filter orders. Filters: `cancelled`, `invoicecreated`, `invoicenotcreated` |
+| `noxctl orders get <docNumber>`                                | `fortnox_get_order`                 | Get a single order                                                              |
+| `noxctl orders create --customer <number> --input <file>`      | `fortnox_create_order`              | Create an order (mutation)                                                      |
+| `noxctl orders update <docNumber> --input <file>`              | `fortnox_update_order`              | Update an order (mutation)                                                      |
+| `noxctl orders create-invoice <docNumber>`                     | `fortnox_create_invoice_from_order` | Convert order → invoice (mutation)                                              |
 
 ### Bookkeeping
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl vouchers list [--series <s>] [--from <date>] [--to <date>]` | `fortnox_list_vouchers` | List vouchers, optionally filtered by series and date range |
-| `noxctl vouchers get <series> <number>` | `fortnox_get_voucher` | Get a single voucher with rows |
-| `noxctl vouchers create --input <file>` | `fortnox_create_voucher` | Create a voucher with debit/credit rows (mutation) |
-| `noxctl vouchers attach <series> <number> <file...> [--year]` | `fortnox_attach_voucher_files` | Upload receipt/underlag files and link them to a voucher (mutation; needs the Fortnox archive scope) |
-| `noxctl vouchers attachments <series> <number> [--year]` | `fortnox_list_voucher_attachments` | List files (receipts/underlag) already attached to a voucher — read-only, default scopes only |
-| `noxctl vouchers file <fileId> [-f <path>]` | `fortnox_get_voucher_file` | Download a file attached to a voucher (get `fileId` from `vouchers attachments`) — read-only, default scopes only |
-| `noxctl general-ledger list --from <date> --to <date> [--year] [--account] [--series]` / alias `ledger list` | `fortnox_general_ledger` | Bookkeeping transactions with amounts for a date range, one row per posting — reads Fortnox's SIE export instead of walking vouchers one by one, so it stays fast for a full year. Read-only, default scopes only |
-| `noxctl accounts list [--search <term>]` | `fortnox_list_accounts` | View chart of accounts, search by name or number |
+| CLI                                                                                                                              | MCP tool                                  | Description                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noxctl vouchers list [--series <s>] [--from <date>] [--to <date>]`                                                              | `fortnox_list_vouchers`                   | List vouchers, optionally filtered by series and date range                                                                                                                                                                                                                                               |
+| `noxctl vouchers get <series> <number>`                                                                                          | `fortnox_get_voucher`                     | Get a single voucher with rows                                                                                                                                                                                                                                                                            |
+| `noxctl vouchers get-many (--ref <series/number...> \| --from <date> --to <date> \| --period <p>) [--series] [--year] [--limit]` | `fortnox_get_vouchers`                    | Get many vouchers with rows in one call — an explicit list (1–50) or a whole period (rows fetched for the first `--limit` vouchers, default 100, max 200; larger periods are flagged `truncated`). A voucher that fails is reported in `errors` without stopping the rest. Read-only, default scopes only |
+| `noxctl vouchers create --input <file>`                                                                                          | `fortnox_create_voucher`                  | Create a voucher with debit/credit rows (mutation)                                                                                                                                                                                                                                                        |
+| `noxctl vouchers attach <series> <number> <file...> [--year]`                                                                    | `fortnox_attach_voucher_files`            | Upload receipt/underlag files and link them to a voucher (mutation; needs the Fortnox archive scope)                                                                                                                                                                                                      |
+| `noxctl vouchers attachments <series> <number> [--year]`                                                                         | `fortnox_list_voucher_attachments`        | List files (receipts/underlag) already attached to a voucher — read-only, default scopes only                                                                                                                                                                                                             |
+| `noxctl vouchers attachment-overview (--from <date> --to <date> \| --period <p>) [--series] [--year] [--only-missing]`           | `fortnox_get_voucher_attachment_overview` | Which vouchers in a period have or lack attached files, from two list calls (no per-voucher requests); `--only-missing` lists just the ones without. Read-only; needs the `connectfile` scope (default set) and, for connections into the file archive, possibly `archive` (`noxctl init --with-archive`) |
+| `noxctl vouchers file <fileId> [-f <path>]`                                                                                      | `fortnox_get_voucher_file`                | Download a file attached to a voucher (get `fileId` from `vouchers attachments`) — read-only, default scopes only                                                                                                                                                                                         |
+| `noxctl general-ledger list --from <date> --to <date> [--year] [--account] [--series]` / alias `ledger list`                     | `fortnox_general_ledger`                  | Bookkeeping transactions with amounts for a date range, one row per posting — reads Fortnox's SIE export instead of walking vouchers one by one, so it stays fast for a full year. Read-only, default scopes only                                                                                         |
+| `noxctl accounts list [--search <term>]`                                                                                         | `fortnox_list_accounts`                   | View chart of accounts, search by name or number                                                                                                                                                                                                                                                          |
 
 ### Financial reports
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
+| CLI                                                                                           | MCP tool                   | Description                        |
+| --------------------------------------------------------------------------------------------- | -------------------------- | ---------------------------------- |
 | `noxctl reports income [--year <n>] [--from <date>] [--to <date>]` / alias `reports resultat` | `fortnox_income_statement` | Income statement (resultaträkning) |
-| `noxctl reports balance [--year <n>] [--to <date>]` / alias `reports balans` | `fortnox_balance_sheet` | Balance sheet (balansräkning) |
+| `noxctl reports balance [--year <n>] [--to <date>]` / alias `reports balans`                  | `fortnox_balance_sheet`    | Balance sheet (balansräkning)      |
 
 ### Tax
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
+| CLI                                           | MCP tool             | Description                                                                                                   |
+| --------------------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `noxctl tax report --from <date> --to <date>` | `fortnox_tax_report` | Informational VAT summary for a period. Reconcile against Fortnox before filing. Dates in `YYYY-MM-DD` format |
 
 ### Tax reductions (ROT/RUT)
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl tax-reductions list [--filter <type>]` | `fortnox_list_taxreductions` | List tax reductions (ROT/RUT) |
-| `noxctl tax-reductions get <id>` | `fortnox_get_taxreduction` | Get a single tax reduction |
+| CLI                                                                                                                           | MCP tool                      | Description                               |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------- |
+| `noxctl tax-reductions list [--filter <type>]`                                                                                | `fortnox_list_taxreductions`  | List tax reductions (ROT/RUT)             |
+| `noxctl tax-reductions get <id>`                                                                                              | `fortnox_get_taxreduction`    | Get a single tax reduction                |
 | `noxctl tax-reductions create --reference <n> --type <rot\|rut> --document-type <type> --customer-name <name> --amount <öre>` | `fortnox_create_taxreduction` | Create a ROT/RUT tax reduction (mutation) |
 
 ### Projects
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl projects list` | `fortnox_list_projects` | List projects |
-| `noxctl projects get <number>` | `fortnox_get_project` | Get a single project |
-| `noxctl projects create --description <text>` | `fortnox_create_project` | Create a project (mutation) |
+| CLI                                              | MCP tool                 | Description                 |
+| ------------------------------------------------ | ------------------------ | --------------------------- |
+| `noxctl projects list`                           | `fortnox_list_projects`  | List projects               |
+| `noxctl projects get <number>`                   | `fortnox_get_project`    | Get a single project        |
+| `noxctl projects create --description <text>`    | `fortnox_create_project` | Create a project (mutation) |
 | `noxctl projects update <number> --input <file>` | `fortnox_update_project` | Update a project (mutation) |
 
 ### Cost centers (kostnadsställen)
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl costcenters list` | `fortnox_list_costcenters` | List cost centers |
-| `noxctl costcenters get <code>` | `fortnox_get_costcenter` | Get a single cost center |
+| CLI                                                            | MCP tool                    | Description                     |
+| -------------------------------------------------------------- | --------------------------- | ------------------------------- |
+| `noxctl costcenters list`                                      | `fortnox_list_costcenters`  | List cost centers               |
+| `noxctl costcenters get <code>`                                | `fortnox_get_costcenter`    | Get a single cost center        |
 | `noxctl costcenters create --code <code> --description <text>` | `fortnox_create_costcenter` | Create a cost center (mutation) |
-| `noxctl costcenters update <code> --input <file>` | `fortnox_update_costcenter` | Update a cost center (mutation) |
-| `noxctl costcenters delete <code>` | `fortnox_delete_costcenter` | Delete a cost center (mutation) |
+| `noxctl costcenters update <code> --input <file>`              | `fortnox_update_costcenter` | Update a cost center (mutation) |
+| `noxctl costcenters delete <code>`                             | `fortnox_delete_costcenter` | Delete a cost center (mutation) |
 
 ### Price lists and prices
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl pricelists list` | `fortnox_list_pricelists` | List price lists |
-| `noxctl pricelists get <code>` | `fortnox_get_pricelist` | Get a single price list |
-| `noxctl pricelists create --code <code> --description <text>` | `fortnox_create_pricelist` | Create a price list (mutation) |
-| `noxctl pricelists update <code> --input <file>` | `fortnox_update_pricelist` | Update a price list (mutation) |
-| `noxctl prices list --pricelist <code> [--article <number>]` | `fortnox_list_prices` | List prices within a price list |
-| `noxctl prices get --pricelist <code> --article <number>` | `fortnox_get_price` | Get a specific price |
-| `noxctl prices update --pricelist <code> --article <number> --input <file>` | `fortnox_update_price` | Update a price (mutation) |
+| CLI                                                                         | MCP tool                   | Description                     |
+| --------------------------------------------------------------------------- | -------------------------- | ------------------------------- |
+| `noxctl pricelists list`                                                    | `fortnox_list_pricelists`  | List price lists                |
+| `noxctl pricelists get <code>`                                              | `fortnox_get_pricelist`    | Get a single price list         |
+| `noxctl pricelists create --code <code> --description <text>`               | `fortnox_create_pricelist` | Create a price list (mutation)  |
+| `noxctl pricelists update <code> --input <file>`                            | `fortnox_update_pricelist` | Update a price list (mutation)  |
+| `noxctl prices list --pricelist <code> [--article <number>]`                | `fortnox_list_prices`      | List prices within a price list |
+| `noxctl prices get --pricelist <code> --article <number>`                   | `fortnox_get_price`        | Get a specific price            |
+| `noxctl prices update --pricelist <code> --article <number> --input <file>` | `fortnox_update_price`     | Update a price (mutation)       |
 
 ### Contracts (avtal — recurring invoicing)
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl contracts list [--filter active\|inactive\|finished]` | `fortnox_list_contracts` | List/filter contracts |
-| `noxctl contracts get <number>` | `fortnox_get_contract` | Get a single contract |
-| `noxctl contracts create --customer <number> --input <file>` | `fortnox_create_contract` | Create a contract (mutation) |
-| `noxctl contracts update <number> --input <file>` | `fortnox_update_contract` | Update a contract (mutation) |
-| `noxctl contracts finish <number>` | `fortnox_finish_contract` | Finish a contract (mutation) |
-| `noxctl contracts create-invoice <number>` | `fortnox_create_invoice_from_contract` | Create the next invoice now (mutation) |
-| `noxctl contracts increase-invoice-count <number>` | `fortnox_increase_contract_invoice_count` | Extend by one invoice (mutation) |
+| CLI                                                           | MCP tool                                  | Description                            |
+| ------------------------------------------------------------- | ----------------------------------------- | -------------------------------------- |
+| `noxctl contracts list [--filter active\|inactive\|finished]` | `fortnox_list_contracts`                  | List/filter contracts                  |
+| `noxctl contracts get <number>`                               | `fortnox_get_contract`                    | Get a single contract                  |
+| `noxctl contracts create --customer <number> --input <file>`  | `fortnox_create_contract`                 | Create a contract (mutation)           |
+| `noxctl contracts update <number> --input <file>`             | `fortnox_update_contract`                 | Update a contract (mutation)           |
+| `noxctl contracts finish <number>`                            | `fortnox_finish_contract`                 | Finish a contract (mutation)           |
+| `noxctl contracts create-invoice <number>`                    | `fortnox_create_invoice_from_contract`    | Create the next invoice now (mutation) |
+| `noxctl contracts increase-invoice-count <number>`            | `fortnox_increase_contract_invoice_count` | Extend by one invoice (mutation)       |
 
 ### Financial years and locked period
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl financial-years list [--date <date>]` | `fortnox_list_financialyears` | List financial years (räkenskapsår) |
-| `noxctl financial-years get <id>` | `fortnox_get_financialyear` | Get a single financial year |
-| `noxctl financial-years locked-period` | `fortnox_get_lockedperiod` | Show through which date bookkeeping is locked |
+| CLI                                           | MCP tool                      | Description                                   |
+| --------------------------------------------- | ----------------------------- | --------------------------------------------- |
+| `noxctl financial-years list [--date <date>]` | `fortnox_list_financialyears` | List financial years (räkenskapsår)           |
+| `noxctl financial-years get <id>`             | `fortnox_get_financialyear`   | Get a single financial year                   |
+| `noxctl financial-years locked-period`        | `fortnox_get_lockedperiod`    | Show through which date bookkeeping is locked |
 
 ### Reference and setup data (read-only)
 
@@ -557,22 +601,22 @@ noxctl account-charts list
 
 ### Accruals (periodiseringar)
 
-| CLI group | MCP tool prefix | Operations |
-|---|---|---|
-| `noxctl invoice-accruals` | `fortnox_*_invoice_accrual` | list, get, create, update, delete |
+| CLI group                          | MCP tool prefix                      | Operations                        |
+| ---------------------------------- | ------------------------------------ | --------------------------------- |
+| `noxctl invoice-accruals`          | `fortnox_*_invoice_accrual`          | list, get, create, update, delete |
 | `noxctl supplier-invoice-accruals` | `fortnox_*_supplier_invoice_accrual` | list, get, create, update, delete |
-| `noxctl contract-accruals` | `fortnox_*_contract_accrual` | list, get, create, update, delete |
+| `noxctl contract-accruals`         | `fortnox_*_contract_accrual`         | list, get, create, update, delete |
 
 Every mutation supports confirmation and dry-run preview. Nested accrual rows are
 strict and validated before any request is sent.
 
 ### Archive, inbox, and cross-document attachments
 
-| CLI group | MCP surface | Purpose |
-|---|---|---|
-| `noxctl archive` | `fortnox_*_archive*` | List/download, multipart upload, delete path/entry |
-| `noxctl inbox` | `fortnox_*_inbox*` | List the root or one folder (`--folder-id` / `folderId`), multipart upload, safe download, delete |
-| `noxctl attachments` | `fortnox_*_document_attachment*` | Attach/list/count/validate/update/detach for invoices, offers, orders, and contracts |
+| CLI group            | MCP surface                      | Purpose                                                                                           |
+| -------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `noxctl archive`     | `fortnox_*_archive*`             | List/download, multipart upload, delete path/entry                                                |
+| `noxctl inbox`       | `fortnox_*_inbox*`               | List the root or one folder (`--folder-id` / `folderId`), multipart upload, safe download, delete |
+| `noxctl attachments` | `fortnox_*_document_attachment*` | Attach/list/count/validate/update/detach for invoices, offers, orders, and contracts              |
 
 Voucher and supplier-invoice file connections additionally expose get/connect/detach
 commands under their existing CLI groups. Binary downloads default to a private
@@ -583,55 +627,55 @@ and only replace an existing regular file when `--overwrite` is explicit.
 
 > **Requires the `salary` scope**, which is **opt-in**. Enable the **Lön** permission on your Fortnox app, then run `noxctl init --with-salary` (or set `FORTNOX_WITH_SALARY=1` in non-interactive setups). Without it, these endpoints return `403 Forbidden`. See [Setup](#1-create-a-fortnox-app).
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl employees list` | `fortnox_list_employees` | List employees |
-| `noxctl employees get <employeeId>` | `fortnox_get_employee` | Get a single employee |
-| `noxctl employees create --first-name <n> --last-name <n> --email <e> [--employment-form <f> --personel-type <t> --salary-form <f>]` | `fortnox_create_employee` | Create an employee (mutation). `--employment-form`/`--personel-type`/`--salary-form` are required *unless* the company has a default employment agreement — otherwise Fortnox rejects with a `ftgavtalid` error |
-| `noxctl employees update <employeeId> --input <file>` | `fortnox_update_employee` | Update an employee (mutation) |
-| `noxctl salary-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_salarytransactions` | List salary transactions |
-| `noxctl salary-transactions get <salaryRow>` | `fortnox_get_salarytransaction` | Get a single salary transaction |
-| `noxctl salary-transactions create --employee <id> --salary-code <code> --date <date> [--amount <n>]` | `fortnox_create_salarytransaction` | Create a salary transaction (mutation) |
-| `noxctl salary-transactions delete <salaryRow>` | `fortnox_delete_salarytransaction` | Delete a salary transaction (mutation) |
-| `noxctl attendance-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_attendancetransactions` | List attendance (närvaro) transactions |
-| `noxctl attendance-transactions get <id>` | `fortnox_get_attendancetransaction` | Get a single attendance transaction |
-| `noxctl attendance-transactions create --employee <id> --cause-code <code> --date <date> [--hours <n>]` | `fortnox_create_attendancetransaction` | Create an attendance transaction (mutation) |
-| `noxctl attendance-transactions delete <id>` | `fortnox_delete_attendancetransaction` | Delete an attendance transaction (mutation) |
-| `noxctl absence-transactions list [--employee <id>] [--date <date>]` | `fortnox_list_absencetransactions` | List absence (frånvaro) transactions |
-| `noxctl absence-transactions get <id>` | `fortnox_get_absencetransaction` | Get a single absence transaction |
-| `noxctl absence-transactions create --employee <id> --cause-code <code> --date <date> [--hours <n>] [--extent <n>]` | `fortnox_create_absencetransaction` | Create an absence transaction (mutation) |
-| `noxctl absence-transactions delete <id>` | `fortnox_delete_absencetransaction` | Delete an absence transaction (mutation) |
-| `noxctl schedule-times get <employeeId> <date>` | `fortnox_get_scheduletime` | Get the schedule for an employee on a date |
-| `noxctl schedule-times update <employeeId> <date> --input <file>` | `fortnox_update_scheduletime` | Update a day's schedule (mutation) |
-| `noxctl schedule-times reset-day <employeeId> <date> --input <file>` | `fortnox_reset_scheduletime_day` | Update a day's schedule and reset the day (mutation) |
+| CLI                                                                                                                                  | MCP tool                               | Description                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noxctl employees list`                                                                                                              | `fortnox_list_employees`               | List employees                                                                                                                                                                                                  |
+| `noxctl employees get <employeeId>`                                                                                                  | `fortnox_get_employee`                 | Get a single employee                                                                                                                                                                                           |
+| `noxctl employees create --first-name <n> --last-name <n> --email <e> [--employment-form <f> --personel-type <t> --salary-form <f>]` | `fortnox_create_employee`              | Create an employee (mutation). `--employment-form`/`--personel-type`/`--salary-form` are required _unless_ the company has a default employment agreement — otherwise Fortnox rejects with a `ftgavtalid` error |
+| `noxctl employees update <employeeId> --input <file>`                                                                                | `fortnox_update_employee`              | Update an employee (mutation)                                                                                                                                                                                   |
+| `noxctl salary-transactions list [--employee <id>] [--date <date>]`                                                                  | `fortnox_list_salarytransactions`      | List salary transactions                                                                                                                                                                                        |
+| `noxctl salary-transactions get <salaryRow>`                                                                                         | `fortnox_get_salarytransaction`        | Get a single salary transaction                                                                                                                                                                                 |
+| `noxctl salary-transactions create --employee <id> --salary-code <code> --date <date> [--amount <n>]`                                | `fortnox_create_salarytransaction`     | Create a salary transaction (mutation)                                                                                                                                                                          |
+| `noxctl salary-transactions delete <salaryRow>`                                                                                      | `fortnox_delete_salarytransaction`     | Delete a salary transaction (mutation)                                                                                                                                                                          |
+| `noxctl attendance-transactions list [--employee <id>] [--date <date>]`                                                              | `fortnox_list_attendancetransactions`  | List attendance (närvaro) transactions                                                                                                                                                                          |
+| `noxctl attendance-transactions get <id>`                                                                                            | `fortnox_get_attendancetransaction`    | Get a single attendance transaction                                                                                                                                                                             |
+| `noxctl attendance-transactions create --employee <id> --cause-code <code> --date <date> [--hours <n>]`                              | `fortnox_create_attendancetransaction` | Create an attendance transaction (mutation)                                                                                                                                                                     |
+| `noxctl attendance-transactions delete <id>`                                                                                         | `fortnox_delete_attendancetransaction` | Delete an attendance transaction (mutation)                                                                                                                                                                     |
+| `noxctl absence-transactions list [--employee <id>] [--date <date>]`                                                                 | `fortnox_list_absencetransactions`     | List absence (frånvaro) transactions                                                                                                                                                                            |
+| `noxctl absence-transactions get <id>`                                                                                               | `fortnox_get_absencetransaction`       | Get a single absence transaction                                                                                                                                                                                |
+| `noxctl absence-transactions create --employee <id> --cause-code <code> --date <date> [--hours <n>] [--extent <n>]`                  | `fortnox_create_absencetransaction`    | Create an absence transaction (mutation)                                                                                                                                                                        |
+| `noxctl absence-transactions delete <id>`                                                                                            | `fortnox_delete_absencetransaction`    | Delete an absence transaction (mutation)                                                                                                                                                                        |
+| `noxctl schedule-times get <employeeId> <date>`                                                                                      | `fortnox_get_scheduletime`             | Get the schedule for an employee on a date                                                                                                                                                                      |
+| `noxctl schedule-times update <employeeId> <date> --input <file>`                                                                    | `fortnox_update_scheduletime`          | Update a day's schedule (mutation)                                                                                                                                                                              |
+| `noxctl schedule-times reset-day <employeeId> <date> --input <file>`                                                                 | `fortnox_reset_scheduletime_day`       | Update a day's schedule and reset the day (mutation)                                                                                                                                                            |
 
 ### Analytics and dashboard
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl analytics overdue` | `fortnox_overdue_invoices` | Overdue invoices summary |
-| `noxctl analytics unpaid` | `fortnox_unpaid_totals` | Outstanding receivables, with overdue split |
-| `noxctl analytics top-customers [--period <period>]` | `fortnox_top_customers` | Top customers by invoiced amount |
-| `noxctl analytics vat --period <period>` | `fortnox_vat_summary` | VAT summary with net VAT position |
-| `noxctl dashboard` | — | At-a-glance: outstanding, overdue, recent invoices, monthly revenue |
+| CLI                                                  | MCP tool                   | Description                                                         |
+| ---------------------------------------------------- | -------------------------- | ------------------------------------------------------------------- |
+| `noxctl analytics overdue`                           | `fortnox_overdue_invoices` | Overdue invoices summary                                            |
+| `noxctl analytics unpaid`                            | `fortnox_unpaid_totals`    | Outstanding receivables, with overdue split                         |
+| `noxctl analytics top-customers [--period <period>]` | `fortnox_top_customers`    | Top customers by invoiced amount                                    |
+| `noxctl analytics vat --period <period>`             | `fortnox_vat_summary`      | VAT summary with net VAT position                                   |
+| `noxctl dashboard`                                   | —                          | At-a-glance: outstanding, overdue, recent invoices, monthly revenue |
 
 ### Company
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
+| CLI                   | MCP tool               | Description                                     |
+| --------------------- | ---------------------- | ----------------------------------------------- |
 | `noxctl company info` | `fortnox_company_info` | Company name, org number, address, and settings |
 
 ### Utility
 
-| CLI | MCP tool | Description |
-|-----|----------|-------------|
-| `noxctl init` | — | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
-| `noxctl doctor` | `fortnox_status` | Validate setup: Node version, credentials, token status, API connectivity, and scopes |
-| `noxctl logout` | — | Remove stored credentials from the OS keychain |
-| `noxctl profile use <name>` | — | Set the active profile (writes `~/.fortnox-mcp/active-profile`) |
-| `noxctl profile current` | — | Show the currently resolved profile and where it came from |
-| `noxctl profile list` | — | List known profiles from the index |
-| `noxctl completion <bash\|zsh\|fish>` | — | Generate a shell completion script |
+| CLI                                   | MCP tool         | Description                                                                                         |
+| ------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `noxctl init`                         | —                | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
+| `noxctl doctor`                       | `fortnox_status` | Validate setup: Node version, credentials, token status, API connectivity, and scopes               |
+| `noxctl logout`                       | —                | Remove stored credentials from the OS keychain                                                      |
+| `noxctl profile use <name>`           | —                | Set the active profile (writes `~/.fortnox-mcp/active-profile`)                                     |
+| `noxctl profile current`              | —                | Show the currently resolved profile and where it came from                                          |
+| `noxctl profile list`                 | —                | List known profiles from the index                                                                  |
+| `noxctl completion <bash\|zsh\|fish>` | —                | Generate a shell completion script                                                                  |
 
 ## CLI output
 
@@ -774,23 +818,23 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for details.
 
 ## Glossary
 
-| Abbreviation | Full term |
-|---|---|
-| AI | Artificial Intelligence |
-| API | Application Programming Interface |
-| BCC | Blind Carbon Copy — an email field that sends a copy to someone without other recipients seeing it |
-| CLI | Command Line Interface — a text-based way to interact with software by typing commands |
-| DPAPI | Data Protection API — a Windows feature for encrypting stored credentials |
-| JSON | JavaScript Object Notation — a widely used format for structured data |
-| MCP | Model Context Protocol — a standard that lets AI assistants use external tools and data sources |
-| MIT | Massachusetts Institute of Technology — refers to a permissive open-source software license |
-| npm | Node Package Manager — a tool for installing and managing JavaScript packages |
-| npx | A tool included with npm for running packages without installing them globally |
-| OAuth | Open Authorization — a standard protocol for granting apps limited access to accounts without sharing passwords |
-| OS | Operating System — the software that runs your computer (e.g. macOS, Windows, Linux) |
-| SEK | Swedish Krona — the currency of Sweden |
-| URI | Uniform Resource Identifier — an address that identifies a resource (similar to a web link) |
-| VAT | Value Added Tax — a consumption tax added at each stage of production |
+| Abbreviation | Full term                                                                                                       |
+| ------------ | --------------------------------------------------------------------------------------------------------------- |
+| AI           | Artificial Intelligence                                                                                         |
+| API          | Application Programming Interface                                                                               |
+| BCC          | Blind Carbon Copy — an email field that sends a copy to someone without other recipients seeing it              |
+| CLI          | Command Line Interface — a text-based way to interact with software by typing commands                          |
+| DPAPI        | Data Protection API — a Windows feature for encrypting stored credentials                                       |
+| JSON         | JavaScript Object Notation — a widely used format for structured data                                           |
+| MCP          | Model Context Protocol — a standard that lets AI assistants use external tools and data sources                 |
+| MIT          | Massachusetts Institute of Technology — refers to a permissive open-source software license                     |
+| npm          | Node Package Manager — a tool for installing and managing JavaScript packages                                   |
+| npx          | A tool included with npm for running packages without installing them globally                                  |
+| OAuth        | Open Authorization — a standard protocol for granting apps limited access to accounts without sharing passwords |
+| OS           | Operating System — the software that runs your computer (e.g. macOS, Windows, Linux)                            |
+| SEK          | Swedish Krona — the currency of Sweden                                                                          |
+| URI          | Uniform Resource Identifier — an address that identifies a resource (similar to a web link)                     |
+| VAT          | Value Added Tax — a consumption tax added at each stage of production                                           |
 
 ## Disclaimer
 
@@ -800,7 +844,7 @@ noxctl is an independent, **unofficial** open-source project — **not affiliate
 
 **You are responsible for everything you do with it.** Under Swedish law (Bokföringslagen), the company owner or board bears full responsibility for the correctness of all accounting and payroll records, regardless of the tools used. noxctl only executes the instructions you give it — review entries before confirming, especially with `--yes` / `confirm: true`, and reconcile against Fortnox and your own records.
 
-**Privacy / personal data.** noxctl can move accounting *and personal* data out of Fortnox — customer/supplier details and, via the payroll commands, employee personal data such as Swedish personal identity numbers (personnummer), salaries, and absence records. When using it with AI assistants or MCP hosts, that data may enter third-party systems. Keep `includeRaw: false` unless full payloads are necessary, and ensure your use complies with GDPR, processor/data-processing agreements, and any required transfer assessments. See `PRIVACY.md`.
+**Privacy / personal data.** noxctl can move accounting _and personal_ data out of Fortnox — customer/supplier details and, via the payroll commands, employee personal data such as Swedish personal identity numbers (personnummer), salaries, and absence records. When using it with AI assistants or MCP hosts, that data may enter third-party systems. Keep `includeRaw: false` unless full payloads are necessary, and ensure your use complies with GDPR, processor/data-processing agreements, and any required transfer assessments. See `PRIVACY.md`.
 
 **Tax note:** The VAT report is an informational summary only. Reconcile it against Fortnox and your accounting records before submitting anything to Skatteverket.
 
@@ -811,7 +855,7 @@ noxctl is an independent, **unofficial** open-source project — **not affiliate
 When you register a Fortnox developer app to use noxctl, **you** (not the noxctl author) accept Fortnox's [Developer Agreement](https://www.fortnox.se/developer) and are the contracting party. In particular:
 
 - **Eligibility:** registering a Fortnox developer app requires a company registered under Swedish law (Developer Agreement cl. 5.1).
-- **Running it for someone else's Fortnox** (e.g. as a bookkeeper/accountant for a client) makes you a data processor — you must have a data-processing agreement (*personuppgiftsbiträdesavtal*) with that client (cl. 12.3). Using it for your own company does not trigger this.
+- **Running it for someone else's Fortnox** (e.g. as a bookkeeper/accountant for a client) makes you a data processor — you must have a data-processing agreement (_personuppgiftsbiträdesavtal_) with that client (cl. 12.3). Using it for your own company does not trigger this.
 - **Sending data to AI/LLMs:** Fortnox does not prohibit it, but you are responsible for the lawfulness of distributing personal data (cl. 13.5 + GDPR) — especially payroll (Lön) and ROT/RUT data, which contain personal identity numbers (personnummer). Ensure a lawful basis and, where required, a data-processing agreement with your AI provider and a valid transfer mechanism for non-EU/EES providers.
 - noxctl is a **client for Fortnox's own API** — a complement, not a replacement — using only documented endpoints and your own credentials.
 

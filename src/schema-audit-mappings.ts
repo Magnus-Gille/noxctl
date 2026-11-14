@@ -171,6 +171,11 @@ export const SCHEMA_AUDIT_MAPPINGS: readonly SchemaAuditMapping[] = [
     'fileattachments_Attachment',
   ),
   root(
+    'supplier-invoice-comment-create',
+    'fortnox_create_supplier_invoice_comment',
+    'fortnox_Lf_SupplierInvoiceCommentLogPayloadItem',
+  ),
+  root(
     'recurring-invoice-request-create',
     'fortnox_create_recurring_invoice_request',
     'Recurring-API_CreateInvoiceRequest',
@@ -349,6 +354,11 @@ export const SCHEMA_AUDIT_EXCEPTIONS: readonly MutationAuditException[] = [
   action(
     'supplier-invoice-file-delete',
     'fortnox_delete_supplier_invoice_file_connection',
+    'Identifier-only delete.',
+  ),
+  action(
+    'supplier-invoice-comment-delete',
+    'fortnox_delete_supplier_invoice_comment',
     'Identifier-only delete.',
   ),
   action(

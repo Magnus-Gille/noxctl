@@ -266,6 +266,13 @@ export async function createStagedServer(
       {
         description: 'Validera och spara ett exakt anrop utan att skriva till Fortnox.',
         inputSchema: z.strictObject({ tool: z.string(), args: z.record(z.string(), z.unknown()) }),
+        // Writes only the local queue; nothing is sent to Fortnox.
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
       ({ tool, args }) =>
         guarded(async () => {
@@ -310,6 +317,14 @@ export async function createStagedServer(
       {
         description: 'Verkställ det sparade anropets ID med uttrycklig bekräftelse.',
         inputSchema: z.strictObject({ id: z.uuid(), confirm: z.boolean().optional() }),
+        // The staged contract allows only additive create_* tools (see baseAllowed and
+        // paymentAllowed); a destructive tool must flip destructiveHint here.
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: false,
+          openWorldHint: true,
+        },
       },
       ({ id, confirm }) =>
         guarded(async () => {
@@ -384,6 +399,7 @@ export async function createStagedServer(
       {
         description: 'Läs ett sparat anrop och dess MCP-kvitto.',
         inputSchema: z.strictObject({ id: z.uuid() }),
+        annotations: { readOnlyHint: true, openWorldHint: false },
       },
       ({ id }) =>
         guarded(async () => {
@@ -399,6 +415,7 @@ export async function createStagedServer(
           cursor: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
           limit: z.number().int().min(1).max(100).optional(),
         }),
+        annotations: { readOnlyHint: true, openWorldHint: false },
       },
       ({ cursor = 0, limit = 25 }) =>
         guarded(async () => {
@@ -419,6 +436,7 @@ export async function createStagedServer(
       {
         description: 'Visa köantal och eftersläpning för det bundna målföretaget.',
         inputSchema: z.strictObject({}),
+        annotations: { readOnlyHint: true, openWorldHint: false },
       },
       () =>
         guarded(async () => {

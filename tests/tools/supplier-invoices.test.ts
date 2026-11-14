@@ -28,6 +28,10 @@ function mockBinaryFetch(bytes: Buffer, contentType: string) {
   });
 }
 
+function textOf(result: unknown): string {
+  return (result as { content: { text: string }[] }).content[0]?.text ?? '';
+}
+
 async function setupClientServer() {
   const server = createServer();
   const client = new Client({ name: 'test-client', version: '1.0.0' });
@@ -373,6 +377,166 @@ describe('supplier invoice tools', () => {
 
       expect(result.isError).toBe(true);
       rmSync(target, { force: true });
+    });
+  });
+
+  describe('supplier invoice comment log tools', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('discovers the comment tools', async () => {
+      const { client } = await setupClientServer();
+      const names = (await client.listTools()).tools.map(({ name }) => name);
+      for (const name of [
+        'fortnox_list_supplier_invoice_comments',
+        'fortnox_create_supplier_invoice_comment',
+        'fortnox_delete_supplier_invoice_comment',
+      ])
+        expect(names).toContain(name);
+    });
+
+    it('lists comments as a table without confirmation', async () => {
+      mockFetch({
+        SupplierInvoiceCommentLog: [
+          { Id: 'c-1', Comment: 'Kontrollerad av Anna', UserName: 'Anna', CreatedAt: '2026-03-01' },
+        ],
+      });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_list_supplier_invoice_comments',
+        arguments: { givenNumber: '7' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toContain('Kontrollerad av Anna');
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain(
+        '/supplierinvoices/7/commentlog',
+      );
+    });
+
+    it('rejects confirm and dryRun on the read-only list tool', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_list_supplier_invoice_comments',
+        arguments: { givenNumber: '7', dryRun: true },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses to create a comment without confirm', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_supplier_invoice_comment',
+        arguments: { givenNumber: '7', Comment: 'Hej' },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('previews a comment create on dryRun without calling Fortnox', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_supplier_invoice_comment',
+        arguments: { givenNumber: '7', Comment: 'Hej', dryRun: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toContain('Dry run');
+      expect(textOf(result)).toContain('"Comment": "Hej"');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('creates a comment with confirm and posts only the Comment field', async () => {
+      mockFetch({ SupplierInvoiceCommentLog: { Id: 'c-2', Comment: 'Hej' } });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_supplier_invoice_comment',
+        arguments: { givenNumber: '7', Comment: 'Hej', confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const init = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1] as {
+        method?: string;
+        body?: string;
+      };
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body ?? 'null')).toEqual({
+        SupplierInvoiceCommentLog: { Comment: 'Hej' },
+      });
+    });
+
+    it('rejects unknown fields on the comment create tool before calling Fortnox', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_supplier_invoice_comment',
+        arguments: { givenNumber: '7', Comment: 'Hej', PersistToInvoice: true, dryRun: true },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('refuses to delete a comment without confirm', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_delete_supplier_invoice_comment',
+        arguments: { givenNumber: '7', commentId: 'c-1' },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('previews a comment delete on dryRun without calling Fortnox', async () => {
+      global.fetch = vi.fn();
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_delete_supplier_invoice_comment',
+        arguments: { givenNumber: '7', commentId: 'c-1', dryRun: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect(textOf(result)).toContain('Dry run');
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('deletes a comment with confirm and accepts an empty 204 body', async () => {
+      // Fortnox answers a comment delete with 204 and no body at all.
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 204,
+        text: () => Promise.resolve(''),
+        json: () => Promise.reject(new SyntaxError('Unexpected end of JSON input')),
+      });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_delete_supplier_invoice_comment',
+        arguments: { givenNumber: '7', commentId: 'c-1', confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0]).toContain(
+        '/supplierinvoices/7/commentlog/c-1',
+      );
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].method).toBe('DELETE');
     });
   });
 });
