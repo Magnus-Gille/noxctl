@@ -12,6 +12,15 @@ export interface RecurringWithMetadata {
   lastModified?: string;
 }
 
+export interface RecurringLabel {
+  id?: string;
+  name?: string;
+  value?: string;
+  created_at?: string;
+  modified_at?: string;
+  [key: string]: unknown;
+}
+
 export interface ListRecurringsParams {
   customerNumbers?: string[];
   statuses?: string[];
@@ -123,6 +132,12 @@ export function createRecurringOperations(transport: FortnoxTransport) {
     );
   }
 
+  async function listRecurringLabels(recurringId: string): Promise<RecurringLabel[]> {
+    return transport.request<RecurringLabel[]>(
+      `${RECURRINGS}/${uuidSegment('recurring ID', recurringId)}/labels`,
+    );
+  }
+
   async function listInvoiceRequests(
     recurringIds: string[],
     statuses?: string[],
@@ -165,6 +180,7 @@ export function createRecurringOperations(transport: FortnoxTransport) {
     patchRecurring,
     listRecurringDeviations,
     getRecurringDeviation,
+    listRecurringLabels,
     listInvoiceRequests,
     getInvoiceRequest,
     createInvoiceRequest,
@@ -179,6 +195,7 @@ export const {
   patchRecurring,
   listRecurringDeviations,
   getRecurringDeviation,
+  listRecurringLabels,
   listInvoiceRequests,
   getInvoiceRequest,
   createInvoiceRequest,

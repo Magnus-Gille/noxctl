@@ -7,7 +7,7 @@ export interface Column {
   format?: (value: unknown, row: Record<string, unknown>) => string;
 }
 
-function stripControl(str: string): string {
+export function stripControl(str: string): string {
   return (
     str
       // Strip ANSI CSI sequences (e.g. \x1b[31m)

@@ -202,6 +202,13 @@ export const supplierInvoiceAttachmentColumns: Column[] = [
   { key: 'fileId', header: 'File ID', width: 36 },
 ];
 
+export const supplierInvoiceCommentColumns: Column[] = [
+  { key: 'Id', header: 'ID', width: 12 },
+  { key: 'CreatedAt', header: 'Created', width: 20 },
+  { key: 'UserName', header: 'User', width: 20 },
+  { key: 'Comment', header: 'Comment', width: 40 },
+];
+
 // --- Invoice payment views (target ≤80 cols) ---
 
 // 8 + 2 + 10 + 2 + 10 + 2 + 12 + 2 + 10 + 2 + 10 = 70
@@ -486,6 +493,12 @@ export const recurringListColumns: Column[] = [
   { key: 'created_at', header: 'Created', width: 20 },
 ];
 
+export const recurringLabelColumns: Column[] = [
+  { key: 'name', header: 'Name', width: 20 },
+  { key: 'value', header: 'Value', width: 24 },
+  { key: 'id', header: 'ID', width: 36 },
+];
+
 export const recurringDetailColumns: Column[] = [
   { key: 'id', header: 'ID', width: 36 },
   { key: 'serial_number', header: 'Serial #', width: 10, align: 'right' },
@@ -529,6 +542,22 @@ export const voucherAttachmentColumns: Column[] = [
   { key: 'fileName', header: 'File', width: 40 },
   { key: 'fileId', header: 'File ID', width: 36 },
   { key: 'voucherYear', header: 'Year', width: 5, align: 'right' },
+];
+
+// Per-period overview: which vouchers have attached files (VoucherAttachmentOverviewRow).
+// 6 + 2 + 6 + 2 + 10 + 2 + 20 + 2 + 5 + 2 + 23 = 80
+export const voucherAttachmentOverviewColumns: Column[] = [
+  { key: 'series', header: 'Series', width: 6 },
+  { key: 'number', header: 'Number', width: 6, align: 'right' },
+  { key: 'transactionDate', header: 'Date', width: 10 },
+  { key: 'description', header: 'Description', width: 20 },
+  { key: 'attachmentCount', header: 'Files', width: 5, align: 'right' },
+  {
+    key: 'fileNames',
+    header: 'File names',
+    width: 23,
+    format: (value) => (Array.isArray(value) ? value.join(', ') : ''),
+  },
 ];
 
 // --- Invoice file attachment views ---

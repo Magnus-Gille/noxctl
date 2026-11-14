@@ -7,6 +7,7 @@ import {
   supplierInvoiceDetailColumns,
   supplierInvoiceConfirmColumns,
   supplierInvoiceAttachmentColumns,
+  supplierInvoiceCommentColumns,
 } from '../views.js';
 import {
   detailResponse,
@@ -83,6 +84,9 @@ export function registerSupplierInvoiceTools(
     createSupplierInvoiceFileConnection,
     deleteSupplierInvoiceFileConnection,
     extensionForMime,
+    listSupplierInvoiceComments,
+    createSupplierInvoiceComment,
+    deleteSupplierInvoiceComment,
   } = operations;
   server.tool(
     'fortnox_list_supplier_invoices',
@@ -379,6 +383,61 @@ export function registerSupplierInvoiceTools(
       if (!confirm) requireConfirmation(target);
       await deleteSupplierInvoiceFileConnection(fileId);
       return textResponse(`Supplier invoice file connection ${fileId} deleted.`);
+    },
+  );
+
+  server.tool(
+    'fortnox_list_supplier_invoice_comments',
+    'Lista kommentarer i loggen för en leverantörsfaktura i Fortnox. Returnerar: ID, Created, User, Comment.',
+    {
+      givenNumber: z.string().describe('Leverantörsfakturanummer (GivenNumber)'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ givenNumber, includeRaw }) => {
+      const comments = await listSupplierInvoiceComments(givenNumber);
+      return listResponse(comments, supplierInvoiceCommentColumns, comments, undefined, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_create_supplier_invoice_comment',
+    'Lägg till en kommentar i loggen för en leverantörsfaktura i Fortnox',
+    {
+      givenNumber: z.string().describe('Leverantörsfakturanummer (GivenNumber)'),
+      Comment: z.string().min(1).describe('Kommentarstext'),
+      confirm: z.boolean().optional().describe('Bekräfta att kommentaren ska läggas till'),
+      dryRun: z.boolean().optional().describe('Visa payload utan att skapa kommentaren'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ givenNumber, Comment, confirm, dryRun, includeRaw }) => {
+      const target = `add comment to supplier invoice ${givenNumber}`;
+      if (dryRun) {
+        return dryRunResponse(target, { SupplierInvoiceCommentLog: { Comment } });
+      }
+      if (!confirm) requireConfirmation(target);
+      const comment = await createSupplierInvoiceComment(givenNumber, { Comment });
+      return detailResponse(comment, supplierInvoiceCommentColumns, comment, includeRaw);
+    },
+  );
+
+  server.tool(
+    'fortnox_delete_supplier_invoice_comment',
+    'Ta bort en kommentar från loggen för en leverantörsfaktura i Fortnox',
+    {
+      givenNumber: z.string().describe('Leverantörsfakturanummer (GivenNumber)'),
+      commentId: z
+        .string()
+        .min(1)
+        .describe('Kommentarens ID, från fortnox_list_supplier_invoice_comments'),
+      confirm: z.boolean().optional().describe('Bekräfta borttagningen'),
+      dryRun: z.boolean().optional().describe('Visa åtgärden utan att ta bort kommentaren'),
+    },
+    async ({ givenNumber, commentId, confirm, dryRun }) => {
+      const target = `delete comment ${commentId} from supplier invoice ${givenNumber}`;
+      if (dryRun) return dryRunResponse(target);
+      if (!confirm) requireConfirmation(target);
+      await deleteSupplierInvoiceComment(givenNumber, commentId);
+      return textResponse(`Comment ${commentId} deleted from supplier invoice ${givenNumber}.`);
     },
   );
 }

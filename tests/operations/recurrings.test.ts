@@ -85,4 +85,35 @@ describe('recurring operations', () => {
     ).rejects.toThrow('Use ASYNC');
     expect(global.fetch).not.toHaveBeenCalled();
   });
+
+  it('lists labels for a recurring from the labels sub-resource', async () => {
+    const labels = [
+      {
+        id: '6f1c2a3e-8b7d-4c5e-9f00-1a2b3c4d5e6f',
+        name: 'Kategori',
+        value: 'Drift',
+        created_at: '2026-01-01T00:00:00Z',
+        modified_at: '2026-01-02T00:00:00Z',
+      },
+    ];
+    mockFetch(labels);
+    const { listRecurringLabels } = await import('../../src/operations/recurrings.js');
+
+    const result = await listRecurringLabels(recurringId);
+
+    const [url, init] = fetchCall();
+    expect(url).toBe(
+      `https://api.fortnox.se/api/recurring-billing/recurrings-v1/${recurringId}/labels`,
+    );
+    expect(init?.method ?? 'GET').toBe('GET');
+    expect(result).toEqual(labels);
+  });
+
+  it('rejects a malformed recurring ID before calling Fortnox', async () => {
+    mockFetch([]);
+    const { listRecurringLabels } = await import('../../src/operations/recurrings.js');
+
+    await expect(listRecurringLabels('../labels')).rejects.toThrow('Invalid recurring ID');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
 });
