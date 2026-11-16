@@ -44,6 +44,11 @@ export {
   type InvoiceIssueReceipt,
 } from './shadow/invoice-issue-adapter.js';
 export {
+  AccountedInvoiceCreditAdapter,
+  type InvoiceCreditPlan,
+  type InvoiceCreditReceipt,
+} from './shadow/invoice-credit-adapter.js';
+export {
   AccountedInvoicePaymentAdapter,
   type InvoicePaymentPlan,
 } from './shadow/invoice-payment-adapter.js';

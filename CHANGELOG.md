@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Synthetic credit-note adapter for the Accounted shadow target (NOX-212).**
+  `AccountedInvoiceCreditAdapter` maps the Fortnox `creditInvoice` operation onto
+  Accounted `POST /api/v1/companies/:companyId/invoices/:id/credit` as an issue-stage
+  step. It mirrors a full credit only when the original is already mirrored and issued,
+  requires an explicit positive `credited_invoice_id` readback, treats warnings, journal
+  entries and missing outcomes as unknown, and refuses partial credits. It is unarmed:
+  no client, credentials or live dispatch. See `docs/shadow-evaluation.md`.
+
 ## [0.14.0] - 2026-11-14
 
 ### Added

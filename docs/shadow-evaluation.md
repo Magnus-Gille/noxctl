@@ -457,18 +457,61 @@ The export must be a root object; a bare array is `export-shape-unsupported`. `m
 therefore an upper bound on source-side support only; it does not replace the queue-backed
 `AccountedInvoicePaymentAdapter.prepare` check and authorizes nothing.
 
-## Credit invoices (NOX-212): refused, API gap
+## Credit invoices (NOX-212): refused as drafts, mirrored as an issue-stage step
 
-Credit invoices (`Credit` true, or a populated `CreditInvoiceReference`) are refused with
-`INVOICE_CREDIT_UNSUPPORTED` / `INVOICE_CREDIT_REFERENCE_UNSUPPORTED`. Credit-style rows stay
-refused by the row rules: a nonpositive integer input quantity hits `ROW_NONPOSITIVE_QUANTITY`, a
-negative price gets the price refusal, and a negative confirmed source quantity a row mismatch. They are not mirrored because the Accounted public API cannot express
-them as a verifiable draft: the draft create schema has no `credited_invoice_id`, and the only credit
-route (`POST .../invoices/:id/credit`) takes only a reason, credits the whole original, requires it to be
-sent/paid/overdue, dates the credit note today and issues it immediately as `KR-<original>`. Journal posting is
-conditional (none for an unpaid cash-method original without a booking signal) and best-effort when
-required: a posting failure can leave an issued credit note with only a warning. An integration must
-therefore handle the warning and verify the journal outcome, not assume an entry exists. Mirroring needs a decision on mapping the Fortnox `creditInvoice` operation (a full credit
-of an already mirrored and issued original) onto that route as an issue-stage step, with readback of
-`credited_invoice_id`, negated rows and totals. The `createInvoice` tool itself accepts neither `Credit`
-nor `CreditInvoiceReference`, so a credit cannot be staged through it.
+The draft path is unchanged. `Credit` true, or a populated `CreditInvoiceReference`, is still refused by
+the draft mapper with `INVOICE_CREDIT_UNSUPPORTED` / `INVOICE_CREDIT_REFERENCE_UNSUPPORTED`, and
+credit-style rows stay refused by the row rules (`ROW_NONPOSITIVE_QUANTITY`, the price refusal, a row
+mismatch). The Accounted draft create schema has no `credited_invoice_id`, so a credit note cannot be a
+draft.
+
+Owner decision (2026-11-14): the Fortnox `creditInvoice` operation maps onto
+`POST /api/v1/companies/:companyId/invoices/:id/credit` as an issue-stage step.
+`AccountedInvoiceCreditAdapter` (`src/shadow/invoice-credit-adapter.ts`) is synthetic-only and unarmed,
+like the issue adapter: no client, credentials, CLI registration or live dispatch; exported through the
+embedded API only. Route facts it is built around: the route credits the WHOLE original, requires it to be
+sent/paid/overdue, dates the credit note today, issues it immediately as `KR-<original invoice_number>` with
+`notes` `Krediterar faktura <original invoice_number>`, flips the original to `credited`, and posts the
+reversal journal best-effort (none for an unpaid cash-method original). Success is HTTP 201.
+
+**Source and queue prerequisites (`prepare`, pure, fail closed).** The record is a `creditInvoice`
+receipt whose `sourceResult` is the Fortnox credit invoice (`Credit` true, `CreditInvoiceReference` equal to
+the one document-number argument, its own `DocumentNumber`). The original must have an applied invoice
+identity AND exactly one applied `markInvoicePrinted` receipt that passes the issue adapter's strict
+`prepare` and a complete issue receipt (`CREDIT_ORIGINAL_NOT_MIRRORED` / `CREDIT_ORIGINAL_NOT_ISSUED`).
+A second applied credit of the same original is `CREDIT_DUPLICATE`. The credit source must be exactly the
+negation of the applied creator's source: every header field other than the credit-specific ones
+(`DocumentNumber`, `Credit`, `CreditInvoiceReference`, dates, totals, `Sent`/`Booked`) unchanged, `Net`,
+`TotalVAT`, `Total` and each row's `DeliveredQuantity`, `Total`, `TotalExcludingVAT` equal to the negated
+original and all other row fields identical. Anything else, including a partial credit (a different amount,
+quantity or row count) or a positive total, is refused (`CREDIT_PARTIAL_UNSUPPORTED`,
+`CREDIT_SOURCE_DRIFT`). Text rows are refused (`CREDIT_TEXT_ROW_UNSUPPORTED`): the route copies no
+`line_type`. Negative-quantity handling follows the route: item quantity and amounts are `-abs(original)`,
+so a credit mirrors only originals that already have positive rows (the draft path guarantees that).
+
+**Apply.** GET-verifies the original is still the exact sent invoice (the issue adapter's GET-only verify), then
+makes one POST with no body and a deterministic `shadow_credit_<sha256>` idempotency key bound to company
+binding, intent id, request hash and the original UUID. Success requires 201, a UUID `id` different from the
+original, `status` `sent`, `invoice_number` `KR-<original number>`, an explicit POSITIVE `credited_invoice_id`
+equal to the original's target UUID (a draft or any non-credit invoice can never pass), `total` equal to the
+negated original total, an explicit `journal_entry_id: null` and no warnings. A posted journal entry, a
+warning, a missing journal key or any contradiction is an unknown outcome: the route's journaling is
+best-effort and a posted entry cannot be verified from the API, so the credit is never promoted to
+complete. Expanded readback then requires the same explicit `credited_invoice_id`, negated subtotal/VAT/total
+(and `_sek`), negated item quantity, line total and VAT per row, unchanged unit price/VAT rate/description/unit,
+the default `notes`, the unchanged mirrored customer, and the original now `credited` (a failed flip is
+only a route warning).
+
+**Receipts and unknown outcomes.** A transport failure with no response carries no credit note id, so it
+throws a plain error (queue state `target_unknown`, nothing persisted as target identity); the idempotency
+key makes a later reconciliation replay safe. A response that carries a credit UUID but fails validation
+throws `TargetReceiptPendingError` with an incomplete receipt (no `data`, never promoted by a later GET). A
+validated response whose readback fails throws it with a complete receipt, recoverable with GET only
+through `verify`. A complete `invoice-credit` receipt carries `data.id`, so the credit note's own durable
+identity (`creditInvoice` in `identity.ts`) resolves from it.
+
+**Not covered.** Partial/line-level credits (the route cannot express them), paid or overdue originals (the
+original must still read back as the sent projection), credits of originals with text rows, ROT/RUT
+(`INVOICE_CREDIT_ROT_RUT_RECLAIMED` on the route), and journal verification. The stage verifier still
+classifies `creditInvoice` as an unsupported transition; it is not changed here. As with issue, target
+accounting settings and webhook subscribers (`credit_note.created`) are not controlled by this adapter.
