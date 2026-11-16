@@ -298,8 +298,14 @@ Customer invoice payments are **not yet part of the pilot**. What exists:
   both, `createStagedServer` refuses to start, so a duplicate-payment preflight cannot race.
 - `measure:payments` reports a fixed message when the export cannot be opened, never the path.
 
+Gate handling of `deferred` payment records (done): the write gate refuses on every `deferred`
+record, naming payment records as "a deferred payment awaiting bookkeeping". No caller-supplied
+exemption (`exceptId`/`exceptStates`) can let a `deferred` record through, and `operatorRefused`
+never applies to it (it only covers `blocked` records). This is still a refusal, not a resolution:
+nothing in the pilot can advance a deferred payment yet.
+
 Remaining before payments can be enabled in the pilot: bookkeep staging (a created payment is
 unbooked until `bookkeepInvoicePayment`), a durable captured-voucher source for
 `AccountedInvoicePaymentAdapter`, a hash-bound payment variant of `preview` and `drain-one`
-over `drainPaymentAware` (with the dispatch journal written before the target request), operator
-refusal and reconciliation for payment groups, and gate handling of `deferred` payment records.
+over `drainPaymentAware` (with the dispatch journal written before the target request), and
+operator refusal and reconciliation for payment groups.

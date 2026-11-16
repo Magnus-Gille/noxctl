@@ -74,6 +74,55 @@ describe('write gate', () => {
     expect(result).toMatchObject({ ok: false });
     expect(JSON.stringify(result)).toContain('rec-1');
   });
+  describe('deferred payment records (NOX-211)', () => {
+    const deferred = (extra: Record<string, unknown> = {}) => ({
+      id: 'pay-1',
+      state: 'deferred' as ShadowState,
+      operation: 'createInvoicePayment',
+      ...extra,
+    });
+    it('refuses with an explicit payment-specific reason, never as an ordinary record', () => {
+      const result = gate([deferred()]);
+      expect(result).toMatchObject({
+        ok: false,
+        oldest: { id: 'pay-1', state: 'deferred' },
+      });
+      if (result.ok) throw new Error('unreachable');
+      expect(result.reason).toContain('pay-1');
+      expect(result.reason).toContain('deferred payment');
+      expect(result.reason).toContain('bookkeeping');
+    });
+    it.each([
+      'createInvoicePayment',
+      'updateInvoicePayment',
+      'bookkeepInvoicePayment',
+      'deleteInvoicePayment',
+    ])(
+      'refuses a deferred %s even when it is the exempted record or listed as refused',
+      (operation) => {
+        const item = deferred({ operation });
+        expect(
+          gate([item], { exceptId: 'pay-1', exceptStates: ['pending', 'retry_wait', 'deferred'] }),
+        ).toMatchObject({ ok: false });
+        expect(gate([item], { exceptId: 'pay-1' })).toMatchObject({ ok: false });
+        expect(gate([item], { operatorRefused: new Set(['pay-1']) })).toMatchObject({ ok: false });
+      },
+    );
+    it('refuses a deferred payment behind an older applied record and ahead of a newer pending one', () => {
+      const result = gate([
+        { id: 'a', state: 'applied' },
+        deferred(),
+        { id: 'n', state: 'pending' },
+      ]);
+      expect(result).toMatchObject({ ok: false, oldest: { id: 'pay-1' } });
+    });
+    it('still refuses a deferred record of a non-payment operation, with the generic reason', () => {
+      const result = gate([{ id: 'c', state: 'deferred' }]);
+      expect(result).toMatchObject({ ok: false });
+      if (result.ok) throw new Error('unreachable');
+      expect(result.reason).not.toContain('deferred payment');
+    });
+  });
   it('refuses when the oldest unapplied record is older than 24h, but not at the limit', () => {
     expect(gate([{ id: 'o', state: 'pending', createdAt: NOW - 86_400_001 }])).toMatchObject({
       ok: false,
