@@ -1,5 +1,6 @@
 import type { FortnoxTransport } from '../fortnox-client.js';
 import { isOperatorRefused } from '../shadow/operator-refusal.js';
+import { PAYMENT_OPERATIONS } from '../shadow/payment-queue-plan.js';
 import type { ShadowStatus } from '../shadow/types.js';
 
 export interface WriteGateInput {
@@ -48,15 +49,21 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
     input.operatorRefused?.has(item.id) === true && isOperatorRefused(item);
   for (const item of items) {
     if (refused(item)) continue;
+    // A deferred record is a payment-group holding state that no pilot command can advance yet, so
+    // no caller-supplied exemption may ever let it through.
     if (
       item.id === input.exceptId &&
+      item.state !== 'deferred' &&
       (input.exceptStates ?? ['pending', 'retry_wait']).includes(item.state)
     )
       continue;
     if (REFUSING.has(item.state))
       return {
         ok: false,
-        reason: `record ${item.id} is ${item.state}; resolve it before any new write`,
+        reason:
+          item.state === 'deferred' && PAYMENT_OPERATIONS.has(item.operation)
+            ? `record ${item.id} is a deferred payment awaiting bookkeeping; the pilot cannot drain or refuse payments yet, resolve it before any new write`
+            : `record ${item.id} is ${item.state}; resolve it before any new write`,
         oldest: {
           id: item.id,
           state: item.state,
