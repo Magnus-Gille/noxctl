@@ -375,13 +375,15 @@ interface Options {
   originalStatus?: string;
   neverFlip?: boolean;
   credited?: Record<string, unknown>;
+  /** Start in the state after a successful credit POST (the original reads as credited). */
+  alreadyPosted?: boolean;
   postThrows?: boolean;
   snapshot?: ShadowRecord[];
   identityOverride?: ShadowIdentityResolution;
 }
 
 function setup(options: Options = {}) {
-  let posted = false;
+  let posted = options.alreadyPosted ?? false;
   const request = vi.fn(async (input: AccountedRequest) => {
     if (input.method === 'POST') {
       if (options.postThrows) throw new Error('synthetic transport failure');
@@ -739,8 +741,30 @@ describe('credit adapter verify', () => {
 
   it('is false when the credit note readback is not a credit', async () => {
     const { record } = await applied();
-    const { adapter: drifted } = setup({ credited: { credited_invoice_id: null } });
+    // Passing control: the same fixture verifies before it is mutated.
+    const { adapter: control } = setup({ alreadyPosted: true });
+    expect(await control.verify(record)).toBe(true);
+    const { adapter: drifted } = setup({
+      alreadyPosted: true,
+      credited: { credited_invoice_id: null },
+    });
     expect(await drifted.verify(record)).toBe(false);
+  });
+
+  it('is false when the readback reports a journal entry or drifted header fields', async () => {
+    const { record } = await applied();
+    for (const credited of [
+      { journal_entry_id: 'b6e1b3f0-0000-4000-8000-000000000000' },
+      { due_date: '2026-03-01' },
+      { due_date: undefined },
+      { our_reference: 'changed' },
+      { your_reference: 'changed' },
+      { invoice_marking: 'changed' },
+      { delivery_date: '2026-01-01' },
+    ]) {
+      const { adapter } = setup({ alreadyPosted: true, credited });
+      expect(await adapter.verify(record)).toBe(false);
+    }
   });
 });
 

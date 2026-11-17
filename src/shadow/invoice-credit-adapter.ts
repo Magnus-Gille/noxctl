@@ -239,6 +239,25 @@ export function matchesCreditNoteExpected(
   ) {
     return false;
   }
+  // The route dates the credit note and its due date today, and carries the original's text
+  // fields over verbatim; an unrequested text field must be empty on the target.
+  if (invoice.due_date !== invoice.invoice_date) return false;
+  for (const key of [
+    'our_reference',
+    'your_reference',
+    'invoice_marking',
+    'delivery_date',
+  ] as const) {
+    const wanted = (expected as unknown as Record<string, unknown>)[key];
+    const stored = invoice[key];
+    if (Object.hasOwn(expected, key)) {
+      if (stored !== wanted) return false;
+    } else if (stored !== undefined && stored !== null && stored !== '') {
+      return false;
+    }
+  }
+  // A reported journal entry contradicts the unbooked cash-method credit this adapter supports.
+  if (Object.hasOwn(invoice, 'journal_entry_id') && invoice.journal_entry_id !== null) return false;
   if (
     !plain(invoice.customer) ||
     invoice.customer.id !== expected.customer_id ||
