@@ -7,6 +7,7 @@ import {
 import type { AccountedRequest } from '../../src/shadow/accounted-adapter.js';
 import type { ShadowIdentityResolution } from '../../src/shadow/identity.js';
 import type { ShadowRecord } from '../../src/shadow/types.js';
+import { TargetNotDispatchedError } from '../../src/shadow/types.js';
 
 const binding = {
   sourceCompany: 'synthetic-source',
@@ -380,16 +381,22 @@ interface Options {
   alreadyPosted?: boolean;
   /** Extra fields on the original's GET projection. */
   originalOverrides?: Record<string, unknown>;
-  postThrows?: boolean;
+  postThrows?: boolean | Error;
+  /** The original's status on every GET after the first one (simulates a change mid-preflight). */
+  statusAfterFirstOriginalRead?: string;
   snapshot?: ShadowRecord[];
   identityOverride?: ShadowIdentityResolution;
 }
 
 function setup(options: Options = {}) {
   let posted = options.alreadyPosted ?? false;
+  let originalReads = 0;
   const request = vi.fn(async (input: AccountedRequest) => {
     if (input.method === 'POST') {
-      if (options.postThrows) throw new Error('synthetic transport failure');
+      if (options.postThrows)
+        throw options.postThrows instanceof Error
+          ? options.postThrows
+          : new Error('synthetic transport failure');
       posted = true;
       return {
         status: options.status ?? 201,
@@ -400,12 +407,17 @@ function setup(options: Options = {}) {
       return { status: 200, json: { data: targetCredit(options.credited) } };
     }
     const flipped = posted && !options.neverFlip;
+    const laterRead = originalReads++ > 0;
     return {
       status: 200,
       json: {
         data: {
           ...targetInvoice('sent', originalNumber),
-          status: flipped ? 'credited' : (options.originalStatus ?? 'sent'),
+          status: flipped
+            ? 'credited'
+            : laterRead && options.statusAfterFirstOriginalRead
+              ? options.statusAfterFirstOriginalRead
+              : (options.originalStatus ?? 'sent'),
           ...options.originalOverrides,
         },
       },
@@ -770,10 +782,25 @@ describe('credit adapter verify', () => {
     ]) {
       const { adapter, request } = setup({ originalOverrides: original });
       await expect(adapter.apply(credit(), prepared(adapter))).rejects.toThrow(
-        /not the exact issued/,
+        TargetNotDispatchedError,
       );
       expect(posts(request)).toHaveLength(0);
     }
+  });
+
+  it('refuses to POST when the original turns paid between the two preflight reads', async () => {
+    const { adapter, request } = setup({ statusAfterFirstOriginalRead: 'paid' });
+    await expect(adapter.apply(credit(), prepared(adapter))).rejects.toThrow(
+      TargetNotDispatchedError,
+    );
+    expect(posts(request)).toHaveLength(0);
+  });
+
+  it('keeps a not-dispatched signal from the request callback instead of wrapping it', async () => {
+    const { adapter } = setup({ postThrows: new TargetNotDispatchedError() });
+    await expect(adapter.apply(credit(), prepared(adapter))).rejects.toThrow(
+      TargetNotDispatchedError,
+    );
   });
 
   it('is false when the readback reports a journal entry or drifted header fields', async () => {

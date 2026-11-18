@@ -5,7 +5,7 @@ import type { AccountedRequestCallback } from './accounted-adapter.js';
 import { AccountedInvoiceIssueAdapter } from './invoice-issue-adapter.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from './identity.js';
 import type { ShadowAdapter, ShadowBinding, ShadowRecord, ShadowSnapshotEntry } from './types.js';
-import { TargetReceiptPendingError } from './types.js';
+import { TargetNotDispatchedError, TargetReceiptPendingError } from './types.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DOCUMENT_NUMBER = /^[1-9]\d*$/;
@@ -580,6 +580,8 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
       response.status === 200 &&
       !!original &&
       original.id === plan.originalTargetId &&
+      // `paid` and `overdue` are themselves booking signals for the route.
+      original.status === 'sent' &&
       (original.journal_entry_id === undefined || original.journal_entry_id === null) &&
       (original.paid_at === undefined || original.paid_at === null) &&
       (original.paid_amount === undefined ||
@@ -636,7 +638,8 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
     }
     const plan = prepared.request;
     if (!(await this.originalIsIssued(plan))) {
-      throw new Error('Credited original is not the exact issued (sent) invoice.');
+      // Nothing was dispatched: a safe, GET-only retry state rather than an unknown outcome.
+      throw new TargetNotDispatchedError();
     }
     const rechecked = this.prepare(record);
     if (!('request' in rechecked) || !isDeepStrictEqual(rechecked.request, plan)) {
@@ -662,6 +665,7 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
         idempotencyKey,
       });
     } catch (cause) {
+      if (cause instanceof TargetNotDispatchedError) throw cause;
       // No credit note id is known: do not persist a target identity. The deterministic
       // idempotency key makes a later reconciliation replay safe.
       throw new Error('Invoice credit outcome is unknown: the request did not return a response', {
