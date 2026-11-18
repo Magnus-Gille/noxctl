@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`contracts create --dry-run` now previews the payload that is actually sent.** The
+  continuous-contract normalization (`Continuous: true` → `ContractLength: 0`, and a
+  clear error for a positive length) was applied to `invoices create` instead of
+  `contracts create` in the CLI. The live call was already normalized in the
+  operations layer; only the preview was wrong, and invoice payloads were needlessly
+  run through contract logic.
+- **The balance sheet balances mid-year.** `reports balance` / `fortnox_balance_sheet`
+  add a "Beräknat resultat" section with the result still sitting in the P&L accounts
+  (3000–8999), and expose it as `calculatedResult` in JSON. Before, the current year
+  was off by exactly the unbooked profit.
+- **`reports income|balance --year` accepts a calendar year.** `--year 2026` now
+  resolves to the financial year starting in 2026 when no financial-year id 2026
+  exists (ids still win). The reports' `financialYear` field reports the resolved id.
+
 ## [0.15.0] - 2026-11-18
 
 ### Added

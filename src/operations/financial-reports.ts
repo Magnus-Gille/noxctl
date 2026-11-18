@@ -36,6 +36,13 @@ export interface BalanceSheet {
   totalAssets: number;
   liabilitiesAndEquity: ReportSection[];
   totalLiabilitiesAndEquity: number;
+  /**
+   * Result of the year not yet booked to equity: the sum of the P&L accounts
+   * (3000–8999) up to the as-of date, credit-negative like the other amounts.
+   * Also listed as the last liabilities-and-equity section when non-zero, so
+   * the sheet balances mid-year.
+   */
+  calculatedResult: number;
 }
 
 // BAS account plan groupings
@@ -66,6 +73,9 @@ const BALANCE_SHEET_ASSET_GROUPS: { range: [number, number]; label: string }[] =
   { range: [1800, 1899], label: 'Kortfristiga placeringar (Short-term investments)' },
   { range: [1900, 1999], label: 'Kassa och bank (Cash and bank)' },
 ];
+
+const PROFIT_AND_LOSS_RANGE: [number, number] = [3000, 8999];
+const CALCULATED_RESULT_LABEL = 'Beräknat resultat (Calculated result, not yet booked)';
 
 const BALANCE_SHEET_LIABILITY_GROUPS: { range: [number, number]; label: string }[] = [
   { range: [2000, 2099], label: 'Eget kapital (Equity)' },
@@ -137,14 +147,26 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
       throw new Error('financialYear must be a positive safe integer.');
     }
     const years = ((await listFinancialYears()).FinancialYears ?? []) as Record<string, unknown>[];
-    const match =
-      financialYear !== undefined
-        ? years.find((fy) => Number(fy.Id) === financialYear)
-        : years.find((fy) => String(fy.FromDate) <= date && date <= String(fy.ToDate));
+    let match: Record<string, unknown> | undefined;
+    if (financialYear === undefined) {
+      match = years.find((fy) => String(fy.FromDate) <= date && date <= String(fy.ToDate));
+    } else {
+      // The Fortnox id wins; otherwise treat a four-digit value as the calendar
+      // year the financial year starts in (`--year 2026`), since ids are small
+      // per-company counters nobody knows by heart.
+      match = years.find((fy) => Number(fy.Id) === financialYear);
+      if (!match && financialYear >= 1000 && financialYear <= 9999) {
+        const starting = years.filter((fy) =>
+          String(fy.FromDate ?? '').startsWith(`${financialYear}-`),
+        );
+        if (starting.length === 1) match = starting[0];
+      }
+    }
     if (!match) {
       throw new Error(
         financialYear !== undefined
-          ? `Financial year ${financialYear} not found in Fortnox.`
+          ? `Financial year ${financialYear} not found in Fortnox (neither as a financial-year id ` +
+              `nor as the calendar year a financial year starts in). See \`noxctl financial-years list\`.`
           : `No financial year found covering ${date}. Pass financialYear explicitly.`,
       );
     }
@@ -244,7 +266,7 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
   }
 
   async function getIncomeStatement(params: FinancialReportParams = {}): Promise<IncomeStatement> {
-    const { sie, fromDate, toDate } = await fetchYearSie(params, 'period');
+    const { sie, fromDate, toDate, financialYear } = await fetchYearSie(params, 'period');
     // P&L accounts carry no opening balance; only the period's movements count.
     const balances = accountBalances(sie, fromDate, toDate, false);
 
@@ -258,7 +280,7 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
 
     return {
       type: 'income-statement',
-      financialYear: params.financialYear,
+      financialYear,
       period:
         params.fromDate || params.toDate
           ? { from: params.fromDate ?? '', to: params.toDate ?? '' }
@@ -269,7 +291,7 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
   }
 
   async function getBalanceSheet(params: FinancialReportParams = {}): Promise<BalanceSheet> {
-    const { sie, fromDate, toDate } = await fetchYearSie(params, 'balance');
+    const { sie, fromDate, toDate, financialYear } = await fetchYearSie(params, 'balance');
     const balances = accountBalances(sie, fromDate, toDate, true);
 
     const assets: ReportSection[] = [];
@@ -284,14 +306,30 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
       if (section) liabilitiesAndEquity.push(section);
     }
 
+    // Mid-year the result sits in the P&L accounts, not yet in 2099, so the
+    // sheet only balances once it is added to equity (as Fortnox does).
+    const calculatedResult = sumAmounts(
+      balances
+        .filter((a) => a.number >= PROFIT_AND_LOSS_RANGE[0] && a.number <= PROFIT_AND_LOSS_RANGE[1])
+        .map((a) => a.closingBalance),
+    );
+    if (calculatedResult !== 0) {
+      liabilitiesAndEquity.push({
+        label: CALCULATED_RESULT_LABEL,
+        lines: [],
+        total: calculatedResult,
+      });
+    }
+
     return {
       type: 'balance-sheet',
-      financialYear: params.financialYear,
+      financialYear,
       asOfDate: params.toDate,
       assets,
       totalAssets: sumAmounts(assets.map((s) => s.total)),
       liabilitiesAndEquity,
       totalLiabilitiesAndEquity: sumAmounts(liabilitiesAndEquity.map((s) => s.total)),
+      calculatedResult,
     };
   }
 

@@ -1529,7 +1529,7 @@ Examples:
     const { createInvoice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
-    const params = normalizeContractPayload({ CustomerNumber: opts.customer, ...input });
+    const params = { CustomerNumber: opts.customer, ...input };
     if (
       !(await confirmMutation(`Create invoice for customer ${opts.customer}`, opts, {
         Invoice: params,
@@ -1974,7 +1974,11 @@ reports
   .command('income')
   .alias('resultat')
   .description('Income statement (resultaträkning)')
-  .option('--year <number>', 'Financial year', parseInt)
+  .option(
+    '--year <number>',
+    'Financial year: Fortnox financial-year id, or the calendar year it starts in (e.g. 2026)',
+    parseInt,
+  )
   .option('--from <date>', 'From date (YYYY-MM-DD)')
   .option('--to <date>', 'To date (YYYY-MM-DD)')
   .option(
@@ -1998,7 +2002,11 @@ reports
   .command('balance')
   .alias('balans')
   .description('Balance sheet (balansräkning)')
-  .option('--year <number>', 'Financial year', parseInt)
+  .option(
+    '--year <number>',
+    'Financial year: Fortnox financial-year id, or the calendar year it starts in (e.g. 2026)',
+    parseInt,
+  )
   .option('--to <date>', 'As-of date (YYYY-MM-DD)')
   .action(async (opts) => {
     const { getBalanceSheet } = defaultFortnoxOperations;
@@ -5283,7 +5291,7 @@ Examples:
     const { createContract } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
-    const params = { CustomerNumber: opts.customer, ...input };
+    const params = normalizeContractPayload({ CustomerNumber: opts.customer, ...input });
     if (
       !(await confirmMutation(`Create contract for customer ${opts.customer}`, opts, {
         Contract: params,
