@@ -7,13 +7,12 @@ const contributing = readFileSync(join(process.cwd(), 'CONTRIBUTING.md'), 'utf8'
 const publishing = readFileSync(join(process.cwd(), 'PUBLISHING.md'), 'utf8');
 
 describe('CI workflow', () => {
-  it('audits the complete installed dependency graph', () => {
-    expect(workflow).toMatch(/- run: npm audit\r?\n/);
-    expect(workflow).not.toContain('npm audit --omit=dev');
-    expect(contributing).toMatch(/complete installed\s+dependency graph/);
-    expect(publishing).toContain(
-      'CI enforces `npm audit` across production and development dependencies',
-    );
+  it('audits production dependencies only, as a temporary documented exception', () => {
+    // TEMPORARY: picomatch <=4.0.7 (dev tooling only) has no fixed release. When it does, restore
+    // `npm audit` over the complete graph and revert this test and the two docs.
+    expect(workflow).toMatch(/- run: npm audit --omit=dev\r?\n/);
+    expect(contributing).toMatch(/production\s+dependencies \(temporarily/);
+    expect(publishing).toContain('temporarily enforces `npm audit --omit=dev`');
     expect(publishing).toContain('`npm run check:release`');
     expect(publishing).toContain('production dependency audit');
   });
