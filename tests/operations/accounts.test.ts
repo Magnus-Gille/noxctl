@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { FortnoxTransport } from '../../src/fortnox-client.js';
+import { createAccountOperations } from '../../src/operations/accounts.js';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
@@ -68,6 +70,27 @@ describe('accounts operations', () => {
 
       const result = await listAccounts({ search: 'FÖRETAG' });
       expect(result.Accounts).toHaveLength(1);
+    });
+
+    it('searches the whole chart of accounts, not just the first page (NOX-225)', async () => {
+      const allAccounts = [
+        ...Array.from({ length: 100 }, (_, i) => ({ Number: 1000 + i, Description: `Konto ${i}` })),
+        { Number: 1930, Description: 'Företagskonto' },
+      ];
+      const transport = {
+        request: vi.fn().mockResolvedValue({ Accounts: allAccounts.slice(0, 100) }),
+        fetchAllPages: vi.fn().mockResolvedValue({ items: allAccounts, totalResources: 101 }),
+      } as unknown as FortnoxTransport;
+      const { listAccounts } = createAccountOperations(transport);
+
+      const result = await listAccounts({ search: '1930' });
+
+      expect(transport.fetchAllPages).toHaveBeenCalledWith('accounts', 'Accounts', {
+        financialyear: undefined,
+      });
+      expect(transport.request).not.toHaveBeenCalled();
+      expect(result.Accounts).toEqual([{ Number: 1930, Description: 'Företagskonto' }]);
+      expect(result.MetaInformation?.['@TotalResources']).toBe(1);
     });
 
     it('passes financialYear to Fortnox', async () => {

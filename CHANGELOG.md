@@ -26,6 +26,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Contract rows can carry a cost centre and project (#224).**
+  `fortnox_create_contract` and `fortnox_update_contract` now accept `CostCenter`
+  and `Project` on each `InvoiceRows` item and on the contract itself, so invoices
+  generated from a contract are booked on the right cost centre and project.
+- **`Continuous: true` now creates a continuous contract (#225).** Fortnox saved a
+  contract created with `Continuous: true` and no `ContractLength` as a one-month,
+  non-continuous contract. noxctl now sends `ContractLength: 0` with it (MCP tools,
+  CLI `contracts create`/`update` and the dry-run preview), and refuses
+  `Continuous: true` combined with a positive `ContractLength` before calling Fortnox.
+- **Contracts can be back-dated with `ContractDate` (#226).** `fortnox_create_contract`
+  and `fortnox_update_contract` accept `ContractDate` (YYYY-MM-DD). Without it Fortnox
+  uses today's date and rejects a `PeriodStart` in the current or an earlier period
+  ("Avtalsdatum måste vara tidigare än periodstart").
 - **`reports income` and `reports balance` no longer appear to hang (NOX-224).**
   Both reports (and `fortnox_income_statement` / `fortnox_balance_sheet`) are now
   built from one SIE 4 export, the same source as `general-ledger`, instead of
@@ -34,6 +47,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   financial year is resolved explicitly (from `--year`, else the year covering
   `--from`/`--to`, else today), and a date outside every financial year now fails
   with a clear error. Amounts are summed in öre to avoid floating-point drift.
+- **`accounts list --search` searches the whole chart of accounts (NOX-225).**
+  Fortnox has no server-side account search, so the filter ran on the first page
+  of 100 accounts only and `--search 1930` found nothing unless `--all` was given.
+  A search now always fetches every page before filtering (CLI and
+  `fortnox_list_accounts`), and the reported total is the number of matches.
+- **Balance sheet groups follow the BAS account classes (NOX-226).** 15xx is now
+  Kundfordringar and 16xx Övriga kortfristiga fordringar, so 1630 Skattekonto no
+  longer appears under Kundfordringar. The other asset groups are corrected too:
+  10xx immateriella, 11–12xx materiella, 13xx finansiella anläggningstillgångar,
+  14xx varulager and 17xx förutbetalda kostnader och upplupna intäkter.
 
 ## [0.14.0] - 2026-11-14
 

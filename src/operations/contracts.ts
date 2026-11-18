@@ -21,6 +21,31 @@ export interface ListContractsParams {
   all?: boolean;
 }
 
+/**
+ * Fortnox stores a contract created with `Continuous: true` but no
+ * `ContractLength` as a one-month, non-continuous contract (issue #225).
+ * Sending `ContractLength: 0` together with `Continuous: true` makes it stick,
+ * so add it when the caller left it out. A positive length contradicts a
+ * continuous contract, so refuse it before calling Fortnox.
+ */
+export function normalizeContractPayload(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  if (payload.Continuous !== true) return payload;
+  const length = payload.ContractLength;
+  if (length === undefined || length === null) {
+    return { ...payload, ContractLength: 0 };
+  }
+  if (length !== 0) {
+    throw new Error(
+      `Continuous: true cannot be combined with ContractLength ${String(length)}. ` +
+        'A continuous contract has no fixed length: omit ContractLength (noxctl sends 0) ' +
+        'or set Continuous: false for a fixed-length contract.',
+    );
+  }
+  return payload;
+}
+
 export function createContractOperations(transport: FortnoxTransport) {
   async function listContracts(params: ListContractsParams = {}): Promise<ContractsResponse> {
     const queryParams: Record<string, string | number | undefined> = {
@@ -54,7 +79,7 @@ export function createContractOperations(transport: FortnoxTransport) {
   async function createContract(params: Record<string, unknown>): Promise<Record<string, unknown>> {
     const data = await transport.request<ContractResponse>('contracts', {
       method: 'POST',
-      body: { Contract: params },
+      body: { Contract: normalizeContractPayload(params) },
     });
     return data.Contract;
   }
@@ -68,7 +93,7 @@ export function createContractOperations(transport: FortnoxTransport) {
       `contracts/${documentSegment(documentNumber)}`,
       {
         method: 'PUT',
-        body: { Contract: body },
+        body: { Contract: normalizeContractPayload(body) },
       },
     );
     return data.Contract;
