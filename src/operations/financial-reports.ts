@@ -53,11 +53,16 @@ const INCOME_STATEMENT_GROUPS: { range: [number, number]; label: string }[] = [
 ];
 
 const BALANCE_SHEET_ASSET_GROUPS: { range: [number, number]; label: string }[] = [
-  { range: [1000, 1399], label: 'Immateriella anläggningstillgångar (Intangible assets)' },
-  { range: [1400, 1499], label: 'Materiella anläggningstillgångar (Tangible assets)' },
-  { range: [1500, 1599], label: 'Finansiella anläggningstillgångar (Financial assets)' },
-  { range: [1600, 1699], label: 'Kundfordringar (Accounts receivable)' },
-  { range: [1700, 1799], label: 'Övriga fordringar (Other receivables)' },
+  { range: [1000, 1099], label: 'Immateriella anläggningstillgångar (Intangible assets)' },
+  { range: [1100, 1299], label: 'Materiella anläggningstillgångar (Tangible assets)' },
+  { range: [1300, 1399], label: 'Finansiella anläggningstillgångar (Financial assets)' },
+  { range: [1400, 1499], label: 'Varulager (Inventory)' },
+  { range: [1500, 1599], label: 'Kundfordringar (Accounts receivable)' },
+  { range: [1600, 1699], label: 'Övriga kortfristiga fordringar (Other current receivables)' },
+  {
+    range: [1700, 1799],
+    label: 'Förutbetalda kostnader och upplupna intäkter (Prepaid expenses and accrued income)',
+  },
   { range: [1800, 1899], label: 'Kortfristiga placeringar (Short-term investments)' },
   { range: [1900, 1999], label: 'Kassa och bank (Cash and bank)' },
 ];
