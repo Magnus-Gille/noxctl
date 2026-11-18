@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Contract rows can carry a cost centre and project (#224).**
+  `fortnox_create_contract` and `fortnox_update_contract` now accept `CostCenter`
+  and `Project` on each `InvoiceRows` item and on the contract itself, so invoices
+  generated from a contract are booked on the right cost centre and project.
+- **`Continuous: true` now creates a continuous contract (#225).** Fortnox saved a
+  contract created with `Continuous: true` and no `ContractLength` as a one-month,
+  non-continuous contract. noxctl now sends `ContractLength: 0` with it (MCP tools,
+  CLI `contracts create`/`update` and the dry-run preview), and refuses
+  `Continuous: true` combined with a positive `ContractLength` before calling Fortnox.
+- **Contracts can be back-dated with `ContractDate` (#226).** `fortnox_create_contract`
+  and `fortnox_update_contract` accept `ContractDate` (YYYY-MM-DD). Without it Fortnox
+  uses today's date and rejects a `PeriodStart` in the current or an earlier period
+  ("Avtalsdatum måste vara tidigare än periodstart").
 - **`reports income` and `reports balance` no longer appear to hang (NOX-224).**
   Both reports (and `fortnox_income_statement` / `fortnox_balance_sheet`) are now
   built from one SIE 4 export, the same source as `general-ledger`, instead of

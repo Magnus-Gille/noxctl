@@ -31,6 +31,7 @@ import { VERSION } from './version.js';
 import { formatVoucherAttachmentOverview, formatVouchersWithRows } from './voucher-text.js';
 import { defaultFortnoxOperations } from './operations/index.js';
 import { prepareAccrualFields } from './operations/accruals.js';
+import { normalizeContractPayload } from './operations/contracts.js';
 import {
   invoiceListColumns,
   invoiceDetailColumns,
@@ -1518,7 +1519,7 @@ Examples:
     const { createInvoice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
-    const params = { CustomerNumber: opts.customer, ...input };
+    const params = normalizeContractPayload({ CustomerNumber: opts.customer, ...input });
     if (
       !(await confirmMutation(`Create invoice for customer ${opts.customer}`, opts, {
         Invoice: params,
@@ -5004,7 +5005,7 @@ contracts
     'after',
     `
 Examples:
-  echo '{"InvoiceRows":[{"Description":"Hosting","DeliveredQuantity":1,"Price":500,"AccountNumber":3001,"VAT":25}],"PeriodStart":"2026-07-01","PeriodEnd":"2027-06-30","InvoiceInterval":3,"ContractLength":12}' | noxctl contracts create --customer 25 --input - --dry-run`,
+  echo '{"InvoiceRows":[{"Description":"Hosting","DeliveredQuantity":1,"Price":500,"AccountNumber":3001,"VAT":25}],"PeriodStart":"2026-07-01","PeriodEnd":"2027-06-30","InvoiceInterval":3,"ContractLength":12,"ContractDate":"2026-06-15"}' | noxctl contracts create --customer 25 --input - --dry-run`,
   )
   .action(async (opts) => {
     const { createContract } = defaultFortnoxOperations;
@@ -5031,7 +5032,7 @@ contracts
   .action(async (documentNumber: string, opts) => {
     const { updateContract } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
-    const fields = JSON.parse(raw) as Record<string, unknown>;
+    const fields = normalizeContractPayload(JSON.parse(raw) as Record<string, unknown>);
     if (!(await confirmMutation(`Update contract ${documentNumber}`, opts, { Contract: fields }))) {
       return;
     }
