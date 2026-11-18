@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Fortnox Finans / Fakturaservice (`/3/noxfinansinvoices`, GitHub #227).** Hand an
+  existing invoice to Fortnox Finans and manage it there, from the CLI
+  (`noxctl noxfinans get|send|pause|unpause|stop|take-fees|report-payment`, alias
+  `noxctl fakturaservice`) and MCP (`fortnox_get_noxfinans_invoice`,
+  `fortnox_send_noxfinans_invoice`, `fortnox_pause_noxfinans_invoice`,
+  `fortnox_unpause_noxfinans_invoice`, `fortnox_stop_noxfinans_invoice`,
+  `fortnox_take_fees_noxfinans_invoice`, `fortnox_report_noxfinans_invoice_payment`).
+  Every call except the status read is a mutation: it needs `--yes` / `confirm`,
+  supports `--dry-run` / `dryRun`, and send, stop, take-fees and report-payment are
+  annotated destructive. Invalid inputs (unknown service or send method, `NONE` with the
+  reminder service, malformed dates, a bookkept payment without method code and
+  account) fail before any request, also on a dry run. Needs the new opt-in scope
+  `noxfinansinvoice`: `noxctl init --with-noxfinans` (or `FORTNOX_WITH_NOXFINANS=1`);
+  `noxctl doctor` / `fortnox_status` probe it. `invoices get` now shows the
+  `NoxFinans` flag. The family moves from excluded to complete in the API coverage map.
+
 ### Fixed
 
 - **Contract rows can carry a cost centre and project (#224).**

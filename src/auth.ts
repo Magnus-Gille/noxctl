@@ -78,6 +78,13 @@ export const SALARY_SCOPE = 'salary';
 // --with-archive` (or FORTNOX_WITH_ARCHIVE=1) appends it.
 export const ARCHIVE_SCOPE = 'archive';
 
+// Fortnox Finans / Fakturaservice (`/3/noxfinansinvoices`). Opt-in like the
+// others: the scope only authorizes on apps with the "Invoice Noxfinans"
+// permission enabled, and the endpoints only work for companies with Fortnox
+// Finans activated. `noxctl init --with-noxfinans` (or FORTNOX_WITH_NOXFINANS=1)
+// appends it.
+export const NOXFINANS_SCOPE = 'noxfinansinvoice';
+
 /**
  * Effective scope string for a profile: the granted set if recorded, else the
  * frozen LEGACY_SCOPES — what a credential predating the `scopes` field was
@@ -625,6 +632,7 @@ const SCOPE_PORTAL_LABELS: Record<string, string> = {
   inbox: 'Inbox',
   connectfile: 'File Connection',
   archive: 'Archive',
+  noxfinansinvoice: 'Invoice Noxfinans',
   salary: 'Salary',
   offer: 'Offer',
   order: 'Order',

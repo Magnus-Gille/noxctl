@@ -42,6 +42,7 @@ export const invoiceDetailColumns: Column[] = [
   { key: 'Currency', header: 'Currency', width: 5 },
   { key: 'Booked', header: 'Booked', width: 5 },
   { key: 'Sent', header: 'Sent', width: 5 },
+  { key: 'NoxFinans', header: 'Fortnox Finans', width: 5 },
   { key: 'OurReference', header: 'Our Reference', width: 30 },
   { key: 'CreditInvoiceReference', header: 'Credit Ref', width: 20 },
 ];
@@ -53,6 +54,23 @@ export const invoiceConfirmColumns: Column[] = [
   { key: 'Booked', header: 'Booked', width: 5 },
   { key: 'Sent', header: 'Sent', width: 5 },
   { key: 'CreditInvoiceReference', header: 'Credit Ref', width: 20 },
+];
+
+// --- Fortnox Finans (noxfinansinvoices) views ---
+
+export const noxFinansInvoiceColumns: Column[] = [
+  { key: 'InvoiceNumber', header: 'Invoice #', width: 10 },
+  { key: 'Status', header: 'Status', width: 16 },
+  { key: 'Service', header: 'Service', width: 12 },
+  { key: 'ServiceName', header: 'Service Name', width: 16 },
+  { key: 'SendMethod', header: 'Send Method', width: 10 },
+  { key: 'OCRNumber', header: 'OCR', width: 20 },
+  { key: 'CurrentCapitalBalance', header: 'Capital Balance', width: 14, format: currency },
+  { key: 'BalanceIncludeFees', header: 'Balance Incl. Fees', width: 14, format: currency },
+  { key: 'NextEvent', header: 'Next Event', width: 18 },
+  { key: 'NextEventDate', header: 'Next Event Date', width: 10 },
+  { key: 'PausedUntilDate', header: 'Paused Until', width: 10 },
+  { key: 'InvoiceDocumentURL', header: 'Document URL', width: 60 },
 ];
 
 // --- Customer views (target ≤80 cols) ---

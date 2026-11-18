@@ -171,6 +171,11 @@ export const SCHEMA_AUDIT_MAPPINGS: readonly SchemaAuditMapping[] = [
     'fileattachments_Attachment',
   ),
   root(
+    'noxfinans-invoice-report-payment',
+    'fortnox_report_noxfinans_invoice_payment',
+    'fortnox_Kf_NoxInvoiceUpdateAndRepostPaymentPayload',
+  ),
+  root(
     'supplier-invoice-comment-create',
     'fortnox_create_supplier_invoice_comment',
     'fortnox_Lf_SupplierInvoiceCommentLogPayloadItem',
@@ -399,6 +404,31 @@ export const SCHEMA_AUDIT_EXCEPTIONS: readonly MutationAuditException[] = [
   action(
     'contract-increase-count',
     'fortnox_increase_contract_invoice_count',
+    'Identifier-only workflow transition.',
+  ),
+  action(
+    'noxfinans-invoice-send',
+    'fortnox_send_noxfinans_invoice',
+    'Two enum arguments (service, sendMethod) mapped onto the three-field NoxFinansInvoice body; the exact body is pinned by operation tests.',
+  ),
+  action(
+    'noxfinans-invoice-pause',
+    'fortnox_pause_noxfinans_invoice',
+    'One date argument mapped onto the single-field PausedUntilDate body; pinned by operation tests.',
+  ),
+  action(
+    'noxfinans-invoice-unpause',
+    'fortnox_unpause_noxfinans_invoice',
+    'Identifier-only workflow transition.',
+  ),
+  action(
+    'noxfinans-invoice-stop',
+    'fortnox_stop_noxfinans_invoice',
+    'Identifier-only workflow transition.',
+  ),
+  action(
+    'noxfinans-invoice-take-fees',
+    'fortnox_take_fees_noxfinans_invoice',
     'Identifier-only workflow transition.',
   ),
   action(

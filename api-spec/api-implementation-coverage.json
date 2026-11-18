@@ -280,13 +280,12 @@
     },
     {
       "id": "fortnox-financeinvoices",
-      "classification": "excluded",
+      "classification": "complete",
       "publicOperationCount": 7,
-      "implementedCount": 0,
+      "implementedCount": 7,
       "missingCount": 0,
-      "excludedCount": 7,
-      "stateHash": "967ac7893d9a313e75c00cf7a1af825243f5abcf75f301914b15809f79ddf97b",
-      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+      "excludedCount": 0,
+      "stateHash": "ed82089fb33ca808994ea1e1102b8b12d1e310c4e7637b60e2f16afcec9e1a07"
     },
     {
       "id": "fortnox-financialyears",

@@ -16,6 +16,7 @@ import { createFileOperations } from './files.js';
 import { createGeneralLedgerOperations } from './general-ledger.js';
 import { createInvoicePaymentOperations } from './invoice-payments.js';
 import { createInvoiceOperations } from './invoices.js';
+import { createNoxFinansInvoiceOperations } from './noxfinans-invoices.js';
 import { createOfferOperations } from './offers.js';
 import { createOrderOperations } from './orders.js';
 import { createPriceListOperations, createPriceOperations } from './pricelists.js';
@@ -52,6 +53,7 @@ export function createFortnoxOperations(transport: FortnoxTransport, observer?: 
     ...createGeneralLedgerOperations(transport),
     ...createInvoicePaymentOperations(transport),
     ...createInvoiceOperations(transport),
+    ...createNoxFinansInvoiceOperations(transport),
     ...createOfferOperations(transport),
     ...createOrderOperations(transport),
     ...createPriceListOperations(transport),

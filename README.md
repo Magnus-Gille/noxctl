@@ -167,8 +167,12 @@ So you control the credentials, the scopes, and which company is connected end t
      authorize with `noxctl init --with-archive` (or `FORTNOX_WITH_ARCHIVE=1`). Only
      needed for `noxctl invoices attach` — voucher and supplier-invoice attachments
      use the `inbox`/`connectfile` scopes instead and don't need it.
+   - **Fortnox Finans / Fakturaservice.** Enable **Invoice Noxfinans** on the app and
+     activate Fortnox Finans on the company, then authorize with
+     `noxctl init --with-noxfinans` (or `FORTNOX_WITH_NOXFINANS=1`). Only needed for
+     `noxctl noxfinans`.
 
-   All three can be combined. The granted scope set is remembered per profile, so
+   All of these can be combined. The granted scope set is remembered per profile, so
    token refreshes keep working.
 
 5. Save the integration
@@ -272,7 +276,7 @@ claude mcp add fortnox-staging  -e NOXCTL_PROFILE=staging -- npx noxctl serve
 Every MCP tool carries [MCP tool annotations](https://modelcontextprotocol.io/specification/2025-06-18/server/tools#tool-annotations) that describe what it does:
 
 - `readOnlyHint: true` marks a tool that only reads. Tools with a `confirm` or `dryRun` input can change Fortnox data, so they are marked `readOnlyHint: false`. This includes `fortnox_invoice_pdf`, whose read mode can also flag an invoice as sent (`markSent`). Tools that save a downloaded file to a path you choose (`outputPath`, optionally `overwrite`), such as `fortnox_get_voucher_file`, write to the local disk. They are also `readOnlyHint: false` and `destructiveHint: true`, because they can overwrite an existing file.
-- `destructiveHint` is set explicitly on every mutation. Following the MCP definition (`false` means only additive changes), it is `true` for delete, cancel, update, patch and replace tools, which remove or overwrite existing data, and for a few tools that close or overwrite data under other names (`fortnox_credit_invoice`, `fortnox_credit_supplier_invoice`, `fortnox_finish_contract`, `fortnox_reset_scheduletime_day`, `fortnox_detach_document_attachment`), for `fortnox_send_invoice` (it overwrites the stored e-mail subject, body and BCC before sending), and for every tool with an `overwrite` option, such as the invoice, reminder, order and offer PDF tools, which can truncate an existing local file. Create tools and other state-advancing calls such as bookkeep are `false`.
+- `destructiveHint` is set explicitly on every mutation. Following the MCP definition (`false` means only additive changes), it is `true` for delete, cancel, update, patch and replace tools, which remove or overwrite existing data, and for a few tools that close or overwrite data under other names (`fortnox_credit_invoice`, `fortnox_credit_supplier_invoice`, `fortnox_finish_contract`, `fortnox_reset_scheduletime_day`, `fortnox_detach_document_attachment`), for `fortnox_send_invoice` (it overwrites the stored e-mail subject, body and BCC before sending), for the Fortnox Finans send, stop, take-fees and report-payment tools (irreversible, charged or bookkeeping), and for every tool with an `overwrite` option, such as the invoice, reminder, order and offer PDF tools, which can truncate an existing local file. Create tools and other state-advancing calls such as bookkeep are `false`.
 - `idempotentHint` is `true` for `update`, `patch`, and `replace` tools.
 - `openWorldHint: true` means the tool calls Fortnox. The only exception is the host-only `fortnox_shadow_status`, which reads local state.
 
@@ -440,6 +444,28 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 | `noxctl invoices credit <docNumber>`                                                                              | `fortnox_credit_invoice`           | Credit an invoice (mutation)                                                                                                                       |
 | `noxctl invoices attach <docNumber> <file...> [--no-include-on-send]`                                             | `fortnox_attach_invoice_files`     | Upload receipt/underlag files and attach them to a customer invoice (mutation; needs the Fortnox **archive** scope — `noxctl init --with-archive`) |
 | `noxctl invoices attachments <docNumber>`                                                                         | `fortnox_list_invoice_attachments` | List files currently attached to a customer invoice                                                                                                |
+
+### Fortnox Finans / Fakturaservice
+
+Hand existing invoices to Fortnox Finans (distribution, OCR and payment matching,
+optional automatic reminders) and manage them there. Needs Fortnox Finans activated on
+the company and the `noxfinansinvoice` scope (`noxctl init --with-noxfinans`).
+**`send` is irreversible and charged by Fortnox:** the invoice goes out to the
+customer and reminders start, even in a regular Fortnox test company (only a dedicated
+Fortnox Finans sandbox is safe). Every mutation prompts or needs `--yes` / `confirm`,
+and supports `--dry-run` / `dryRun`. `noxctl fakturaservice` is an alias.
+
+| CLI                                                                                                                                                             | MCP tool                                   | Description                                                                                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `noxctl noxfinans get <invoiceNumber>`                                                                                                                          | `fortnox_get_noxfinans_invoice`            | Status in Fortnox Finans: Status, Service/ServiceName, OCR, balance incl. fees, next event, PDF link (read-only)    |
+| `noxctl noxfinans send <invoiceNumber> --service LEDGERBASE\|REMINDER --send-method EMAIL\|LETTER\|EINVOICE\|NONE`                                              | `fortnox_send_noxfinans_invoice`           | Send an existing invoice with Fortnox Finans (mutation, destructive). Status, OCR and PDF can take minutes to hours |
+| `noxctl noxfinans pause <invoiceNumber> --until <YYYY-MM-DD>`                                                                                                   | `fortnox_pause_noxfinans_invoice`          | Pause reminders up to and including a date, max 60 days (mutation)                                                  |
+| `noxctl noxfinans unpause <invoiceNumber>`                                                                                                                      | `fortnox_unpause_noxfinans_invoice`        | Lift a manual pause (mutation)                                                                                      |
+| `noxctl noxfinans stop <invoiceNumber>`                                                                                                                         | `fortnox_stop_noxfinans_invoice`           | Remove the invoice from the Fortnox Finans process (mutation, destructive)                                          |
+| `noxctl noxfinans take-fees <invoiceNumber>`                                                                                                                    | `fortnox_take_fees_noxfinans_invoice`      | The company pays added fees instead of the customer (mutation, destructive)                                         |
+| `noxctl noxfinans report-payment <invoiceNumber> --amount <n> [--method-code BG --account 1930] [--client-takes-fees] [--no-bookkeep] [--no-report-to-finance]` | `fortnox_report_noxfinans_invoice_payment` | Report a payment made directly to the company (mutation, destructive)                                               |
+
+`noxctl invoices get` now also shows the invoice's `NoxFinans` flag.
 
 ### Invoice payments (inbetalningar)
 
