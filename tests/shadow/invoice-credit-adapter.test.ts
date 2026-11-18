@@ -362,6 +362,7 @@ function creditResponse(overrides: Record<string, unknown> = {}) {
     id: creditId,
     invoice_number: `KR-${originalNumber}`,
     credited_invoice_id: invoiceId,
+    invoice_date: '2026-02-01',
     status: 'sent',
     total: -125,
     journal_entry_id: null,
@@ -377,6 +378,8 @@ interface Options {
   credited?: Record<string, unknown>;
   /** Start in the state after a successful credit POST (the original reads as credited). */
   alreadyPosted?: boolean;
+  /** Extra fields on the original's GET projection. */
+  originalOverrides?: Record<string, unknown>;
   postThrows?: boolean;
   snapshot?: ShadowRecord[];
   identityOverride?: ShadowIdentityResolution;
@@ -403,6 +406,7 @@ function setup(options: Options = {}) {
         data: {
           ...targetInvoice('sent', originalNumber),
           status: flipped ? 'credited' : (options.originalStatus ?? 'sent'),
+          ...options.originalOverrides,
         },
       },
     };
@@ -751,6 +755,27 @@ describe('credit adapter verify', () => {
     expect(await drifted.verify(record)).toBe(false);
   });
 
+  it('treats a POST response without a real credit date as an unknown outcome', async () => {
+    for (const invoice_date of [undefined, '2026-02-31']) {
+      const { adapter } = setup({ response: creditResponse({ invoice_date }) });
+      await expect(adapter.apply(credit(), prepared(adapter))).rejects.toThrow();
+    }
+  });
+
+  it('refuses to POST when the original already carries a booking signal', async () => {
+    for (const original of [
+      { journal_entry_id: 'b6e1b3f0-0000-4000-8000-000000000001' },
+      { paid_at: '2026-02-01' },
+      { paid_amount: 10 },
+    ]) {
+      const { adapter, request } = setup({ originalOverrides: original });
+      await expect(adapter.apply(credit(), prepared(adapter))).rejects.toThrow(
+        /not the exact issued/,
+      );
+      expect(posts(request)).toHaveLength(0);
+    }
+  });
+
   it('is false when the readback reports a journal entry or drifted header fields', async () => {
     const { record } = await applied();
     for (const credited of [
@@ -761,6 +786,8 @@ describe('credit adapter verify', () => {
       { your_reference: 'changed' },
       { invoice_marking: 'changed' },
       { delivery_date: '2026-01-01' },
+      { invoice_date: '2026-02-31', due_date: '2026-02-31' },
+      { invoice_date: '2026-03-01', due_date: '2026-03-01' },
     ]) {
       const { adapter } = setup({ alreadyPosted: true, credited });
       expect(await adapter.verify(record)).toBe(false);

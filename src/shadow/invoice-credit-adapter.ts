@@ -10,6 +10,12 @@ import { TargetReceiptPendingError } from './types.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DOCUMENT_NUMBER = /^[1-9]\d*$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function realDate(value: unknown): value is string {
+  if (typeof value !== 'string' || !ISO_DATE.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
 const NUMERIC = /^-?\d+(\.\d+)?$/;
 
 /** Refusal codes of the credit-note adapter. They never replace the draft-path refusals. */
@@ -205,6 +211,8 @@ export function matchesCreditNoteExpected(
   expected: InvoiceDraftExpected,
   originalInvoiceNumber: string,
   invoiceNumber: string = `KR-${originalInvoiceNumber}`,
+  /** The credit date the route reported when it created the note; the readback must agree. */
+  issuedInvoiceDate?: unknown,
 ): boolean {
   const invoice = data(value);
   if (!invoice || invoice.id !== creditTargetId || !uuid(creditTargetId)) return false;
@@ -223,8 +231,8 @@ export function matchesCreditNoteExpected(
     invoice.currency !== 'SEK' ||
     invoice.customer_id !== expected.customer_id ||
     invoice.notes !== `Krediterar faktura ${originalInvoiceNumber}` ||
-    typeof invoice.invoice_date !== 'string' ||
-    !ISO_DATE.test(invoice.invoice_date) ||
+    !realDate(invoice.invoice_date) ||
+    (issuedInvoiceDate !== undefined && invoice.invoice_date !== issuedInvoiceDate) ||
     invoice.subtotal !== negated(expected.subtotal) ||
     invoice.vat_amount !== negated(expected.vat_amount) ||
     invoice.total !== negated(expected.total) ||
@@ -364,6 +372,8 @@ function responseComplete(
     uuid(response.credited_invoice_id) &&
     response.credited_invoice_id.toLowerCase() === plan.originalTargetId.toLowerCase() &&
     response.status === 'sent' &&
+    // The route returns the inserted row, so it reports the credit date the readback is bound to.
+    realDate(response.invoice_date) &&
     response.total === (plan.expected.total === 0 ? 0 : -Math.abs(plan.expected.total)) &&
     // The original was issued under the cash method with no booking signal, so the route books
     // no reversal. Journaling is best-effort on the route: any entry or warning is unverifiable.
@@ -558,7 +568,24 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
     const issueRecord = this.snapshot().find(
       ({ record }) => record.id === plan.issueIntentId,
     )?.record;
-    return !!issueRecord && (await this.issue.verify(issueRecord));
+    if (!issueRecord || !(await this.issue.verify(issueRecord))) return false;
+    // The route treats a linked journal entry, a payment date or a paid amount as a booking
+    // signal and would post a reversal; that is outside the unbooked credit this adapter supports.
+    const response = await this.request({
+      method: 'GET',
+      path: `${this.path}/${encodeURIComponent(plan.originalTargetId)}?expand=items`,
+    });
+    const original = data(response.json);
+    return (
+      response.status === 200 &&
+      !!original &&
+      original.id === plan.originalTargetId &&
+      (original.journal_entry_id === undefined || original.journal_entry_id === null) &&
+      (original.paid_at === undefined || original.paid_at === null) &&
+      (original.paid_amount === undefined ||
+        original.paid_amount === null ||
+        original.paid_amount === 0)
+    );
   }
 
   private async originalIsCredited(plan: InvoiceCreditPlan): Promise<boolean> {
@@ -575,7 +602,11 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
     );
   }
 
-  private async creditReadback(plan: InvoiceCreditPlan, creditTargetId: string): Promise<boolean> {
+  private async creditReadback(
+    plan: InvoiceCreditPlan,
+    creditTargetId: string,
+    issued: Record<string, unknown>,
+  ): Promise<boolean> {
     const response = await this.request({
       method: 'GET',
       path: `${this.path}/${encodeURIComponent(creditTargetId)}?expand=items`,
@@ -588,6 +619,8 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
         plan.originalTargetId,
         plan.expected,
         plan.originalInvoiceNumber,
+        undefined,
+        issued.invoice_date,
       ) &&
       (await this.originalIsCredited(plan))
     );
@@ -654,7 +687,7 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
       mutation: { status: 201, response: created },
     };
     try {
-      if (!(await this.creditReadback(plan, created.id))) {
+      if (!(await this.creditReadback(plan, created.id, created))) {
         throw new Error('Credit note readback differs from the confirmed full credit.');
       }
     } catch (cause) {
@@ -695,6 +728,6 @@ export class AccountedInvoiceCreditAdapter implements ShadowAdapter {
     ) {
       return false;
     }
-    return this.creditReadback(plan, receipt.data.id);
+    return this.creditReadback(plan, receipt.data.id, receipt.mutation.response);
   }
 }
