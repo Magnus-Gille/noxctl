@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-18
+
 ### Added
 
 - **Fortnox Finans / Fakturaservice (`/3/noxfinansinvoices`, GitHub #227).** Hand an
@@ -570,6 +572,7 @@ supplier-invoices file <fileId>` and `fortnox_get_supplier_invoice_file`
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.15.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.11.0...v0.12.0
