@@ -8,29 +8,29 @@ vi.mock('../../src/auth.js', () => ({
 }));
 
 /**
- * The financial-reports operations fetch several endpoints — accounts (paginated),
- * the vouchers list, and each voucher's detail. Order isn't deterministic because
- * accounts + vouchers are fetched in parallel, so route the mock by URL instead of
- * by call sequence.
+ * The financial reports are built from one financial-year lookup plus one SIE 4
+ * export. Route the fetch mock by URL; the SIE body is CP437 bytes.
  */
-function mockFetchByUrl(routes: { accounts: unknown; vouchers: unknown; voucherDetail: unknown }) {
+function mockFortnox(sieLines: string[]) {
+  const years = {
+    FinancialYears: [{ Id: 4, FromDate: '2026-01-01', ToDate: '2026-12-31' }],
+  };
+  const sie = Buffer.from(['#FORMAT PC8', '#SIETYP 4', ...sieLines].join('\r\n'), 'latin1');
   global.fetch = vi.fn().mockImplementation((url: string) => {
-    let response: unknown;
-    if (/\/vouchers\/[^/]+\/\d+/.test(url)) {
-      // individual voucher detail: /vouchers/A/1
-      response = routes.voucherDetail;
-    } else if (/\/vouchers(\?|$)/.test(url)) {
-      // vouchers list
-      response = routes.vouchers;
-    } else {
-      // accounts list
-      response = routes.accounts;
+    if (String(url).includes('/3/sie/4')) {
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'application/octet-stream' }),
+        arrayBuffer: () =>
+          Promise.resolve(sie.buffer.slice(sie.byteOffset, sie.byteOffset + sie.byteLength)),
+      });
     }
     return Promise.resolve({
       ok: true,
       status: 200,
-      text: () => Promise.resolve(JSON.stringify(response)),
-      json: () => Promise.resolve(response),
+      text: () => Promise.resolve(JSON.stringify(years)),
+      json: () => Promise.resolve(years),
     });
   });
 }
@@ -50,28 +50,17 @@ describe('financial report tools', () => {
 
   describe('fortnox_income_statement', () => {
     it('renders a resultaträkning with grouped revenue and costs', async () => {
-      mockFetchByUrl({
-        accounts: {
-          Accounts: [
-            { Number: 3001, Description: 'Försäljning', BalanceBroughtForward: 0 },
-            { Number: 5410, Description: 'Förbrukningsinventarier', BalanceBroughtForward: 0 },
-          ],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        vouchers: {
-          Vouchers: [{ VoucherSeries: 'A', VoucherNumber: 1 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        voucherDetail: {
-          Voucher: {
-            VoucherRows: [
-              { Account: 3001, Debit: 0, Credit: 50000 },
-              { Account: 5410, Debit: 3000, Credit: 0 },
-              { Account: 1930, Debit: 47000, Credit: 0 },
-            ],
-          },
-        },
-      });
+      mockFortnox([
+        '#KONTO 3001 "F\x94rs\x84ljning"',
+        '#KONTO 5410 "F\x94rbrukningsinventarier"',
+        '#KONTO 1930 "Bank"',
+        '#VER A 1 20260115 "Sale"',
+        '{',
+        '#TRANS 3001 {} -50000.00',
+        '#TRANS 5410 {} 3000.00',
+        '#TRANS 1930 {} 47000.00',
+        '}',
+      ]);
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
@@ -91,17 +80,7 @@ describe('financial report tools', () => {
     });
 
     it('shows the period in the heading when fromDate/toDate are provided', async () => {
-      mockFetchByUrl({
-        accounts: {
-          Accounts: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        vouchers: {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        voucherDetail: { Voucher: { VoucherRows: [] } },
-      });
+      mockFortnox([]);
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
@@ -115,19 +94,14 @@ describe('financial report tools', () => {
     });
 
     it('includes raw JSON when includeRaw is set', async () => {
-      mockFetchByUrl({
-        accounts: {
-          Accounts: [{ Number: 3001, Description: 'Försäljning', BalanceBroughtForward: 0 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        vouchers: {
-          Vouchers: [{ VoucherSeries: 'A', VoucherNumber: 1 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        voucherDetail: {
-          Voucher: { VoucherRows: [{ Account: 3001, Debit: 0, Credit: 12000 }] },
-        },
-      });
+      mockFortnox([
+        '#KONTO 3001 "F\x94rs\x84ljning"',
+        '#VER A 1 20260115 "Sale"',
+        '{',
+        '#TRANS 3001 {} -12000.00',
+        '#TRANS 1930 {} 12000.00',
+        '}',
+      ]);
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
@@ -144,21 +118,14 @@ describe('financial report tools', () => {
 
   describe('fortnox_balance_sheet', () => {
     it('renders a balansräkning split into assets and liabilities/equity', async () => {
-      mockFetchByUrl({
-        accounts: {
-          Accounts: [
-            { Number: 1930, Description: 'Bank', BalanceBroughtForward: 100000 },
-            { Number: 2081, Description: 'Aktiekapital', BalanceBroughtForward: -25000 },
-            { Number: 2440, Description: 'Leverantörsskulder', BalanceBroughtForward: -75000 },
-          ],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        vouchers: {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        voucherDetail: { Voucher: { VoucherRows: [] } },
-      });
+      mockFortnox([
+        '#KONTO 1930 "Bank"',
+        '#KONTO 2081 "Aktiekapital"',
+        '#KONTO 2440 "Leverant\x94rsskulder"',
+        '#IB 0 1930 100000.00',
+        '#IB 0 2081 -25000.00',
+        '#IB 0 2440 -75000.00',
+      ]);
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
@@ -178,17 +145,7 @@ describe('financial report tools', () => {
     });
 
     it('shows the as-of date in the heading when toDate is provided', async () => {
-      mockFetchByUrl({
-        accounts: {
-          Accounts: [{ Number: 1930, Description: 'Bank', BalanceBroughtForward: 50000 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        vouchers: {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        voucherDetail: { Voucher: { VoucherRows: [] } },
-      });
+      mockFortnox(['#KONTO 1930 "Bank"', '#IB 0 1930 50000.00']);
 
       const { client } = await setupClientServer();
       const result = await client.callTool({
@@ -201,17 +158,7 @@ describe('financial report tools', () => {
     });
 
     it('includes raw JSON when includeRaw is set', async () => {
-      mockFetchByUrl({
-        accounts: {
-          Accounts: [{ Number: 1930, Description: 'Bank', BalanceBroughtForward: 50000 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        vouchers: {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        voucherDetail: { Voucher: { VoucherRows: [] } },
-      });
+      mockFortnox(['#KONTO 1930 "Bank"', '#IB 0 1930 50000.00']);
 
       const { client } = await setupClientServer();
       const result = await client.callTool({

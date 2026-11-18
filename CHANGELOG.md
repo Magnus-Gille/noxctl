@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **`reports income` and `reports balance` no longer appear to hang (NOX-224).**
+  Both reports (and `fortnox_income_statement` / `fortnox_balance_sheet`) are now
+  built from one SIE 4 export, the same source as `general-ledger`, instead of
+  listing every voucher and fetching each one's rows separately. Under Fortnox's
+  rate limit that walk took minutes for a normal year with no output. The
+  financial year is resolved explicitly (from `--year`, else the year covering
+  `--from`/`--to`, else today), and a date outside every financial year now fails
+  with a clear error. Amounts are summed in öre to avoid floating-point drift.
+
 ## [0.14.0] - 2026-11-14
 
 ### Added

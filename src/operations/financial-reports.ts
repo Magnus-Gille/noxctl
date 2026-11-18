@@ -1,30 +1,6 @@
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
-
-interface AccountEntry {
-  Number: number;
-  Description: string;
-  BalanceBroughtForward: number;
-  [key: string]: unknown;
-}
-
-interface AccountsResponse {
-  Accounts: AccountEntry[];
-  MetaInformation?: { '@TotalPages': number; '@CurrentPage': number };
-}
-
-interface VoucherRow {
-  Account: number;
-  Debit: number;
-  Credit: number;
-  Removed?: boolean;
-}
-
-const VOUCHER_DETAIL_CONCURRENCY = 5;
-
-interface VouchersResponse {
-  Vouchers: { VoucherRows?: VoucherRow[]; [key: string]: unknown }[];
-  MetaInformation?: { '@TotalPages': number; '@CurrentPage': number };
-}
+import { fetchSie, type ParsedSie } from '../sie.js';
+import { createFinancialYearOperations } from './financial-years.js';
 
 export interface FinancialReportParams {
   financialYear?: number;
@@ -99,157 +75,145 @@ const BALANCE_SHEET_LIABILITY_GROUPS: { range: [number, number]; label: string }
   { range: [2900, 2999], label: 'Upplupna kostnader (Accrued expenses)' },
 ];
 
-/** Fetch all pages of accounts for a financial year. */
+interface ResolvedFinancialYear {
+  id: number;
+  fromDate: string;
+  toDate: string;
+}
+
+interface AccountBalance {
+  number: number;
+  description: string;
+  closingBalance: number;
+}
+
+function localIsoDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// SIE dates are YYYYMMDD with no separators.
+function sieDateToIso(date: string): string {
+  if (!/^\d{8}$/.test(date)) return date;
+  return `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`;
+}
+
+// Sum in öre so many two-decimal amounts never drift (0.1 + 0.2 style).
+function toCents(amount: number): number {
+  return Math.round(amount * 100);
+}
+
+function sumAmounts(amounts: number[]): number {
+  return amounts.reduce((sum, a) => sum + toCents(a), 0) / 100;
+}
+
+/*
+ * Both reports are built from ONE SIE 4 export (#KONTO names, #IB opening
+ * balances, #VER/#TRANS movements) — the same source `general-ledger` uses.
+ * The earlier implementation listed every voucher and then fetched each one's
+ * rows individually; under Fortnox's 25 requests / 5 s limit a normal year
+ * (hundreds of vouchers) took minutes with no output, which looked like a hang
+ * (NOX-224).
+ */
 export function createFinancialReportOperations(transport: FortnoxTransport) {
-  async function fetchAllAccounts(financialYear?: number): Promise<AccountEntry[]> {
-    const all: AccountEntry[] = [];
-    let page = 1;
-    let totalPages = 1;
+  const { listFinancialYears } = createFinancialYearOperations(transport);
 
-    do {
-      const data = await transport.request<AccountsResponse>('accounts', {
-        params: { financialyear: financialYear, page },
-      });
-      all.push(...data.Accounts);
-      totalPages = data.MetaInformation?.['@TotalPages'] ?? 1;
-      page++;
-    } while (page <= totalPages);
-
-    return all;
+  // Financial-year ids are per company, and the SIE export needs one: Fortnox
+  // rejects a date range it cannot place in a year ("Perioden måste ligga inom
+  // bokföringsåret"). Resolve the year, with its boundaries, explicitly.
+  async function resolveFinancialYear(
+    financialYear: number | undefined,
+    date: string,
+  ): Promise<ResolvedFinancialYear> {
+    if (
+      financialYear !== undefined &&
+      (!Number.isSafeInteger(financialYear) || financialYear <= 0)
+    ) {
+      throw new Error('financialYear must be a positive safe integer.');
+    }
+    const years = ((await listFinancialYears()).FinancialYears ?? []) as Record<string, unknown>[];
+    const match =
+      financialYear !== undefined
+        ? years.find((fy) => Number(fy.Id) === financialYear)
+        : years.find((fy) => String(fy.FromDate) <= date && date <= String(fy.ToDate));
+    if (!match) {
+      throw new Error(
+        financialYear !== undefined
+          ? `Financial year ${financialYear} not found in Fortnox.`
+          : `No financial year found covering ${date}. Pass financialYear explicitly.`,
+      );
+    }
+    const id = Number(match.Id);
+    const fromDate = String(match.FromDate ?? '');
+    const toDate = String(match.ToDate ?? '');
+    if (!Number.isSafeInteger(id) || id <= 0 || !fromDate || !toDate) {
+      throw new Error('Invalid financial year returned by Fortnox. Pass financialYear explicitly.');
+    }
+    return { id, fromDate, toDate };
   }
 
-  interface VoucherDetailResponse {
-    Voucher: { VoucherRows?: VoucherRow[]; [key: string]: unknown };
+  async function fetchYearSie(
+    params: FinancialReportParams,
+    mode: 'period' | 'balance',
+  ): Promise<{ sie: ParsedSie; fromDate: string; toDate: string; financialYear: number }> {
+    const anchor =
+      (mode === 'period' ? params.fromDate : undefined) ??
+      params.toDate ??
+      localIsoDate(new Date());
+    const year = await resolveFinancialYear(params.financialYear, anchor);
+
+    // Clamp to the financial year; a balance sheet always starts at the year's
+    // opening balance (#IB) so its range always starts on the first day.
+    const fromDate =
+      mode === 'period' && params.fromDate && params.fromDate > year.fromDate
+        ? params.fromDate
+        : year.fromDate;
+    const toDate = params.toDate && params.toDate < year.toDate ? params.toDate : year.toDate;
+    if (fromDate > toDate) {
+      throw new Error(
+        `Period ${fromDate}–${toDate} lies outside financial year ${year.id} (${year.fromDate}–${year.toDate}).`,
+      );
+    }
+
+    const sie = await fetchSie(transport, { fromDate, toDate, financialYear: year.id });
+    return { sie, fromDate, toDate, financialYear: year.id };
   }
 
-  /** Fetch all vouchers (list + individual details) and sum debit/credit per account. */
-  async function fetchVoucherSums(
-    financialYear?: number,
-    fromDate?: string,
-    toDate?: string,
-  ): Promise<Map<number, { debit: number; credit: number }>> {
-    const sums = new Map<number, { debit: number; credit: number }>();
+  /** Per-account balances: optional opening balance + movements dated within [from, to]. */
+  function accountBalances(
+    sie: ParsedSie,
+    fromDate: string,
+    toDate: string,
+    includeOpening: boolean,
+  ): AccountBalance[] {
+    const cents = new Map<string, number>();
 
-    // Step 1: List all vouchers to get series/number identifiers
-    const vouchers: { series: string; number: number }[] = [];
-    let page = 1;
-    let totalPages = 1;
-
-    do {
-      const data = await transport.request<VouchersResponse>('vouchers', {
-        params: {
-          financialyear: financialYear,
-          fromdate: fromDate,
-          todate: toDate,
-          page,
-          limit: 100,
-        },
-      });
-      for (const v of data.Vouchers ?? []) {
-        vouchers.push({
-          series: v.VoucherSeries as string,
-          number: v.VoucherNumber as number,
-        });
-      }
-      totalPages = data.MetaInformation?.['@TotalPages'] ?? 1;
-      page++;
-    } while (page <= totalPages);
-
-    // Step 2: Fetch voucher details concurrently. The shared client still owns
-    // rate limiting; this pool only keeps network latency from serialising reads.
-    const yearParam = financialYear ? `?financialyear=${financialYear}` : '';
-    let nextVoucherIndex = 0;
-    let failure: unknown;
-
-    async function worker(): Promise<void> {
-      while (failure === undefined) {
-        const voucherIndex = nextVoucherIndex++;
-        if (voucherIndex >= vouchers.length) return;
-        const voucher = vouchers[voucherIndex]!;
-
-        try {
-          const detail = await transport.request<VoucherDetailResponse>(
-            `vouchers/${encodeURIComponent(voucher.series)}/${voucher.number}${yearParam}`,
-          );
-          for (const row of detail.Voucher.VoucherRows ?? []) {
-            if (row.Removed === true) continue;
-            const existing = sums.get(row.Account) ?? { debit: 0, credit: 0 };
-            existing.debit += row.Debit || 0;
-            existing.credit += row.Credit || 0;
-            sums.set(row.Account, existing);
-          }
-        } catch (error) {
-          failure = error;
-        }
+    if (includeOpening) {
+      for (const ib of sie.openingBalances) {
+        if (ib.yearIndex !== 0) continue;
+        cents.set(ib.account, (cents.get(ib.account) ?? 0) + toCents(ib.balance));
       }
     }
 
-    const workerCount = Math.min(VOUCHER_DETAIL_CONCURRENCY, vouchers.length);
-    await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    if (failure !== undefined) throw failure;
+    // The export is already scoped by date, but filter again so the report is
+    // correct regardless of how Fortnox treats the range boundaries.
+    for (const t of sie.transactions) {
+      const date = sieDateToIso(t.voucherDate || t.transactionDate);
+      if (date < fromDate || date > toDate) continue;
+      cents.set(t.account, (cents.get(t.account) ?? 0) + toCents(t.amount));
+    }
 
-    return sums;
-  }
-
-  interface AccountBalance {
-    number: number;
-    description: string;
-    closingBalance: number;
-  }
-
-  /** Compute closing balances: BalanceBroughtForward + debit - credit for each account. */
-  async function computeBalances(
-    financialYear?: number,
-    fromDate?: string,
-    toDate?: string,
-  ): Promise<AccountBalance[]> {
-    const [accounts, voucherSums] = await Promise.all([
-      fetchAllAccounts(financialYear),
-      fetchVoucherSums(financialYear, fromDate, toDate),
-    ]);
-
-    return accounts
-      .map((a) => {
-        const movement = voucherSums.get(a.Number);
-        const debit = movement?.debit ?? 0;
-        const credit = movement?.credit ?? 0;
-        // For period-scoped income statements (fromDate set), skip BBF
-        // since we only want the period's movements for P&L accounts.
-        // For balance sheets, always include BBF.
-        const bbf = fromDate ? 0 : a.BalanceBroughtForward;
-        const closingBalance = bbf + debit - credit;
-        return {
-          number: a.Number,
-          description: a.Description,
-          closingBalance,
-        };
-      })
-      .filter((a) => a.closingBalance !== 0);
-  }
-
-  /** Compute balance sheet balances: always includes BBF + movements up to toDate. */
-  async function computeBalanceSheetBalances(
-    financialYear?: number,
-    toDate?: string,
-  ): Promise<AccountBalance[]> {
-    const [accounts, voucherSums] = await Promise.all([
-      fetchAllAccounts(financialYear),
-      fetchVoucherSums(financialYear, undefined, toDate),
-    ]);
-
-    return accounts
-      .map((a) => {
-        const movement = voucherSums.get(a.Number);
-        const debit = movement?.debit ?? 0;
-        const credit = movement?.credit ?? 0;
-        const closingBalance = a.BalanceBroughtForward + debit - credit;
-        return {
-          number: a.Number,
-          description: a.Description,
-          closingBalance,
-        };
-      })
-      .filter((a) => a.closingBalance !== 0);
+    const balances: AccountBalance[] = [];
+    for (const [account, value] of cents) {
+      const number = Number(account);
+      if (!Number.isInteger(number) || value === 0) continue;
+      balances.push({
+        number,
+        description: sie.accounts.get(account)?.description ?? '',
+        closingBalance: value / 100,
+      });
+    }
+    return balances.sort((a, b) => a.number - b.number);
   }
 
   function buildSection(
@@ -270,12 +234,14 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
     return {
       label,
       lines,
-      total: lines.reduce((sum, l) => sum + l.balance, 0),
+      total: sumAmounts(lines.map((l) => l.balance)),
     };
   }
 
   async function getIncomeStatement(params: FinancialReportParams = {}): Promise<IncomeStatement> {
-    const balances = await computeBalances(params.financialYear, params.fromDate, params.toDate);
+    const { sie, fromDate, toDate } = await fetchYearSie(params, 'period');
+    // P&L accounts carry no opening balance; only the period's movements count.
+    const balances = accountBalances(sie, fromDate, toDate, false);
 
     const sections: ReportSection[] = [];
     for (const group of INCOME_STATEMENT_GROUPS) {
@@ -283,7 +249,7 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
       if (section) sections.push(section);
     }
 
-    const netResult = sections.reduce((sum, s) => sum + s.total, 0);
+    const netResult = sumAmounts(sections.map((s) => s.total));
 
     return {
       type: 'income-statement',
@@ -298,7 +264,8 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
   }
 
   async function getBalanceSheet(params: FinancialReportParams = {}): Promise<BalanceSheet> {
-    const balances = await computeBalanceSheetBalances(params.financialYear, params.toDate);
+    const { sie, fromDate, toDate } = await fetchYearSie(params, 'balance');
+    const balances = accountBalances(sie, fromDate, toDate, true);
 
     const assets: ReportSection[] = [];
     for (const group of BALANCE_SHEET_ASSET_GROUPS) {
@@ -317,9 +284,9 @@ export function createFinancialReportOperations(transport: FortnoxTransport) {
       financialYear: params.financialYear,
       asOfDate: params.toDate,
       assets,
-      totalAssets: assets.reduce((sum, s) => sum + s.total, 0),
+      totalAssets: sumAmounts(assets.map((s) => s.total)),
       liabilitiesAndEquity,
-      totalLiabilitiesAndEquity: liabilitiesAndEquity.reduce((sum, s) => sum + s.total, 0),
+      totalLiabilitiesAndEquity: sumAmounts(liabilitiesAndEquity.map((s) => s.total)),
     };
   }
 
