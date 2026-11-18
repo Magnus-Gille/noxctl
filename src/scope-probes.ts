@@ -27,4 +27,7 @@ export const scopeProbeEndpoints: Record<string, string> = {
   connectfile: 'voucherfileconnections?limit=1',
   salary: 'employees?limit=1',
   archive: 'archive',
+  // No list endpoint exists; a status read of a non-existent invoice answers 403
+  // without the scope and a not-found error with it.
+  noxfinansinvoice: 'noxfinansinvoices/0',
 };

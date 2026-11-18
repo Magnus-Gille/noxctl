@@ -14,6 +14,7 @@ import { registerCompanyTools } from './tools/company.js';
 import { registerArticleTools } from './tools/articles.js';
 import { registerSupplierTools } from './tools/suppliers.js';
 import { registerSupplierInvoiceTools } from './tools/supplier-invoices.js';
+import { registerNoxFinansInvoiceTools } from './tools/noxfinans-invoices.js';
 import { registerFinancialReportTools } from './tools/financial-reports.js';
 import { registerGeneralLedgerTools } from './tools/general-ledger.js';
 import { registerStatusTools } from './tools/status.js';
@@ -73,6 +74,7 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
 
   registerCustomerTools(server, operations);
   registerInvoiceTools(server, operations);
+  registerNoxFinansInvoiceTools(server, operations);
   registerBookkeepingTools(server, operations);
   registerTaxTools(server, operations);
   registerCompanyTools(server, operations);

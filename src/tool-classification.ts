@@ -40,6 +40,10 @@ const DESTRUCTIVE_TOOLS: ReadonlySet<string> = new Set([
   'fortnox_finish_contract', // ends the contract; no further invoices are created
   'fortnox_reset_scheduletime_day', // overwrites and resets one schedule day
   'fortnox_send_invoice', // overwrites stored EmailSubject/EmailBody/EmailAddressBCC before sending
+  'fortnox_send_noxfinans_invoice', // distributes the invoice via Fortnox Finans, starts reminders, is charged
+  'fortnox_stop_noxfinans_invoice', // removes the invoice from the Fortnox Finans process for good
+  'fortnox_take_fees_noxfinans_invoice', // the company pays the invoice's added fees instead of the customer
+  'fortnox_report_noxfinans_invoice_payment', // bookkeeps a payment and deducts it in Fortnox Finans
 ]);
 
 // An `overwrite` control lets a tool truncate an existing local file. That is

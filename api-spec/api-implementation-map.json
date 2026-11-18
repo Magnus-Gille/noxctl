@@ -686,11 +686,9 @@
     {
       "id": "fortnox-financeinvoices",
       "tagHash": "67b70b2c68c3aab7f617e0470e7a514ed21276471720b8bf1e705e7a870c093c",
-      "classification": "excluded",
+      "classification": "complete",
       "operations": {
-        "implemented": [],
-        "missing": [],
-        "excluded": [
+        "implemented": [
           "223a12b451e1349fce2b98bea76b81c1dc539bff6e87c3d09c463fd61b3e77d8",
           "48e12404dede3e1e3f02d901c09c180eee0ba2c4427200fcbe12f808c391e147",
           "5099ce41002fe83677ba299559bd670de369ba9ef403188ae5acdf87589ed5f1",
@@ -698,9 +696,60 @@
           "9c3325daf9049a9a0e137c0db1f791cc9de339bb63cdad59aa93b781af05ffbe",
           "b2dff4b01676f99b266279f3216bd35496bafd3c0487b16c874c7678d0742a45",
           "e09fb43a70f119ed8ff86caf6d26046f4d4066a8516c7baa8abc57cd52e79630"
-        ]
+        ],
+        "missing": [],
+        "excluded": []
       },
-      "rationale": "This product family is explicitly outside the initial open-source core API boundary."
+      "evidence": {
+        "operationExports": [
+          "getNoxFinansInvoice",
+          "sendNoxFinansInvoice",
+          "pauseNoxFinansInvoice",
+          "unpauseNoxFinansInvoice",
+          "stopNoxFinansInvoice",
+          "takeFeesNoxFinansInvoice",
+          "reportNoxFinansInvoicePayment"
+        ],
+        "mcpTools": [
+          "fortnox_get_noxfinans_invoice",
+          "fortnox_send_noxfinans_invoice",
+          "fortnox_pause_noxfinans_invoice",
+          "fortnox_unpause_noxfinans_invoice",
+          "fortnox_stop_noxfinans_invoice",
+          "fortnox_take_fees_noxfinans_invoice",
+          "fortnox_report_noxfinans_invoice_payment"
+        ],
+        "cliCommands": [
+          [
+            "noxfinans",
+            "get"
+          ],
+          [
+            "noxfinans",
+            "send"
+          ],
+          [
+            "noxfinans",
+            "pause"
+          ],
+          [
+            "noxfinans",
+            "unpause"
+          ],
+          [
+            "noxfinans",
+            "stop"
+          ],
+          [
+            "noxfinans",
+            "take-fees"
+          ],
+          [
+            "noxfinans",
+            "report-payment"
+          ]
+        ]
+      }
     },
     {
       "id": "fortnox-financialyears",

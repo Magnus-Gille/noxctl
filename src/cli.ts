@@ -35,6 +35,7 @@ import {
   invoiceListColumns,
   invoiceDetailColumns,
   invoiceConfirmColumns,
+  noxFinansInvoiceColumns,
   invoiceAttachmentColumns,
   invoiceAttachmentListColumns,
   customerListColumns,
@@ -395,12 +396,17 @@ program
     '--with-archive',
     'Also request the archive (Arkivplats) scope — lets noxctl read files from the Fortnox file archive, e.g. attachments made via the Fortnox web UI',
   )
+  .option(
+    '--with-noxfinans',
+    'Also request the Fortnox Finans (noxfinansinvoice) scope — for `noxctl noxfinans`; requires Fortnox Finans activated and the "Invoice Noxfinans" permission on your Fortnox app',
+  )
   .action(
     async (initOpts: {
       profile?: string;
       withSalary?: boolean;
       withOrders?: boolean;
       withArchive?: boolean;
+      withNoxfinans?: boolean;
     }) => {
       const {
         inspectCredentials,
@@ -409,6 +415,7 @@ program
         SALARY_SCOPE,
         ORDER_SCOPES,
         ARCHIVE_SCOPE,
+        NOXFINANS_SCOPE,
       } = await import('./auth.js');
       const { validateProfileName } = await import('./profile-name.js');
 
@@ -419,11 +426,14 @@ program
       const withSalary = Boolean(initOpts.withSalary) || process.env.FORTNOX_WITH_SALARY === '1';
       const withOrders = Boolean(initOpts.withOrders) || process.env.FORTNOX_WITH_ORDERS === '1';
       const withArchive = Boolean(initOpts.withArchive) || process.env.FORTNOX_WITH_ARCHIVE === '1';
+      const withNoxfinans =
+        Boolean(initOpts.withNoxfinans) || process.env.FORTNOX_WITH_NOXFINANS === '1';
       const scopes = [
         SCOPES,
         withOrders ? ORDER_SCOPES : '',
         withSalary ? SALARY_SCOPE : '',
         withArchive ? ARCHIVE_SCOPE : '',
+        withNoxfinans ? NOXFINANS_SCOPE : '',
       ]
         .filter(Boolean)
         .join(' ');
@@ -2404,6 +2414,268 @@ Examples:
       }
       const data = await updateSupplier(supplierNumber, fields);
       outputDetail(data as Record<string, unknown>, supplierDetailColumns, json(), 'Supplier');
+    },
+  );
+
+// --- noxfinans (Fortnox Finans / Fakturaservice) ---
+const noxFinans = program
+  .command('noxfinans')
+  .alias('fakturaservice')
+  .description('Fortnox Finans / Fakturaservice: send invoices and manage reminders');
+
+noxFinans.addHelpText(
+  'after',
+  `
+Hands existing customer invoices to Fortnox Finans (distribution, OCR/payment
+matching, reminders) and manages them there. Needs Fortnox Finans activated on
+the company and the "noxfinansinvoice" scope: run \`noxctl init --with-noxfinans\`.
+
+WARNING: \`send\` is irreversible and charged by Fortnox. The invoice goes out to
+the customer and the reminder process starts, even in a regular Fortnox test
+company — only a dedicated Fortnox Finans sandbox is safe. Use --dry-run first.`,
+);
+
+noxFinans
+  .command('get <invoiceNumber>')
+  .description('Show the Fortnox Finans status of an invoice (read-only)')
+  .addHelpText(
+    'after',
+    `
+Example:
+  noxctl noxfinans get 7201`,
+  )
+  .action(async (invoiceNumber: string) => {
+    const { getNoxFinansInvoice } = defaultFortnoxOperations;
+    const data = await getNoxFinansInvoice(invoiceNumber);
+    outputDetail(data, noxFinansInvoiceColumns, json(), 'NoxFinansInvoice');
+  });
+
+noxFinans
+  .command('send <invoiceNumber>')
+  .description('Send an existing invoice with Fortnox Finans (irreversible, charged)')
+  .addOption(
+    new Option(
+      '--service <service>',
+      'LEDGERBASE (Service Full/Light, per company settings) or REMINDER (reminder service)',
+    )
+      .choices(['LEDGERBASE', 'REMINDER'])
+      .makeOptionMandatory(),
+  )
+  .addOption(
+    new Option(
+      '--send-method <method>',
+      'How Fortnox Finans distributes it: EMAIL, LETTER, EINVOICE or NONE (not with REMINDER)',
+    )
+      .choices(['EMAIL', 'LETTER', 'EINVOICE', 'NONE'])
+      .makeOptionMandatory(),
+  )
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Preconditions (Fortnox): invoice exists, open balance > 0, currency SEK, invoice
+date at most two years old, name/address/zip/city filled in, at least one row,
+not an interest invoice. Status, OCR number and PDF link can take from a minute
+to several hours to appear; follow up with \`noxctl noxfinans get\`.
+
+Example:
+  noxctl noxfinans send 7201 --service LEDGERBASE --send-method EMAIL --dry-run`,
+  )
+  .action(
+    async (
+      invoiceNumber: string,
+      opts: {
+        service: 'LEDGERBASE' | 'REMINDER';
+        sendMethod: 'EMAIL' | 'LETTER' | 'EINVOICE' | 'NONE';
+        yes?: boolean;
+        dryRun?: boolean;
+      },
+    ) => {
+      const { noxFinansSendPayload } = await import('./operations/noxfinans-invoices.js');
+      const { sendNoxFinansInvoice } = defaultFortnoxOperations;
+      const params = { service: opts.service, sendMethod: opts.sendMethod };
+      const payload = noxFinansSendPayload(invoiceNumber, params);
+      if (
+        !(await confirmMutation(
+          `Send invoice ${invoiceNumber} with Fortnox Finans (${opts.service}, ${opts.sendMethod}) — this distributes it to the customer and is charged`,
+          opts,
+          payload,
+        ))
+      ) {
+        return;
+      }
+      const data = await sendNoxFinansInvoice(invoiceNumber, params);
+      outputConfirmation(
+        `Invoice ${invoiceNumber} sent to Fortnox Finans. Status, OCR and PDF can take a while; check with \`noxctl noxfinans get ${invoiceNumber}\`.`,
+        json(),
+        data,
+        noxFinansInvoiceColumns,
+        'NoxFinansInvoice',
+      );
+    },
+  );
+
+noxFinans
+  .command('pause <invoiceNumber>')
+  .description('Pause the Fortnox Finans reminder process until a date (max 60 days)')
+  .requiredOption('--until <date>', 'Paused up to and including this date (YYYY-MM-DD)')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+Only invoices with status OPEN can be paused. The date must be in the future and,
+if the invoice is already paused, later than the current pause date.
+
+Example:
+  noxctl noxfinans pause 7201 --until 2026-12-15 --dry-run`,
+  )
+  .action(
+    async (invoiceNumber: string, opts: { until: string; yes?: boolean; dryRun?: boolean }) => {
+      const { pauseNoxFinansInvoice } = defaultFortnoxOperations;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(opts.until)) {
+        fail(`Invalid --until: ${opts.until} (expected YYYY-MM-DD)`, 2);
+      }
+      const payload = { NoxFinansInvoice: { PausedUntilDate: opts.until } };
+      if (
+        !(await confirmMutation(
+          `Pause Fortnox Finans invoice ${invoiceNumber} until ${opts.until}`,
+          opts,
+          payload,
+        ))
+      ) {
+        return;
+      }
+      const data = await pauseNoxFinansInvoice(invoiceNumber, opts.until);
+      outputConfirmation(
+        `Invoice ${invoiceNumber} paused in Fortnox Finans until ${opts.until}.`,
+        json(),
+        data,
+        noxFinansInvoiceColumns,
+        'NoxFinansInvoice',
+      );
+    },
+  );
+
+for (const action of [
+  {
+    command: 'unpause',
+    description: 'Lift a manual pause immediately (system pauses cannot be lifted)',
+    label: 'Unpause',
+    done: 'unpaused',
+    exportName: 'unpauseNoxFinansInvoice',
+  },
+  {
+    command: 'stop',
+    description: 'Remove the invoice from the Fortnox Finans process (no more automatic reminders)',
+    label: 'Stop the Fortnox Finans process for',
+    done: 'removed from the Fortnox Finans process',
+    exportName: 'stopNoxFinansInvoice',
+  },
+  {
+    command: 'take-fees',
+    description: 'Let the company pay the fees added to the invoice instead of the customer',
+    label: 'Take the fees (the company pays) for',
+    done: 'fees taken by the company',
+    exportName: 'takeFeesNoxFinansInvoice',
+  },
+] as const) {
+  noxFinans
+    .command(`${action.command} <invoiceNumber>`)
+    .description(action.description)
+    .option('-y, --yes', 'Skip confirmation prompt')
+    .option('--dry-run', 'Preview the action without sending it')
+    .addHelpText(
+      'after',
+      `
+Not available for invoices in the old Noxbox platform.
+
+Example:
+  noxctl noxfinans ${action.command} 7201 --dry-run`,
+    )
+    .action(async (invoiceNumber: string, opts: { yes?: boolean; dryRun?: boolean }) => {
+      const run = defaultFortnoxOperations[action.exportName];
+      if (
+        !(await confirmMutation(`${action.label} Fortnox Finans invoice ${invoiceNumber}`, opts))
+      ) {
+        return;
+      }
+      const data = await run(invoiceNumber);
+      outputConfirmation(
+        `Invoice ${invoiceNumber}: ${action.done}.`,
+        json(),
+        data,
+        noxFinansInvoiceColumns,
+        'NoxFinansInvoice',
+      );
+    });
+}
+
+noxFinans
+  .command('report-payment <invoiceNumber>')
+  .description('Report a payment the customer made directly to the company')
+  .requiredOption('--amount <amount>', 'Paid amount (SEK)', parseFloat)
+  .option('--method-code <code>', 'Payment method code, e.g. BG or PG (needed when bookkept)')
+  .option('--account <account>', 'Account to bookkeep on, e.g. 1930 (needed when bookkept)', (v) =>
+    parsePositiveInteger(v),
+  )
+  .option('--client-takes-fees', 'The company pays the customer fees', false)
+  .option('--no-bookkeep', 'Do not bookkeep the payment in Fortnox')
+  .option('--no-report-to-finance', 'Do not report the payment to Fortnox Finans')
+  .option('-y, --yes', 'Skip confirmation prompt')
+  .option('--dry-run', 'Preview the request without sending it')
+  .addHelpText(
+    'after',
+    `
+By default the payment is both bookkept in Fortnox and reported to Fortnox Finans
+(Fortnox's usual case). Not available for invoices in the old Noxbox platform.
+
+Example:
+  noxctl noxfinans report-payment 7201 --amount 500 --method-code BG --account 1930 --dry-run`,
+  )
+  .action(
+    async (
+      invoiceNumber: string,
+      opts: {
+        amount: number;
+        methodCode?: string;
+        account?: number;
+        clientTakesFees: boolean;
+        bookkeep: boolean;
+        reportToFinance: boolean;
+        yes?: boolean;
+        dryRun?: boolean;
+      },
+    ) => {
+      const { noxFinansPaymentPayload } = await import('./operations/noxfinans-invoices.js');
+      const { reportNoxFinansInvoicePayment } = defaultFortnoxOperations;
+      const payment = {
+        PaymentAmount: opts.amount,
+        ...(opts.methodCode !== undefined ? { PaymentMethodCode: opts.methodCode } : {}),
+        ...(opts.account !== undefined ? { PaymentMethodAccount: opts.account } : {}),
+        ClientTakesFees: opts.clientTakesFees,
+        BookkeepPaymentInFortnox: opts.bookkeep,
+        ReportToFinance: opts.reportToFinance,
+      };
+      const payload = noxFinansPaymentPayload(payment);
+      if (
+        !(await confirmMutation(
+          `Report a payment of ${opts.amount} on Fortnox Finans invoice ${invoiceNumber}`,
+          opts,
+          payload,
+        ))
+      ) {
+        return;
+      }
+      const data = await reportNoxFinansInvoicePayment(invoiceNumber, payment);
+      outputConfirmation(
+        `Payment of ${opts.amount} reported for invoice ${invoiceNumber} in Fortnox Finans.`,
+        json(),
+        data,
+        noxFinansInvoiceColumns,
+        'NoxFinansInvoice',
+      );
     },
   );
 
