@@ -2005,7 +2005,7 @@ const accounts = program.command('accounts').description('Chart of accounts oper
 accounts
   .command('list')
   .description('List accounts')
-  .option('--search <term>', 'Search by account name or number')
+  .option('--search <term>', 'Search by account name or number (searches all pages)')
   .option('--year <number>', 'Financial year', parseInt)
   .option('--page <number>', 'Page number', parseInt)
   .option('--limit <number>', 'Results per page', parseInt)

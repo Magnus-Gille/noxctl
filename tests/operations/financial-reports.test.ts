@@ -186,6 +186,36 @@ describe('financial reports operations', () => {
       expect(report.liabilitiesAndEquity[1]!.lines[0]!.description).toBe('Leverantörsskulder');
     });
 
+    it('groups receivables by BAS: 15xx kundfordringar, 16xx övriga fordringar (NOX-226)', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.requestFile).mockResolvedValue({
+        buffer: Buffer.from(
+          [
+            '#FORMAT PC8',
+            '#SIETYP 4',
+            '#RAR 0 20260101 20261231',
+            '#KONTO 1510 "Kundfordringar"',
+            '#KONTO 1630 "Skattekonto"',
+            '#KONTO 1790 "F\x94rutbetalda kostnader"',
+            '#IB 0 1510 1000.00',
+            '#IB 0 1630 200.00',
+            '#IB 0 1790 30.00',
+          ].join('\r\n'),
+          'latin1',
+        ),
+        contentType: 'application/octet-stream',
+      });
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
+
+      const report = await getBalanceSheet({ financialYear: 4 });
+      const sectionFor = (account: number) =>
+        report.assets.find((s) => s.lines.some((l) => l.account === account))!.label;
+
+      expect(sectionFor(1510)).toMatch(/^Kundfordringar/);
+      expect(sectionFor(1630)).toMatch(/^Övriga kortfristiga fordringar/);
+      expect(sectionFor(1790)).toMatch(/^Förutbetalda kostnader och upplupna intäkter/);
+    });
+
     it('covers the whole financial year when no as-of date is given', async () => {
       const transport = stubTransport();
       const { getBalanceSheet } = createFinancialReportOperations(transport);
