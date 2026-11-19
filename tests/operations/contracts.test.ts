@@ -73,6 +73,48 @@ describe('contract operations', () => {
     });
   });
 
+  describe('Continuous contracts (#225)', () => {
+    it('createContract adds ContractLength 0 when Continuous is true', async () => {
+      mockFetch({ Contract: { DocumentNumber: '2' } });
+      const { createContract } = await import('../../src/operations/contracts.js');
+
+      await createContract({ CustomerNumber: '25', Continuous: true });
+
+      const body = JSON.parse(fetchCall()[1].body!) as { Contract: Record<string, unknown> };
+      expect(body.Contract.ContractLength).toBe(0);
+    });
+
+    it('updateContract adds ContractLength 0 when Continuous is true', async () => {
+      mockFetch({ Contract: { DocumentNumber: '2' } });
+      const { updateContract } = await import('../../src/operations/contracts.js');
+
+      await updateContract('2', { Continuous: true });
+
+      const body = JSON.parse(fetchCall()[1].body!) as { Contract: Record<string, unknown> };
+      expect(body.Contract.ContractLength).toBe(0);
+    });
+
+    it('leaves non-continuous contracts alone', async () => {
+      mockFetch({ Contract: { DocumentNumber: '2' } });
+      const { createContract } = await import('../../src/operations/contracts.js');
+
+      await createContract({ CustomerNumber: '25', Continuous: false, ContractLength: 12 });
+
+      const body = JSON.parse(fetchCall()[1].body!) as { Contract: Record<string, unknown> };
+      expect(body.Contract.ContractLength).toBe(12);
+    });
+
+    it('rejects Continuous true with a positive ContractLength without calling Fortnox', async () => {
+      mockFetch({ Contract: {} });
+      const { createContract } = await import('../../src/operations/contracts.js');
+
+      await expect(
+        createContract({ CustomerNumber: '25', Continuous: true, ContractLength: 12 }),
+      ).rejects.toThrow(/Continuous/);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+  });
+
   describe('updateContract', () => {
     it('uses PUT against the document number', async () => {
       mockFetch({ Contract: { DocumentNumber: '1' } });

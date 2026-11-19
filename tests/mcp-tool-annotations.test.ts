@@ -24,6 +24,10 @@ const EXPECTED_EXPLICIT_DESTRUCTIVE_TOOLS = [
   'fortnox_order_pdf', // can overwrite a local file
   'fortnox_reset_scheduletime_day',
   'fortnox_send_invoice', // overwrites stored email fields before sending
+  'fortnox_send_noxfinans_invoice', // distributes via Fortnox Finans and is charged
+  'fortnox_stop_noxfinans_invoice', // removes the invoice from the Fortnox Finans process
+  'fortnox_take_fees_noxfinans_invoice', // the company pays the added fees
+  'fortnox_report_noxfinans_invoice_payment', // bookkeeps a payment
 ];
 const DESTRUCTIVE_BY_NAME = /^fortnox_(delete|cancel|update|patch|replace)_/;
 

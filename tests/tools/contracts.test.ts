@@ -140,6 +140,162 @@ describe('contract tools', () => {
     });
   });
 
+  describe('contract fields from issues #224-#226', () => {
+    function sentContract(): Record<string, unknown> {
+      const call = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      return (JSON.parse(call[1].body) as { Contract: Record<string, unknown> }).Contract;
+    }
+
+    it('create accepts CostCenter and Project on rows and on the contract (#224)', async () => {
+      mockFetch({ Contract: { DocumentNumber: '5' } });
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_contract',
+        arguments: {
+          CustomerNumber: '25',
+          CostCenter: '8',
+          Project: '42',
+          InvoiceRows: [
+            {
+              ArticleNumber: '10',
+              DeliveredQuantity: 1,
+              Price: 500,
+              AccountNumber: 3004,
+              CostCenter: '8',
+              Project: '42',
+            },
+          ],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const contract = sentContract();
+      expect(contract.CostCenter).toBe('8');
+      expect(contract.Project).toBe('42');
+      const row = (contract.InvoiceRows as Record<string, unknown>[])[0];
+      expect(row.CostCenter).toBe('8');
+      expect(row.Project).toBe('42');
+    });
+
+    it('update accepts CostCenter and Project on rows and on the contract (#224)', async () => {
+      mockFetch({ Contract: { DocumentNumber: '1' } });
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_update_contract',
+        arguments: {
+          documentNumber: '1',
+          CostCenter: '8',
+          Project: '42',
+          InvoiceRows: [
+            { ArticleNumber: '10', DeliveredQuantity: 1, CostCenter: '8', Project: '42' },
+          ],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const contract = sentContract();
+      expect(contract.CostCenter).toBe('8');
+      expect(contract.Project).toBe('42');
+      const row = (contract.InvoiceRows as Record<string, unknown>[])[0];
+      expect(row.CostCenter).toBe('8');
+      expect(row.Project).toBe('42');
+    });
+
+    it('create sends ContractLength 0 with Continuous true (#225)', async () => {
+      mockFetch({ Contract: { DocumentNumber: '5' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_create_contract',
+        arguments: {
+          CustomerNumber: '25',
+          Continuous: true,
+          InvoiceInterval: 1,
+          PeriodStart: '2026-12-01',
+          PeriodEnd: '2026-12-31',
+          InvoiceRows: [{ ArticleNumber: '10', DeliveredQuantity: 1, Price: 500 }],
+          confirm: true,
+        },
+      });
+
+      const contract = sentContract();
+      expect(contract.Continuous).toBe(true);
+      expect(contract.ContractLength).toBe(0);
+    });
+
+    it('create dry run shows ContractLength 0 with Continuous true (#225)', async () => {
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_contract',
+        arguments: {
+          CustomerNumber: '25',
+          Continuous: true,
+          InvoiceRows: [{ ArticleNumber: '10', DeliveredQuantity: 1 }],
+          dryRun: true,
+        },
+      });
+
+      expect(textOf(result)).toContain('"ContractLength": 0');
+    });
+
+    it('rejects Continuous true together with a positive ContractLength (#225)', async () => {
+      mockFetch({ Contract: {} });
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_contract',
+        arguments: {
+          CustomerNumber: '25',
+          Continuous: true,
+          ContractLength: 12,
+          InvoiceRows: [{ ArticleNumber: '10', DeliveredQuantity: 1 }],
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('create and update pass ContractDate through (#226)', async () => {
+      mockFetch({ Contract: { DocumentNumber: '5' } });
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_create_contract',
+        arguments: {
+          CustomerNumber: '25',
+          ContractDate: '2026-10-31',
+          PeriodStart: '2026-11-01',
+          PeriodEnd: '2026-11-30',
+          InvoiceRows: [{ ArticleNumber: '10', DeliveredQuantity: 1 }],
+          confirm: true,
+        },
+      });
+      expect(sentContract().ContractDate).toBe('2026-10-31');
+
+      mockFetch({ Contract: { DocumentNumber: '5' } });
+      await client.callTool({
+        name: 'fortnox_update_contract',
+        arguments: { documentNumber: '5', ContractDate: '2026-10-31', confirm: true },
+      });
+      expect(sentContract().ContractDate).toBe('2026-10-31');
+    });
+
+    it('rejects a malformed ContractDate', async () => {
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_create_contract',
+        arguments: {
+          CustomerNumber: '25',
+          ContractDate: '31/10/2026',
+          InvoiceRows: [{ ArticleNumber: '10', DeliveredQuantity: 1 }],
+          dryRun: true,
+        },
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
   describe('fortnox_update_contract', () => {
     it('updates a contract', async () => {
       mockFetch({ Contract: { DocumentNumber: '1', Comments: 'Uppdaterad' } });

@@ -4,7 +4,14 @@ import { resolveShadowIdentity } from './identity.js';
 import { mapInvoiceDraft, type InvoiceDraftExpected } from './invoice-draft-mapping.js';
 import { matchesInvoiceExpected } from './invoice-draft-adapter.js';
 import { AccountedInvoiceStageVerifier } from './invoice-stage-verifier.js';
-import { copy, digest, planPaymentQueue, restoreGroup } from './payment-queue-plan.js';
+import {
+  PAYMENT_INVOICE_CREDITED,
+  copy,
+  creditOfInvoice,
+  digest,
+  planPaymentQueue,
+  restoreGroup,
+} from './payment-queue-plan.js';
 import {
   mapBookedInvoicePayment,
   type BookedPaymentPlan,
@@ -194,6 +201,15 @@ export class AccountedInvoicePaymentAdapter implements ShadowPaymentAdapter {
       );
       if (identity.state !== 'ready')
         return { blocked: 'Payment invoice identity is not applied.' };
+      // Only the stable prefix is consulted, so a later credit cannot change a claimed plan.
+      const credit = creditOfInvoice(records, group.sourceInvoiceId);
+      if (credit)
+        return {
+          blocked:
+            'credited' in credit
+              ? `${PAYMENT_INVOICE_CREDITED}: The paid invoice was credited before this payment; credited invoices are settled manually.`
+              : `${PAYMENT_INVOICE_CREDITED}: An earlier credit record has a malformed invoice number.`,
+        };
       const creator = records.find((record) => record.id === identity.intentId);
       if (!creator || creator.state !== 'applied' || creator.operation !== 'createInvoice')
         return { blocked: 'Payment requires an applied strict invoice creator.' };

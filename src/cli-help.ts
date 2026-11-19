@@ -11,6 +11,7 @@ export const commandGroups: ReadonlyArray<readonly [string, readonly string[]]> 
       'invoice-accruals',
       'invoice-payments',
       'invoices',
+      'noxfinans',
       'offers',
       'orders',
       'pricelists',

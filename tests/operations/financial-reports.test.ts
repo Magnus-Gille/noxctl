@@ -1,246 +1,313 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import type { FortnoxTransport } from '../../src/fortnox-client.js';
+import { createFinancialReportOperations } from '../../src/operations/financial-reports.js';
 
-vi.mock('../../src/auth.js', () => ({
-  getValidToken: vi.fn().mockResolvedValue('mock-token'),
-}));
+// One SIE 4 export covers the whole report: #KONTO for names, #IB for opening
+// balances and #VER/#TRANS for the movements. Voucher A3 lies after the
+// balance-sheet cut-off used below, so it proves local date filtering too.
+const SAMPLE_SIE = [
+  '#FORMAT PC8',
+  '#SIETYP 4',
+  '#RAR 0 20260101 20261231',
+  '#RAR -1 20250101 20251231',
+  '#KONTO 1930 "Bank"',
+  '#KONTO 2081 "Aktiekapital"',
+  '#KONTO 2440 "Leverant\x94rsskulder"',
+  '#KONTO 3001 "F\x94rs\x84ljning"',
+  '#KONTO 5410 "F\x94rbrukningsinventarier"',
+  '#KONTO 6570 "Bankkostnader"',
+  '#IB -1 1930 999.00',
+  '#IB 0 1930 100000.00',
+  '#IB 0 2081 -25000.00',
+  '#IB 0 2440 -75000.00',
+  '#UB 0 1930 148500.00',
+  '#VER A 1 20260115 "Sale" 20260115',
+  '{',
+  '#TRANS 3001 {} -50000.00',
+  '#TRANS 1930 {} 50000.00',
+  '}',
+  '#VER A 2 20260320 "Purchases" 20260320',
+  '{',
+  '#BTRANS 5410 {} 10000.00',
+  '#TRANS 5410 {} 3000.00',
+  '#TRANS 6570 {} 500.00',
+  '#TRANS 1930 {} -3500.00',
+  '}',
+  '#VER A 3 20260701 "Later sale" 20260701',
+  '{',
+  '#TRANS 3001 {} -2000.00',
+  '#TRANS 1930 {} 2000.00',
+  '}',
+].join('\r\n');
 
-// Helper: mock fetch to return different responses for sequential calls
-function mockFetchSequence(responses: unknown[]) {
-  let callCount = 0;
-  global.fetch = vi.fn().mockImplementation(() => {
-    const response = responses[callCount] ?? { Accounts: [], Vouchers: [] };
-    callCount++;
-    return Promise.resolve({
-      ok: true,
-      status: 200,
-      text: () => Promise.resolve(JSON.stringify(response)),
-      json: () => Promise.resolve(response),
-    });
-  });
+const YEARS = {
+  FinancialYears: [
+    { Id: 3, FromDate: '2025-01-01', ToDate: '2025-12-31' },
+    { Id: 4, FromDate: '2026-01-01', ToDate: '2026-12-31' },
+  ],
+};
+
+function stubTransport(): FortnoxTransport {
+  return {
+    request: vi.fn().mockImplementation(async (endpoint: string) => {
+      if (endpoint === 'financialyears') return YEARS;
+      throw new Error(`unexpected request to ${endpoint}`);
+    }),
+    requestWithMetadata: vi.fn(),
+    requestPdf: vi.fn(),
+    requestPdfFromMutation: vi.fn(),
+    requestFile: vi.fn().mockResolvedValue({
+      buffer: Buffer.from(SAMPLE_SIE, 'latin1'),
+      contentType: 'application/octet-stream',
+    }),
+    fetchAllPages: vi.fn(),
+  } as FortnoxTransport;
 }
 
 describe('financial reports operations', () => {
   afterEach(() => {
-    vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe('getIncomeStatement', () => {
-    it('fetches voucher details with bounded concurrency', async () => {
-      let activeDetailRequests = 0;
-      let maxActiveDetailRequests = 0;
+    it('builds the report from a single SIE export without per-voucher requests', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
 
-      global.fetch = vi.fn().mockImplementation(async (input: string | URL | Request) => {
-        const url = String(input);
-        let response: unknown;
+      const report = await getIncomeStatement({ fromDate: '2026-01-01', toDate: '2026-11-18' });
 
-        if (url.includes('/3/accounts')) {
-          response = {
-            Accounts: [{ Number: 3001, Description: 'Försäljning', BalanceBroughtForward: 0 }],
-            MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-          };
-        } else if (url.includes('/3/vouchers?')) {
-          response = {
-            Vouchers: Array.from({ length: 6 }, (_, index) => ({
-              VoucherSeries: 'A',
-              VoucherNumber: index + 1,
-            })),
-            MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-          };
-        } else {
-          activeDetailRequests++;
-          maxActiveDetailRequests = Math.max(maxActiveDetailRequests, activeDetailRequests);
-          await new Promise((resolve) => setTimeout(resolve, 10));
-          activeDetailRequests--;
-          response = {
-            Voucher: { VoucherRows: [{ Account: 3001, Debit: 0, Credit: 100 }] },
-          };
-        }
-
-        return {
-          ok: true,
-          status: 200,
-          text: () => Promise.resolve(JSON.stringify(response)),
-          json: () => Promise.resolve(response),
-        };
+      expect(transport.requestFile).toHaveBeenCalledTimes(1);
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-01-01', todate: '2026-11-18', financialyear: 4 },
       });
-
-      const { getIncomeStatement } = await import('../../src/operations/financial-reports.js');
-      const report = await getIncomeStatement();
-
-      expect(maxActiveDetailRequests).toBeGreaterThan(1);
-      expect(maxActiveDetailRequests).toBeLessThanOrEqual(5);
-      expect(report.netResult).toBe(-600);
-    });
-
-    it('groups revenue and expense accounts correctly', async () => {
-      // Call 1: accounts page 1 (with meta saying 1 page)
-      // Call 2: vouchers list (returns 2 vouchers)
-      // Call 3-4: individual voucher fetches
-      mockFetchSequence([
-        {
-          Accounts: [
-            { Number: 3001, Description: 'Försäljning', BalanceBroughtForward: 0 },
-            { Number: 5410, Description: 'Förbrukningsinventarier', BalanceBroughtForward: 0 },
-            { Number: 6570, Description: 'Bankkostnader', BalanceBroughtForward: 0 },
-          ],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Vouchers: [
-            { VoucherSeries: 'A', VoucherNumber: 1 },
-            { VoucherSeries: 'A', VoucherNumber: 2 },
-          ],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Voucher: {
-            VoucherRows: [
-              { Account: 3001, Debit: 0, Credit: 50000 },
-              { Account: 1930, Debit: 50000, Credit: 0 },
-            ],
-          },
-        },
-        {
-          Voucher: {
-            VoucherRows: [
-              { Account: 5410, Debit: 3000, Credit: 0 },
-              { Account: 5410, Debit: 10000, Credit: 0, Removed: true },
-              { Account: 6570, Debit: 500, Credit: 0 },
-              { Account: 1930, Debit: 0, Credit: 3500 },
-            ],
-          },
-        },
-      ]);
-
-      const { getIncomeStatement } = await import('../../src/operations/financial-reports.js');
-      const report = await getIncomeStatement();
+      // Only the financial-year lookup goes through the JSON API.
+      expect(vi.mocked(transport.request).mock.calls.map((c) => c[0])).toEqual(['financialyears']);
 
       expect(report.type).toBe('income-statement');
-      expect(report.sections).toHaveLength(2); // Revenue + Other external costs
-      expect(report.sections[0].label).toContain('Nettoomsättning');
-      expect(report.sections[0].total).toBe(-50000); // Credit = negative in BAS
-      expect(report.sections[1].label).toContain('Övriga externa kostnader');
-      expect(report.sections[1].total).toBe(3500); // Debit = positive
-      expect(report.netResult).toBe(-46500); // Negative = profit in BAS
+      expect(report.period).toEqual({ from: '2026-01-01', to: '2026-11-18' });
+      expect(report.sections.map((s) => s.label)).toEqual([
+        expect.stringContaining('Nettoomsättning'),
+        expect.stringContaining('Övriga externa kostnader'),
+      ]);
+      expect(report.sections[0]!.total).toBe(-52000); // Credit = negative in BAS
+      expect(report.sections[0]!.lines[0]).toEqual({
+        account: 3001,
+        description: 'Försäljning',
+        balance: -52000,
+      });
+      expect(report.sections[1]!.total).toBe(3500); // #BTRANS (removed row) ignored
+      expect(report.netResult).toBe(-48500); // Negative = profit in BAS
     });
 
-    it('returns empty sections when no transactions', async () => {
-      mockFetchSequence([
-        {
-          Accounts: [{ Number: 3001, Description: 'Försäljning', BalanceBroughtForward: 0 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-      ]);
+    it('only counts vouchers inside the requested period', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
 
-      const { getIncomeStatement } = await import('../../src/operations/financial-reports.js');
-      const report = await getIncomeStatement();
+      const report = await getIncomeStatement({ fromDate: '2026-02-01', toDate: '2026-06-30' });
 
+      expect(report.sections).toHaveLength(1);
+      expect(report.netResult).toBe(3500);
+    });
+
+    it('uses the explicit financial year and its own boundaries', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.requestFile).mockResolvedValue({
+        buffer: Buffer.from('#FORMAT PC8\r\n#SIETYP 4\r\n', 'latin1'),
+        contentType: 'application/octet-stream',
+      });
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      const report = await getIncomeStatement({ financialYear: 3 });
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2025-01-01', todate: '2025-12-31', financialyear: 3 },
+      });
+      expect(report.financialYear).toBe(3);
       expect(report.sections).toHaveLength(0);
       expect(report.netResult).toBe(0);
     });
 
-    it('includes period when fromDate/toDate provided', async () => {
-      mockFetchSequence([
-        {
-          Accounts: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-      ]);
+    it("defaults to the financial year containing today's date", async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(2026, 7, 1, 12));
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
 
-      const { getIncomeStatement } = await import('../../src/operations/financial-reports.js');
-      const report = await getIncomeStatement({
-        fromDate: '2026-01-01',
-        toDate: '2026-03-31',
+      await getIncomeStatement();
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-01-01', todate: '2026-12-31', financialyear: 4 },
       });
-
-      expect(report.period).toEqual({ from: '2026-01-01', to: '2026-03-31' });
     });
 
-    it('excludes BBF when fromDate is set (period-scoped)', async () => {
-      mockFetchSequence([
-        {
-          Accounts: [{ Number: 3001, Description: 'Försäljning', BalanceBroughtForward: -10000 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Vouchers: [{ VoucherSeries: 'A', VoucherNumber: 1 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Voucher: {
-            VoucherRows: [{ Account: 3001, Debit: 0, Credit: 5000 }],
-          },
-        },
-      ]);
+    it('fails clearly when no financial year covers the date', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
 
-      const { getIncomeStatement } = await import('../../src/operations/financial-reports.js');
-      const report = await getIncomeStatement({ fromDate: '2026-02-01' });
+      await expect(getIncomeStatement({ fromDate: '2030-01-01' })).rejects.toThrow(
+        /No financial year found covering 2030-01-01/,
+      );
+      expect(transport.requestFile).not.toHaveBeenCalled();
+    });
 
-      // Should only include the 5000 movement, not the 10000 BBF
-      expect(report.sections[0].total).toBe(-5000);
+    it('fails clearly when the explicit financial year does not exist', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      await expect(getIncomeStatement({ financialYear: 99 })).rejects.toThrow(
+        /Financial year 99 not found/,
+      );
+      expect(transport.requestFile).not.toHaveBeenCalled();
+    });
+    it('accepts a calendar year when it is not a financial-year id', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      const report = await getIncomeStatement({ financialYear: 2025 });
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2025-01-01', todate: '2025-12-31', financialyear: 3 },
+      });
+      expect(report.financialYear).toBe(3);
+    });
+
+    it('prefers a financial-year id over a calendar year with the same number', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.request).mockImplementation(async (endpoint: string) => {
+        if (endpoint === 'financialyears') {
+          return {
+            FinancialYears: [
+              { Id: 2025, FromDate: '2026-01-01', ToDate: '2026-12-31' },
+              { Id: 7, FromDate: '2025-01-01', ToDate: '2025-12-31' },
+            ],
+          };
+        }
+        throw new Error(`unexpected request to ${endpoint}`);
+      });
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      await getIncomeStatement({ financialYear: 2025 });
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-01-01', todate: '2026-12-31', financialyear: 2025 },
+      });
+    });
+
+    it('names both id and calendar year when neither matches', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      await expect(getIncomeStatement({ financialYear: 2030 })).rejects.toThrow(
+        /Financial year 2030 not found.*calendar year/,
+      );
     });
   });
 
   describe('getBalanceSheet', () => {
-    it('separates assets from liabilities and equity', async () => {
-      mockFetchSequence([
-        {
-          Accounts: [
-            { Number: 1930, Description: 'Bank', BalanceBroughtForward: 100000 },
-            { Number: 2081, Description: 'Aktiekapital', BalanceBroughtForward: -25000 },
-            { Number: 2440, Description: 'Leverantörsskulder', BalanceBroughtForward: -5000 },
-          ],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Vouchers: [{ VoucherSeries: 'A', VoucherNumber: 1 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Voucher: {
-            VoucherRows: [
-              { Account: 1930, Debit: 10000, Credit: 0 },
-              { Account: 2440, Debit: 0, Credit: 10000 },
-            ],
-          },
-        },
-      ]);
+    it('adds opening balances to movements up to the as-of date', async () => {
+      const transport = stubTransport();
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
 
-      const { getBalanceSheet } = await import('../../src/operations/financial-reports.js');
-      const report = await getBalanceSheet();
+      const report = await getBalanceSheet({ toDate: '2026-03-31' });
 
+      expect(transport.requestFile).toHaveBeenCalledTimes(1);
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-01-01', todate: '2026-03-31', financialyear: 4 },
+      });
       expect(report.type).toBe('balance-sheet');
+      expect(report.asOfDate).toBe('2026-03-31');
       expect(report.assets).toHaveLength(1); // Cash and bank
-      expect(report.assets[0].total).toBe(110000); // 100000 + 10000
-      expect(report.liabilitiesAndEquity).toHaveLength(2); // Equity + Accounts payable
-      expect(report.totalAssets).toBe(110000);
+      // 100000 IB + 50000 - 3500; voucher A3 (July) and the prior-year IB excluded
+      expect(report.assets[0]!.lines[0]).toEqual({
+        account: 1930,
+        description: 'Bank',
+        balance: 146500,
+      });
+      expect(report.totalAssets).toBe(146500);
+      expect(report.liabilitiesAndEquity.map((s) => s.total)).toEqual([-25000, -75000, -46500]);
+      expect(report.liabilitiesAndEquity[1]!.lines[0]!.description).toBe('Leverantörsskulder');
     });
 
-    it('always includes BBF even with toDate', async () => {
-      mockFetchSequence([
-        {
-          Accounts: [{ Number: 1930, Description: 'Bank', BalanceBroughtForward: 50000 }],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
-        {
-          Vouchers: [],
-          MetaInformation: { '@TotalPages': 1, '@CurrentPage': 1 },
-        },
+    it('adds the unbooked result so the balance sheet balances', async () => {
+      const transport = stubTransport();
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
+
+      const report = await getBalanceSheet({ toDate: '2026-03-31' });
+
+      // Profit so far: 50000 sale - 3500 costs, credit-negative in BAS.
+      expect(report.calculatedResult).toBe(-46500);
+      const resultSection = report.liabilitiesAndEquity.at(-1)!;
+      expect(resultSection.label).toMatch(/^Beräknat resultat/);
+      expect(resultSection.total).toBe(-46500);
+      expect(report.totalLiabilitiesAndEquity).toBe(-146500);
+      expect(report.totalAssets + report.totalLiabilitiesAndEquity).toBe(0);
+    });
+
+    it('adds no result section when the result is already booked', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.requestFile).mockResolvedValue({
+        buffer: Buffer.from(
+          [
+            '#FORMAT PC8',
+            '#SIETYP 4',
+            '#RAR 0 20260101 20261231',
+            '#IB 0 1930 100.00',
+            '#IB 0 2081 -100.00',
+          ].join('\r\n'),
+          'latin1',
+        ),
+        contentType: 'application/octet-stream',
+      });
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
+
+      const report = await getBalanceSheet({ financialYear: 4 });
+
+      expect(report.calculatedResult).toBe(0);
+      expect(report.liabilitiesAndEquity.map((s) => s.label)).toEqual([
+        expect.stringContaining('Eget kapital'),
       ]);
+    });
 
-      const { getBalanceSheet } = await import('../../src/operations/financial-reports.js');
-      const report = await getBalanceSheet({ toDate: '2026-01-31' });
+    it('groups receivables by BAS: 15xx kundfordringar, 16xx övriga fordringar (NOX-226)', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.requestFile).mockResolvedValue({
+        buffer: Buffer.from(
+          [
+            '#FORMAT PC8',
+            '#SIETYP 4',
+            '#RAR 0 20260101 20261231',
+            '#KONTO 1510 "Kundfordringar"',
+            '#KONTO 1630 "Skattekonto"',
+            '#KONTO 1790 "F\x94rutbetalda kostnader"',
+            '#IB 0 1510 1000.00',
+            '#IB 0 1630 200.00',
+            '#IB 0 1790 30.00',
+          ].join('\r\n'),
+          'latin1',
+        ),
+        contentType: 'application/octet-stream',
+      });
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
 
-      expect(report.asOfDate).toBe('2026-01-31');
-      expect(report.totalAssets).toBe(50000); // BBF included
+      const report = await getBalanceSheet({ financialYear: 4 });
+      const sectionFor = (account: number) =>
+        report.assets.find((s) => s.lines.some((l) => l.account === account))!.label;
+
+      expect(sectionFor(1510)).toMatch(/^Kundfordringar/);
+      expect(sectionFor(1630)).toMatch(/^Övriga kortfristiga fordringar/);
+      expect(sectionFor(1790)).toMatch(/^Förutbetalda kostnader och upplupna intäkter/);
+    });
+
+    it('covers the whole financial year when no as-of date is given', async () => {
+      const transport = stubTransport();
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
+
+      const report = await getBalanceSheet({ financialYear: 4 });
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-01-01', todate: '2026-12-31', financialyear: 4 },
+      });
+      expect(report.totalAssets).toBe(148500);
     });
   });
 });

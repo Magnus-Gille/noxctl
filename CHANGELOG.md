@@ -15,6 +15,100 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   endpoints dissolve bundles and are announced for future deprecation. The
   default stays `classic` (no behaviour change) until v2 is verified against a
   live company. Any other value fails closed before a request is made.
+- **Synthetic credit-note adapter for the Accounted shadow target (NOX-212).**
+  `AccountedInvoiceCreditAdapter` maps the Fortnox `creditInvoice` operation onto
+  Accounted `POST /api/v1/companies/:companyId/invoices/:id/credit` as an issue-stage
+  step. It mirrors a full credit only when the original is already mirrored and issued,
+  requires an explicit positive `credited_invoice_id` readback, treats warnings, journal
+  entries and missing outcomes as unknown, and refuses partial credits. Its source model
+  follows the real export: the Fortnox credit response is the updated original, and the
+  credit note is read from separately captured evidence (`creditNoteLookup`). It is
+  unarmed: no client, credentials, credit-note capture or live dispatch. See
+  `docs/shadow-evaluation.md`.
+
+### Fixed
+
+- **`contracts create --dry-run` now previews the payload that is actually sent.** The
+  continuous-contract normalization (`Continuous: true` → `ContractLength: 0`, and a
+  clear error for a positive length) was applied to `invoices create` instead of
+  `contracts create` in the CLI. The live call was already normalized in the
+  operations layer; only the preview was wrong, and invoice payloads were needlessly
+  run through contract logic.
+- **The balance sheet balances mid-year.** `reports balance` / `fortnox_balance_sheet`
+  add a "Beräknat resultat" section with the result still sitting in the P&L accounts
+  (3000–8999), and expose it as `calculatedResult` in JSON. Before, the current year
+  was off by exactly the unbooked profit.
+- **`reports income|balance --year` accepts a calendar year.** `--year 2026` now
+  resolves to the financial year starting in 2026 when no financial-year id 2026
+  exists (ids still win). The reports' `financialYear` field reports the resolved id.
+- **Shadow mirroring: a credit no longer collides with the original invoice's identity
+  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated *original*
+  (its `DocumentNumber` is `n`); the new credit note is only named by that response's
+  `CreditInvoiceReference`. The real export (2026-10-27) agrees: the credited original
+  references the credit note, and the credit note carries `"0"`. A `creditInvoice` record
+  is therefore keyed by `CreditInvoiceReference` (never `"0"`), so it no longer makes the
+  original's identity a conflict.
+- **Shadow mirroring: payments on a credited invoice are refused (NOX-211).** In the real
+  export a credited cash-method original is settled by an offsetting positive payment, and
+  the credit note by a negative one. Mirroring the positive one would mark a credited invoice
+  as paid. The payment preflight and `AccountedInvoicePaymentAdapter` now refuse with
+  `PAYMENT_INVOICE_CREDITED` when an earlier `creditInvoice` record names the invoice (a
+  credit record with an unreadable invoice number blocks every payment), and
+  `measure:payments` counts such payments as `invoice-credited`.
+
+## [0.15.0] - 2026-11-18
+
+### Added
+
+- **Fortnox Finans / Fakturaservice (`/3/noxfinansinvoices`, GitHub #227).** Hand an
+  existing invoice to Fortnox Finans and manage it there, from the CLI
+  (`noxctl noxfinans get|send|pause|unpause|stop|take-fees|report-payment`, alias
+  `noxctl fakturaservice`) and MCP (`fortnox_get_noxfinans_invoice`,
+  `fortnox_send_noxfinans_invoice`, `fortnox_pause_noxfinans_invoice`,
+  `fortnox_unpause_noxfinans_invoice`, `fortnox_stop_noxfinans_invoice`,
+  `fortnox_take_fees_noxfinans_invoice`, `fortnox_report_noxfinans_invoice_payment`).
+  Every call except the status read is a mutation: it needs `--yes` / `confirm`,
+  supports `--dry-run` / `dryRun`, and send, stop, take-fees and report-payment are
+  annotated destructive. Invalid inputs (unknown service or send method, `NONE` with the
+  reminder service, malformed dates, a bookkept payment without method code and
+  account) fail before any request, also on a dry run. Needs the new opt-in scope
+  `noxfinansinvoice`: `noxctl init --with-noxfinans` (or `FORTNOX_WITH_NOXFINANS=1`);
+  `noxctl doctor` / `fortnox_status` probe it. `invoices get` now shows the
+  `NoxFinans` flag. The family moves from excluded to complete in the API coverage map.
+
+### Fixed
+
+- **Contract rows can carry a cost centre and project (#224).**
+  `fortnox_create_contract` and `fortnox_update_contract` now accept `CostCenter`
+  and `Project` on each `InvoiceRows` item and on the contract itself, so invoices
+  generated from a contract are booked on the right cost centre and project.
+- **`Continuous: true` now creates a continuous contract (#225).** Fortnox saved a
+  contract created with `Continuous: true` and no `ContractLength` as a one-month,
+  non-continuous contract. noxctl now sends `ContractLength: 0` with it (MCP tools,
+  CLI `contracts create`/`update` and the dry-run preview), and refuses
+  `Continuous: true` combined with a positive `ContractLength` before calling Fortnox.
+- **Contracts can be back-dated with `ContractDate` (#226).** `fortnox_create_contract`
+  and `fortnox_update_contract` accept `ContractDate` (YYYY-MM-DD). Without it Fortnox
+  uses today's date and rejects a `PeriodStart` in the current or an earlier period
+  ("Avtalsdatum måste vara tidigare än periodstart").
+- **`reports income` and `reports balance` no longer appear to hang (NOX-224).**
+  Both reports (and `fortnox_income_statement` / `fortnox_balance_sheet`) are now
+  built from one SIE 4 export, the same source as `general-ledger`, instead of
+  listing every voucher and fetching each one's rows separately. Under Fortnox's
+  rate limit that walk took minutes for a normal year with no output. The
+  financial year is resolved explicitly (from `--year`, else the year covering
+  `--from`/`--to`, else today), and a date outside every financial year now fails
+  with a clear error. Amounts are summed in öre to avoid floating-point drift.
+- **`accounts list --search` searches the whole chart of accounts (NOX-225).**
+  Fortnox has no server-side account search, so the filter ran on the first page
+  of 100 accounts only and `--search 1930` found nothing unless `--all` was given.
+  A search now always fetches every page before filtering (CLI and
+  `fortnox_list_accounts`), and the reported total is the number of matches.
+- **Balance sheet groups follow the BAS account classes (NOX-226).** 15xx is now
+  Kundfordringar and 16xx Övriga kortfristiga fordringar, so 1630 Skattekonto no
+  longer appears under Kundfordringar. The other asset groups are corrected too:
+  10xx immateriella, 11–12xx materiella, 13xx finansiella anläggningstillgångar,
+  14xx varulager and 17xx förutbetalda kostnader och upplupna intäkter.
 
 ## [0.14.0] - 2026-11-14
 
@@ -528,6 +622,7 @@ supplier-invoices file <fileId>` and `fortnox_get_supplier_invoice_file`
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.15.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.11.0...v0.12.0

@@ -84,6 +84,10 @@ describe('classifyTool', () => {
       'fortnox_finish_contract',
       'fortnox_reset_scheduletime_day',
       'fortnox_send_invoice', // overwrites stored EmailSubject/EmailBody/EmailAddressBCC before sending
+      'fortnox_send_noxfinans_invoice', // distributes the invoice via Fortnox Finans, starts reminders, is charged
+      'fortnox_stop_noxfinans_invoice', // removes the invoice from the Fortnox Finans process for good
+      'fortnox_take_fees_noxfinans_invoice', // the company pays the invoice's added fees instead of the customer
+      'fortnox_report_noxfinans_invoice_payment', // bookkeeps a payment and deducts it in Fortnox Finans
     ]) {
       expect(classifyTool(name, ['confirm', 'dryRun']).annotations.destructiveHint, name).toBe(
         true,

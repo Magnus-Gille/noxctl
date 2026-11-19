@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import { normalizeContractPayload } from '../operations/contracts.js';
 import { contractListColumns, contractDetailColumns, invoiceDetailColumns } from '../views.js';
 import {
   detailResponse,
@@ -18,8 +19,18 @@ const invoiceRowSchema = z
     AccountNumber: z.number().optional().describe('Bokföringskonto'),
     VAT: z.number().optional().describe('Momssats (%)'),
     Discount: z.number().optional().describe('Rabatt'),
+    CostCenter: z.string().nullable().optional().describe('Kostnadsställe för raden'),
+    Project: z.string().nullable().optional().describe('Projekt för raden'),
   })
   .strict();
+
+const contractDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Ange datum som YYYY-MM-DD')
+  .optional()
+  .describe(
+    'Avtalsdatum (YYYY-MM-DD). Måste vara före PeriodStart; sätt ett tidigare datum för att låta avtalet börja i innevarande eller en tidigare period. Utelämnat sätter Fortnox dagens datum.',
+  );
 
 export function registerContractTools(
   server: McpServer,
@@ -85,13 +96,22 @@ export function registerContractTools(
         .optional()
         .describe('Faktureringsintervall i månader (1, 3, 6, 12)'),
       ContractLength: z.number().optional().describe('Avtalslängd i månader'),
-      Continuous: z.boolean().optional().describe('Löpande avtal (utan slutdatum)'),
+      Continuous: z
+        .boolean()
+        .optional()
+        .describe(
+          'Löpande avtal (utan slutdatum). Utan ContractLength skickas ContractLength 0 automatiskt; ett positivt ContractLength med Continuous: true avvisas.',
+        ),
+      ContractDate: contractDateSchema,
+      CostCenter: z.string().nullable().optional().describe('Kostnadsställe för hela avtalet'),
+      Project: z.string().nullable().optional().describe('Projekt för hela avtalet'),
       Comments: z.string().optional().describe('Kommentar'),
       confirm: z.boolean().optional().describe('Bekräfta att avtalet ska skapas'),
       dryRun: z.boolean().optional().describe('Visa vad som skulle skickas utan att skapa avtalet'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ confirm, dryRun, includeRaw, ...params }) => {
+    async ({ confirm, dryRun, includeRaw, ...input }) => {
+      const params = normalizeContractPayload(input) as typeof input;
       if (dryRun) {
         return dryRunResponse(`create contract for customer ${params.CustomerNumber}`, {
           Contract: params,
@@ -120,7 +140,15 @@ export function registerContractTools(
         .optional()
         .describe('Faktureringsintervall i månader (1, 3, 6, 12)'),
       ContractLength: z.number().optional().describe('Avtalslängd i månader'),
-      Continuous: z.boolean().optional().describe('Löpande avtal (utan slutdatum)'),
+      Continuous: z
+        .boolean()
+        .optional()
+        .describe(
+          'Löpande avtal (utan slutdatum). Utan ContractLength skickas ContractLength 0 automatiskt; ett positivt ContractLength med Continuous: true avvisas.',
+        ),
+      ContractDate: contractDateSchema,
+      CostCenter: z.string().nullable().optional().describe('Kostnadsställe för hela avtalet'),
+      Project: z.string().nullable().optional().describe('Projekt för hela avtalet'),
       Comments: z.string().optional().describe('Kommentar'),
       confirm: z.boolean().optional().describe('Bekräfta att avtalet ska uppdateras'),
       dryRun: z
@@ -129,7 +157,8 @@ export function registerContractTools(
         .describe('Visa vad som skulle skickas utan att uppdatera avtalet'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
-    async ({ documentNumber, confirm, dryRun, includeRaw, ...fields }) => {
+    async ({ documentNumber, confirm, dryRun, includeRaw, ...input }) => {
+      const fields = normalizeContractPayload(input) as typeof input;
       if (dryRun) {
         return dryRunResponse(`update contract ${documentNumber}`, { Contract: fields });
       }

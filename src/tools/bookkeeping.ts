@@ -280,7 +280,10 @@ export function registerBookkeepingTools(
     'Visa kontoplan i Fortnox. Returnerar: Number, Description, SRU.',
     {
       financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
-      search: z.string().optional().describe('Sök på kontonamn'),
+      search: z
+        .string()
+        .optional()
+        .describe('Sök på kontonamn eller kontonummer (söker i hela kontoplanen)'),
       all: z.boolean().optional().describe('Hämta alla sidor (ignorerar page/limit)'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },

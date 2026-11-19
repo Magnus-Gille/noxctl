@@ -553,6 +553,25 @@
       "stateHash": "ceb1f9fb7c81901aa835d00cb946859f7644b58bc11274806bb079f12c59ae80"
     },
     {
+      "id": "noxfinans-invoice-report-payment",
+      "declaredPropertyCount": 10,
+      "specificationPropertyCount": 6,
+      "missingPropertyCount": 0,
+      "checkedNodeCount": 7,
+      "issuesByDimension": {
+        "field": 0,
+        "nesting": 0,
+        "requiredness": 2,
+        "type": 0,
+        "enum": 0,
+        "nullability": 0,
+        "constraint": 6,
+        "strictness": 0
+      },
+      "resultClass": "tracked-gap",
+      "stateHash": "0183cce0f9a16d644bcb6a8e8b99b7e89bcb9d0c28a30a3aa7274906d5a9c453"
+    },
+    {
       "id": "offer-create",
       "declaredPropertyCount": 11,
       "specificationPropertyCount": 45,

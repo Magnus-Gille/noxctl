@@ -25,7 +25,9 @@ export function createAccountOperations(transport: FortnoxTransport) {
 
     let data: AccountsResponse;
 
-    if (params.all) {
+    // Fortnox has no server-side account search, so a search must filter the
+    // whole chart of accounts; filtering one page silently misses matches.
+    if (params.all || params.search) {
       const { items, totalResources } = await transport.fetchAllPages<Record<string, unknown>>(
         'accounts',
         'Accounts',
@@ -50,6 +52,11 @@ export function createAccountOperations(transport: FortnoxTransport) {
             .toLowerCase()
             .includes(term),
       );
+      data.MetaInformation = {
+        '@TotalResources': data.Accounts.length,
+        '@TotalPages': 1,
+        '@CurrentPage': 1,
+      };
     }
 
     return data;

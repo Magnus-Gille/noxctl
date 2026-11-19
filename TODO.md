@@ -65,16 +65,15 @@ families and operations.
     the drift workflow reports a genuinely transactional bank path. See issue #13.
 15. ~~File attachments (underlag) — upload receipts, attach to vouchers~~ ✅ Done (#37) — `noxctl vouchers attach`; live use needs the **archive** scope
 16. Live mutation test coverage — only read paths tested live
-17. Evaluate moving `fortnox_income_statement` and `fortnox_balance_sheet`
-    onto the SIE export (`src/sie.ts`, added for `fortnox_general_ledger`) to
-    avoid their per-voucher detail requests. `fortnox_tax_report` does not
-    perform that detail walk (see `src/operations/tax.ts`) and needs a separate
-    assessment of whether SIE would help. Keep SRU-based report grouping as a
-    separate design task:
-    mappings can require multiple codes and sign-dependent handling, while
-    the current SIE parser retains only one SRU code per account. Verify the
-    reported `fortnox_income_statement` table/`includeRaw` `netResult` sign
-    discrepancy separately before changing its report contract.
+17. ~~Move `fortnox_income_statement` and `fortnox_balance_sheet` onto the SIE
+    export~~ ✅ Done (NOX-224) — both reports now read one SIE 4 export instead
+    of walking every voucher. Still open: `fortnox_tax_report` (see
+    `src/operations/tax.ts`) needs a separate assessment of whether SIE would
+    help; SRU-based report grouping stays a separate design task (mappings can
+    require multiple codes and sign-dependent handling, while the current SIE
+    parser retains only one SRU code per account); and the reported
+    `fortnox_income_statement` table/`includeRaw` `netResult` sign discrepancy
+    should be verified separately before changing its report contract.
 
 ## Adding a New Resource
 
