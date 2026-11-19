@@ -1,3 +1,4 @@
+import { documentResource } from '../document-api-version.js';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
@@ -31,7 +32,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
 
     if (params.all) {
       const { items, totalResources } = await transport.fetchAllPages<Record<string, unknown>>(
-        'offers',
+        documentResource('offers'),
         'Offers',
         queryParams,
       );
@@ -41,20 +42,20 @@ export function createOfferOperations(transport: FortnoxTransport) {
       };
     }
 
-    return transport.request<OffersResponse>('offers', {
+    return transport.request<OffersResponse>(documentResource('offers'), {
       params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
     });
   }
 
   async function getOffer(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<OfferResponse>(
-      `offers/${documentSegment(documentNumber)}`,
+      `${documentResource('offers')}/${documentSegment(documentNumber)}`,
     );
     return data.Offer;
   }
 
   async function createOffer(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const data = await transport.request<OfferResponse>('offers', {
+    const data = await transport.request<OfferResponse>(documentResource('offers'), {
       method: 'POST',
       body: { Offer: params },
     });
@@ -67,7 +68,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { documentNumber: _, ...body } = fields;
     const data = await transport.request<OfferResponse>(
-      `offers/${documentSegment(documentNumber)}`,
+      `${documentResource('offers')}/${documentSegment(documentNumber)}`,
       {
         method: 'PUT',
         body: { Offer: body },
@@ -78,7 +79,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
 
   async function createInvoiceFromOffer(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<{ Invoice: Record<string, unknown> }>(
-      `offers/${documentSegment(documentNumber)}/createinvoice`,
+      `${documentResource('offers')}/${documentSegment(documentNumber)}/createinvoice`,
       { method: 'PUT' },
     );
     return data.Invoice;
@@ -86,7 +87,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
 
   async function createOrderFromOffer(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<{ Order: Record<string, unknown> }>(
-      `offers/${documentSegment(documentNumber)}/createorder`,
+      `${documentResource('offers')}/${documentSegment(documentNumber)}/createorder`,
       { method: 'PUT' },
     );
     return data.Order;
@@ -97,7 +98,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
     action: 'cancel' | 'externalprint',
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<OfferResponse>(
-      `offers/${documentSegment(documentNumber)}/${action}`,
+      `${documentResource('offers')}/${documentSegment(documentNumber)}/${action}`,
       { method: 'PUT' },
     );
     return data.Offer ?? {};
@@ -109,7 +110,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
 
   async function emailOffer(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<OfferResponse>(
-      `offers/${documentSegment(documentNumber)}/email`,
+      `${documentResource('offers')}/${documentSegment(documentNumber)}/email`,
       { mutation: true },
     );
     return data.Offer ?? {};
@@ -119,7 +120,7 @@ export function createOfferOperations(transport: FortnoxTransport) {
     documentNumber: string,
     mode: 'preview' | 'print' = 'preview',
   ): Promise<Buffer | undefined> {
-    const path = `offers/${documentSegment(documentNumber)}/${mode}`;
+    const path = `${documentResource('offers')}/${documentSegment(documentNumber)}/${mode}`;
     return mode === 'print' ? transport.requestPdfFromMutation(path) : transport.requestPdf(path);
   }
 

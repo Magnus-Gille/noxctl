@@ -1,3 +1,4 @@
+import { documentResource } from '../document-api-version.js';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment } from '../identifiers.js';
 
@@ -31,7 +32,7 @@ export function createOrderOperations(transport: FortnoxTransport) {
 
     if (params.all) {
       const { items, totalResources } = await transport.fetchAllPages<Record<string, unknown>>(
-        'orders',
+        documentResource('orders'),
         'Orders',
         queryParams,
       );
@@ -41,20 +42,20 @@ export function createOrderOperations(transport: FortnoxTransport) {
       };
     }
 
-    return transport.request<OrdersResponse>('orders', {
+    return transport.request<OrdersResponse>(documentResource('orders'), {
       params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
     });
   }
 
   async function getOrder(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<OrderResponse>(
-      `orders/${documentSegment(documentNumber)}`,
+      `${documentResource('orders')}/${documentSegment(documentNumber)}`,
     );
     return data.Order;
   }
 
   async function createOrder(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const data = await transport.request<OrderResponse>('orders', {
+    const data = await transport.request<OrderResponse>(documentResource('orders'), {
       method: 'POST',
       body: { Order: params },
     });
@@ -67,7 +68,7 @@ export function createOrderOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { documentNumber: _, ...body } = fields;
     const data = await transport.request<OrderResponse>(
-      `orders/${documentSegment(documentNumber)}`,
+      `${documentResource('orders')}/${documentSegment(documentNumber)}`,
       {
         method: 'PUT',
         body: { Order: body },
@@ -78,7 +79,7 @@ export function createOrderOperations(transport: FortnoxTransport) {
 
   async function createInvoiceFromOrder(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<{ Invoice: Record<string, unknown> }>(
-      `orders/${documentSegment(documentNumber)}/createinvoice`,
+      `${documentResource('orders')}/${documentSegment(documentNumber)}/createinvoice`,
       { method: 'PUT' },
     );
     return data.Invoice;
@@ -89,7 +90,7 @@ export function createOrderOperations(transport: FortnoxTransport) {
     action: 'cancel' | 'externalprint',
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<OrderResponse>(
-      `orders/${documentSegment(documentNumber)}/${action}`,
+      `${documentResource('orders')}/${documentSegment(documentNumber)}/${action}`,
       { method: 'PUT' },
     );
     return data.Order ?? {};
@@ -101,7 +102,7 @@ export function createOrderOperations(transport: FortnoxTransport) {
 
   async function emailOrder(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<OrderResponse>(
-      `orders/${documentSegment(documentNumber)}/email`,
+      `${documentResource('orders')}/${documentSegment(documentNumber)}/email`,
       { mutation: true },
     );
     return data.Order ?? {};
@@ -111,7 +112,7 @@ export function createOrderOperations(transport: FortnoxTransport) {
     documentNumber: string,
     mode: 'preview' | 'print' = 'preview',
   ): Promise<Buffer | undefined> {
-    const path = `orders/${documentSegment(documentNumber)}/${mode}`;
+    const path = `${documentResource('orders')}/${documentSegment(documentNumber)}/${mode}`;
     return mode === 'print' ? transport.requestPdfFromMutation(path) : transport.requestPdf(path);
   }
 
