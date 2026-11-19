@@ -38,6 +38,10 @@ export function registerStatusTools(server: McpServer): void {
       }
       const creds = inspection.credentials!;
       pass('Credentials', 'found');
+      {
+        const { effectiveScopes, optInSummary } = await import('../auth.js');
+        pass('Opt-in scopes', optInSummary(effectiveScopes(creds), inspection.profile));
+      }
 
       // 3. Client ID
       if (creds.client_id) {

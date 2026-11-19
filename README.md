@@ -167,13 +167,15 @@ So you control the credentials, the scopes, and which company is connected end t
      authorize with `noxctl init --with-archive` (or `FORTNOX_WITH_ARCHIVE=1`). Only
      needed for `noxctl invoices attach` — voucher and supplier-invoice attachments
      use the `inbox`/`connectfile` scopes instead and don't need it.
-   - **Fortnox Finans / Fakturaservice.** Enable **Invoice Noxfinans** on the app and
+   - **Fortnox Finans / Fakturaservice.** Enable **Faktura (Nox Finans)** (English portal: **Invoice Noxfinans**) on the app and
      activate Fortnox Finans on the company, then authorize with
      `noxctl init --with-noxfinans` (or `FORTNOX_WITH_NOXFINANS=1`). Only needed for
      `noxctl noxfinans`.
 
    All of these can be combined. The granted scope set is remembered per profile, so
-   token refreshes keep working.
+   token refreshes keep working. Re-running `noxctl init` replaces it with exactly what
+   that run's flags request; `noxctl doctor` lists the opt-ins a profile has and the
+   `init` line that keeps them.
 
 5. Save the integration
 

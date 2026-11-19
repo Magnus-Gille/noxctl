@@ -159,6 +159,48 @@ describe('financial reports operations', () => {
       );
       expect(transport.requestFile).not.toHaveBeenCalled();
     });
+    it('accepts a calendar year when it is not a financial-year id', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      const report = await getIncomeStatement({ financialYear: 2025 });
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2025-01-01', todate: '2025-12-31', financialyear: 3 },
+      });
+      expect(report.financialYear).toBe(3);
+    });
+
+    it('prefers a financial-year id over a calendar year with the same number', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.request).mockImplementation(async (endpoint: string) => {
+        if (endpoint === 'financialyears') {
+          return {
+            FinancialYears: [
+              { Id: 2025, FromDate: '2026-01-01', ToDate: '2026-12-31' },
+              { Id: 7, FromDate: '2025-01-01', ToDate: '2025-12-31' },
+            ],
+          };
+        }
+        throw new Error(`unexpected request to ${endpoint}`);
+      });
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      await getIncomeStatement({ financialYear: 2025 });
+
+      expect(transport.requestFile).toHaveBeenCalledWith('sie/4', {
+        params: { fromdate: '2026-01-01', todate: '2026-12-31', financialyear: 2025 },
+      });
+    });
+
+    it('names both id and calendar year when neither matches', async () => {
+      const transport = stubTransport();
+      const { getIncomeStatement } = createFinancialReportOperations(transport);
+
+      await expect(getIncomeStatement({ financialYear: 2030 })).rejects.toThrow(
+        /Financial year 2030 not found.*calendar year/,
+      );
+    });
   });
 
   describe('getBalanceSheet', () => {
@@ -182,8 +224,48 @@ describe('financial reports operations', () => {
         balance: 146500,
       });
       expect(report.totalAssets).toBe(146500);
-      expect(report.liabilitiesAndEquity.map((s) => s.total)).toEqual([-25000, -75000]);
+      expect(report.liabilitiesAndEquity.map((s) => s.total)).toEqual([-25000, -75000, -46500]);
       expect(report.liabilitiesAndEquity[1]!.lines[0]!.description).toBe('Leverantörsskulder');
+    });
+
+    it('adds the unbooked result so the balance sheet balances', async () => {
+      const transport = stubTransport();
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
+
+      const report = await getBalanceSheet({ toDate: '2026-03-31' });
+
+      // Profit so far: 50000 sale - 3500 costs, credit-negative in BAS.
+      expect(report.calculatedResult).toBe(-46500);
+      const resultSection = report.liabilitiesAndEquity.at(-1)!;
+      expect(resultSection.label).toMatch(/^Beräknat resultat/);
+      expect(resultSection.total).toBe(-46500);
+      expect(report.totalLiabilitiesAndEquity).toBe(-146500);
+      expect(report.totalAssets + report.totalLiabilitiesAndEquity).toBe(0);
+    });
+
+    it('adds no result section when the result is already booked', async () => {
+      const transport = stubTransport();
+      vi.mocked(transport.requestFile).mockResolvedValue({
+        buffer: Buffer.from(
+          [
+            '#FORMAT PC8',
+            '#SIETYP 4',
+            '#RAR 0 20260101 20261231',
+            '#IB 0 1930 100.00',
+            '#IB 0 2081 -100.00',
+          ].join('\r\n'),
+          'latin1',
+        ),
+        contentType: 'application/octet-stream',
+      });
+      const { getBalanceSheet } = createFinancialReportOperations(transport);
+
+      const report = await getBalanceSheet({ financialYear: 4 });
+
+      expect(report.calculatedResult).toBe(0);
+      expect(report.liabilitiesAndEquity.map((s) => s.label)).toEqual([
+        expect.stringContaining('Eget kapital'),
+      ]);
     });
 
     it('groups receivables by BAS: 15xx kundfordringar, 16xx övriga fordringar (NOX-226)', async () => {
