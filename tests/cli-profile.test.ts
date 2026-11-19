@@ -453,3 +453,41 @@ describe('invoices send help', () => {
     expect(res.stdout).toMatch(/profile invoice-bcc/);
   });
 });
+
+// NOX-231: `init` replaces the scope set with exactly what its flags request,
+// so doctor and init show the granted opt-ins and the line that keeps them.
+describe('opt-in scope reporting', () => {
+  async function envWithScopes(scopes: string): Promise<NodeJS.ProcessEnv> {
+    const env = await mockCredentialEnv('available');
+    const blob = JSON.parse(env.NOXCTL_TEST_CREDENTIAL_BLOB!) as Record<string, unknown>;
+    blob.scopes = scopes;
+    // Unreachable token endpoint: doctor must report opt-ins before any network step.
+    env.NOXCTL_TEST_CREDENTIAL_BLOB = JSON.stringify(blob);
+    return env;
+  }
+
+  it.skipIf(process.platform === 'win32')(
+    'doctor lists granted opt-in scopes and the init line that keeps them',
+    async () => {
+      const res = run(
+        ['--output', 'table', 'doctor'],
+        await envWithScopes('article customer invoice offer order noxfinansinvoice'),
+      );
+      expect(res.stdout).toContain('Opt-in scopes — orders (offer, order), noxfinans');
+      expect(res.stdout).toContain('noxctl init --with-orders --with-noxfinans');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'init with existing credentials prints the re-run line with current flags',
+    async () => {
+      const res = run(
+        ['--output', 'table', 'init', '--with-archive'],
+        await envWithScopes('article customer invoice salary'),
+      );
+      expect(res.stdout).toContain('Existing credentials found.');
+      expect(res.stdout).toContain('Opt-in scopes on this profile: salary');
+      expect(res.stdout).toContain('noxctl init --with-salary --with-archive');
+    },
+  );
+});

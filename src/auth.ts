@@ -80,10 +80,75 @@ export const ARCHIVE_SCOPE = 'archive';
 
 // Fortnox Finans / Fakturaservice (`/3/noxfinansinvoices`). Opt-in like the
 // others: the scope only authorizes on apps with the "Invoice Noxfinans"
-// permission enabled, and the endpoints only work for companies with Fortnox
+// permission enabled (Swedish portal: "Faktura (Nox Finans)"), and the endpoints only work for companies with Fortnox
 // Finans activated. `noxctl init --with-noxfinans` (or FORTNOX_WITH_NOXFINANS=1)
 // appends it.
 export const NOXFINANS_SCOPE = 'noxfinansinvoice';
+
+export interface OptInScopeGroup {
+  /** Short name used in doctor output. */
+  name: string;
+  /** The `noxctl init` flag that requests this group. */
+  flag: string;
+  /** Scopes the flag adds; the group counts as granted only if all are present. */
+  scopes: string[];
+  /** Permission name(s) in the Fortnox developer portal (Swedish / English). */
+  portal: string;
+}
+
+// Opt-in scope groups, in the order `noxctl init` documents its flags. `init`
+// replaces the stored scope set with exactly what the flags request, so doctor
+// and init use this table to show what a profile has and how to keep it (NOX-231).
+export const OPT_IN_SCOPE_GROUPS: readonly OptInScopeGroup[] = [
+  {
+    name: 'salary',
+    flag: '--with-salary',
+    scopes: [SALARY_SCOPE],
+    portal: '"Lön" (Salary)',
+  },
+  {
+    name: 'orders',
+    flag: '--with-orders',
+    scopes: ORDER_SCOPES.split(' '),
+    portal: '"Offert" and "Order" (Offer, Order)',
+  },
+  {
+    name: 'archive',
+    flag: '--with-archive',
+    scopes: [ARCHIVE_SCOPE],
+    portal: '"Arkivplats" (Archive)',
+  },
+  {
+    name: 'noxfinans',
+    flag: '--with-noxfinans',
+    scopes: [NOXFINANS_SCOPE],
+    portal: '"Faktura (Nox Finans)" (Invoice Noxfinans)',
+  },
+];
+
+/** Opt-in groups fully present in a space-separated scope string. */
+export function grantedOptIns(scopes: string): OptInScopeGroup[] {
+  const granted = new Set(scopes.split(/\s+/).filter(Boolean));
+  return OPT_IN_SCOPE_GROUPS.filter((g) => g.scopes.every((s) => granted.has(s)));
+}
+
+/** The `noxctl init` line that re-requests exactly the opt-ins in `scopes`. */
+export function initRerunCommand(scopes: string, profile?: string): string {
+  const parts = ['noxctl init'];
+  if (profile && profile.toLowerCase() !== 'default') parts.push(`--profile ${profile}`);
+  for (const g of grantedOptIns(scopes)) parts.push(g.flag);
+  return parts.join(' ');
+}
+
+/** One-line summary of granted opt-in scopes for doctor / fortnox_status. */
+export function optInSummary(scopes: string, profile?: string): string {
+  const granted = grantedOptIns(scopes);
+  if (granted.length === 0) {
+    return `none (add with \`noxctl init\` plus ${OPT_IN_SCOPE_GROUPS.map((g) => g.flag).join(' / ')})`;
+  }
+  const list = granted.map((g) => `${g.name} (${g.scopes.join(', ')})`).join(', ');
+  return `${list}. \`noxctl init\` replaces the scope set, so keep these flags when re-running: \`${initRerunCommand(scopes, profile)}\``;
+}
 
 /**
  * Effective scope string for a profile: the granted set if recorded, else the
@@ -632,7 +697,7 @@ const SCOPE_PORTAL_LABELS: Record<string, string> = {
   inbox: 'Inbox',
   connectfile: 'File Connection',
   archive: 'Archive',
-  noxfinansinvoice: 'Invoice Noxfinans',
+  noxfinansinvoice: 'Invoice Noxfinans / Faktura (Nox Finans)',
   salary: 'Salary',
   offer: 'Offer',
   order: 'Order',

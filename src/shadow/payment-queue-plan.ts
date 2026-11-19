@@ -27,6 +27,30 @@ function numberId(value: unknown): string | undefined {
   if (typeof value === 'string' && /^[1-9]\d*$/.test(value)) return value;
   return undefined;
 }
+/** Refusal code for a payment on an invoice that the source has credited (NOX-211/NOX-212). */
+export const PAYMENT_INVOICE_CREDITED = 'PAYMENT_INVOICE_CREDITED';
+
+/**
+ * Finds a `creditInvoice` record that credits the given source invoice. In the real export a
+ * credited cash-method original is settled by an offsetting positive payment (and the credit note
+ * by a negative one); mirroring that payment would mark a credited invoice as paid in the target.
+ * A credit record whose invoice number cannot be read is reported as `malformed`, so it blocks
+ * every payment until it is resolved. Credit records that never reached the source are ignored.
+ */
+export function creditOfInvoice(
+  records: readonly ShadowRecord[],
+  sourceInvoiceId: string,
+): { credited: ShadowRecord } | { malformed: ShadowRecord } | undefined {
+  for (const record of records) {
+    if (record.operation !== 'creditInvoice' || record.state === 'source_cancelled') continue;
+    const id = Array.isArray(record.args) ? record.args[0] : undefined;
+    // creditInvoice takes the document number as a string; anything else is not trusted.
+    if (typeof id !== 'string' || numberId(id) !== id) return { malformed: record };
+    if (id === sourceInvoiceId) return { credited: record };
+  }
+  return undefined;
+}
+
 function object(value: unknown): value is Record<string, unknown> {
   return (
     value !== null &&

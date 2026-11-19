@@ -25,6 +25,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   reads from Fortnox; details that cannot be read are listed as unavailable.
   Interactive sends show the same preview before the confirmation prompt.
   This covers sends made through noxctl only, not the Fortnox web interface.
+- **Synthetic credit-note adapter for the Accounted shadow target (NOX-212).**
+  `AccountedInvoiceCreditAdapter` maps the Fortnox `creditInvoice` operation onto
+  Accounted `POST /api/v1/companies/:companyId/invoices/:id/credit` as an issue-stage
+  step. It mirrors a full credit only when the original is already mirrored and issued,
+  requires an explicit positive `credited_invoice_id` readback, treats warnings, journal
+  entries and missing outcomes as unknown, and refuses partial credits. Its source model
+  follows the real export: the Fortnox credit response is the updated original, and the
+  credit note is read from separately captured evidence (`creditNoteLookup`). It is
+  unarmed: no client, credentials, credit-note capture or live dispatch. See
+  `docs/shadow-evaluation.md`.
+
+### Fixed
+
+- **`contracts create --dry-run` now previews the payload that is actually sent.** The
+  continuous-contract normalization (`Continuous: true` → `ContractLength: 0`, and a
+  clear error for a positive length) was applied to `invoices create` instead of
+  `contracts create` in the CLI. The live call was already normalized in the
+  operations layer; only the preview was wrong, and invoice payloads were needlessly
+  run through contract logic.
+- **The balance sheet balances mid-year.** `reports balance` / `fortnox_balance_sheet`
+  add a "Beräknat resultat" section with the result still sitting in the P&L accounts
+  (3000–8999), and expose it as `calculatedResult` in JSON. Before, the current year
+  was off by exactly the unbooked profit.
+- **`reports income|balance --year` accepts a calendar year.** `--year 2026` now
+  resolves to the financial year starting in 2026 when no financial-year id 2026
+  exists (ids still win). The reports' `financialYear` field reports the resolved id.
+- **Shadow mirroring: a credit no longer collides with the original invoice's identity
+  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated *original*
+  (its `DocumentNumber` is `n`); the new credit note is only named by that response's
+  `CreditInvoiceReference`. The real export (2026-10-27) agrees: the credited original
+  references the credit note, and the credit note carries `"0"`. A `creditInvoice` record
+  is therefore keyed by `CreditInvoiceReference` (never `"0"`), so it no longer makes the
+  original's identity a conflict.
+- **Shadow mirroring: payments on a credited invoice are refused (NOX-211).** In the real
+  export a credited cash-method original is settled by an offsetting positive payment, and
+  the credit note by a negative one. Mirroring the positive one would mark a credited invoice
+  as paid. The payment preflight and `AccountedInvoicePaymentAdapter` now refuse with
+  `PAYMENT_INVOICE_CREDITED` when an earlier `creditInvoice` record names the invoice (a
+  credit record with an unreadable invoice number blocks every payment), and
+  `measure:payments` counts such payments as `invoice-credited`.
 
 ## [0.15.0] - 2026-11-18
 
