@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Opt-in Fortnox v2 document endpoints (NOX-219, NOX-220, NOX-221, NOX-222).**
+  Set `NOXCTL_FORTNOX_DOCUMENT_API=v2` to route every invoice, offer, order and
+  article call to `/3/invoices-v2`, `/3/offers-v2`, `/3/orders-v2` and
+  `/3/articles-v2`. Fortnox introduced these for bundle articles; the classic
+  endpoints dissolve bundles and are announced for future deprecation. The
+  default stays `classic` (no behaviour change) until v2 is verified against a
+  live company. Any other value fails closed before a request is made.
 - **Synthetic credit-note adapter for the Accounted shadow target (NOX-212).**
   `AccountedInvoiceCreditAdapter` maps the Fortnox `creditInvoice` operation onto
   Accounted `POST /api/v1/companies/:companyId/invoices/:id/credit` as an issue-stage
