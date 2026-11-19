@@ -93,6 +93,25 @@ describe('payment mapping measurement (NOX-211)', () => {
     expect(result).toEqual({ payments: 1, mapped: 1, refused: {} });
   });
 
+  it('counts payments on a credited original or on a credit note as invoice-credited', () => {
+    // Real export shape (2026-10-27): Credit is the string "true"/"false"; the ORIGINAL carries the
+    // credit note number in CreditInvoiceReference, the credit note itself carries "0".
+    const result = measurePaymentMapping({
+      InvoicePayments: [
+        payment(1, '10'),
+        payment(2, '11', { Amount: -125, AmountCurrency: -125 }),
+        payment(3, '12'),
+      ],
+      Invoices: [
+        invoice('10', { Credit: 'false', CreditInvoiceReference: '11' }),
+        invoice('11', { Credit: 'true', CreditInvoiceReference: '0', Total: -125 }),
+        invoice('12', { Credit: 'false', CreditInvoiceReference: '0' }),
+      ],
+      Vouchers: [voucher(1, '10'), voucher(2, '11'), voucher(3, '12')],
+    });
+    expect(result).toEqual({ payments: 3, mapped: 1, refused: { 'invoice-credited': 2 } });
+  });
+
   it('never reads a root array as any collection', () => {
     expect(measurePaymentMapping([])).toEqual({
       payments: 0,

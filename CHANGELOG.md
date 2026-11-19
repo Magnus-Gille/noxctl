@@ -21,6 +21,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **`reports income|balance --year` accepts a calendar year.** `--year 2026` now
   resolves to the financial year starting in 2026 when no financial-year id 2026
   exists (ids still win). The reports' `financialYear` field reports the resolved id.
+- **Shadow mirroring: a credit no longer collides with the original invoice's identity
+  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated *original*
+  (its `DocumentNumber` is `n`); the new credit note is only named by that response's
+  `CreditInvoiceReference`. The real export (2026-10-27) agrees: the credited original
+  references the credit note, and the credit note carries `"0"`. A `creditInvoice` record
+  is therefore keyed by `CreditInvoiceReference` (never `"0"`), so it no longer makes the
+  original's identity a conflict.
+- **Shadow mirroring: payments on a credited invoice are refused (NOX-211).** In the real
+  export a credited cash-method original is settled by an offsetting positive payment, and
+  the credit note by a negative one. Mirroring the positive one would mark a credited invoice
+  as paid. The payment preflight and `AccountedInvoicePaymentAdapter` now refuse with
+  `PAYMENT_INVOICE_CREDITED` when an earlier `creditInvoice` record names the invoice (a
+  credit record with an unreadable invoice number blocks every payment), and
+  `measure:payments` counts such payments as `invoice-credited`.
 
 ## [0.15.0] - 2026-11-18
 

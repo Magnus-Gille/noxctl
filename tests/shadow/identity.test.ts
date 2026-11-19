@@ -48,7 +48,14 @@ const fixtures: Fixture[] = [
     sourceId: 'S-001',
   },
   { kind: 'invoice', operation: 'createInvoice', sourceField: 'DocumentNumber', sourceId: 'I-001' },
-  { kind: 'invoice', operation: 'creditInvoice', sourceField: 'DocumentNumber', sourceId: 'I-002' },
+  // Fortnox PUT /invoices/{n}/credit answers with the updated ORIGINAL; the new credit note is the
+  // number in its CreditInvoiceReference (confirmed against the real export, 2026-11-19).
+  {
+    kind: 'invoice',
+    operation: 'creditInvoice',
+    sourceField: 'CreditInvoiceReference',
+    sourceId: 'I-002',
+  },
   {
     kind: 'invoice-payment',
     operation: 'createInvoicePayment',
@@ -348,6 +355,55 @@ describe('resolveShadowIdentity', () => {
       });
     },
   );
+
+  it('keys a credit by the credit note number, not the original that Fortnox returns', () => {
+    const original = makeRecord(
+      {
+        kind: 'invoice',
+        operation: 'createInvoice',
+        sourceField: 'DocumentNumber',
+        sourceId: '10',
+      },
+      { id: 'create-10' },
+    );
+    const credit = makeRecord(
+      {
+        kind: 'invoice',
+        operation: 'creditInvoice',
+        sourceField: 'DocumentNumber',
+        sourceId: '10',
+      },
+      {
+        id: 'credit-10',
+        args: ['10'],
+        targetId: '550e8400-e29b-41d4-a716-446655440001',
+        targetReceipt: { data: { id: '550e8400-e29b-41d4-a716-446655440001' } },
+        sourceResult: { DocumentNumber: '10', Credit: 'false', CreditInvoiceReference: '11' },
+      },
+    );
+    expect(resolveShadowIdentity([original, credit], binding, 'invoice', '10')).toMatchObject({
+      state: 'ready',
+      intentId: 'create-10',
+      targetId,
+    });
+    expect(resolveShadowIdentity([original, credit], binding, 'invoice', '11')).toMatchObject({
+      state: 'ready',
+      intentId: 'credit-10',
+    });
+  });
+
+  it('gives a credit whose response carries no credit note reference no identity', () => {
+    const credit = makeRecord(
+      {
+        kind: 'invoice',
+        operation: 'creditInvoice',
+        sourceField: 'CreditInvoiceReference',
+        sourceId: '0',
+      },
+      { args: ['10'] },
+    );
+    expect(resolveShadowIdentity([credit], binding, 'invoice', '0')).toEqual({ state: 'missing' });
+  });
 });
 
 describe('customer source address evidence', () => {

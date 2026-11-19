@@ -102,6 +102,24 @@ describe('invoice payment preflight (NOX-211)', () => {
     expect(check(h, pay({}))).toMatch(/already has payment record pay-1/);
   });
 
+  it('refuses a payment on an invoice that has a credit record', async () => {
+    const h = await withInvoice();
+    await h.host.queue.execute(
+      { id: 'credit-1', operation: 'creditInvoice', args: ['1'] },
+      async () => ({ DocumentNumber: '1', CreditInvoiceReference: '2', Credit: 'false' }),
+    );
+    expect(check(h, pay({}))).toMatch(/PAYMENT_INVOICE_CREDITED: Invoice 1 .*credit-1/);
+  });
+
+  it('blocks a new payment while a credit record names no usable invoice', async () => {
+    const h = await withInvoice();
+    await h.host.queue.execute(
+      { id: 'credit-x', operation: 'creditInvoice', args: [1] },
+      async () => ({}),
+    );
+    expect(check(h, pay({}))).toMatch(/credit-x has a malformed invoice number/);
+  });
+
   it('blocks when the receipt and the request name different invoices', async () => {
     const h = await withInvoice();
     await h.host.queue.execute(

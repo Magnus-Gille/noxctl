@@ -634,6 +634,40 @@ describe('synthetic-only Accounted invoice payment adapter queue integration', (
     }
   });
 
+  it('blocks a payment on an invoice that was credited before it, before any mark-paid request', async () => {
+    // Real export (2026-10-27): the credited original is settled by an offsetting positive payment
+    // and the credit note by a negative one. Mirroring the positive one would mark a credited
+    // invoice as paid in Accounted.
+    const root = mkdtempSync(join(tmpdir(), 'invoice-payment-credited-'));
+    const queue = await openShadowQueue(root, binding);
+    const transport = makeTransport();
+    try {
+      await seedIssuedInvoice(queue, transport.request);
+      await queue.execute(
+        { id: 'invoice-credit', operation: 'creditInvoice', args: ['10'] },
+        async () => invoiceSource({ Sent: true, CreditInvoiceReference: '11' }),
+      );
+      await seedPayment(queue);
+      const states: string[] = [];
+      for (let step = 0; step < 6; step++) {
+        const result = await queue.drainPaymentAware(
+          normalAdapter,
+          paymentAdapter(queue, transport.request),
+        );
+        states.push(result.state);
+        if (result.state === 'blocked' || result.intentIds.includes(bookkeepPaymentId)) break;
+      }
+      // The credit drains as an ordinary record first; the payment group then blocks.
+      expect(states).toEqual(['applied', 'deferred', 'blocked']);
+      expect(queue.get(bookkeepPaymentId)?.reason).toMatch(/PAYMENT_INVOICE_CREDITED/);
+      expect(transport.calls.filter((call) => call.path.includes('/mark-paid'))).toHaveLength(0);
+      expect(transport.commitCount).toBe(0);
+    } finally {
+      queue.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('refuses an accrual dry-run preview without issuing the committing POST', async () => {
     const root = mkdtempSync(join(tmpdir(), 'invoice-payment-accrual-preview-'));
     const queue = await openShadowQueue(root, binding);

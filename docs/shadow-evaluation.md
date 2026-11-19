@@ -457,6 +457,31 @@ The export must be a root object; a bare array is `export-shape-unsupported`. `m
 therefore an upper bound on source-side support only; it does not replace the queue-backed
 `AccountedInvoicePaymentAdapter.prepare` check and authorizes nothing.
 
+#### Result on the real export (2026-10-27), measured 2026-11-19
+
+Run on the owner's machine against the private export (`entity-details.json` and
+`voucher-details.json` assembled into the shape above); only counts left the machine.
+
+| Outcome | Payments | Proposed handling |
+|---|---:|---|
+| mapped (source-side upper bound) | 42 | mirror once the pilot wiring below is done |
+| `payment-not-booked` | 2 | accept: both are a second, unbooked full payment on an invoice that also has a booked one; the preflight refuses a second payment per invoice anyway |
+| `invoice-not-strict: rounding` | 2 | manual for now; `RoundOff` support is a separate decision |
+| `invoice-not-strict: accounting-method` | 1 | manual (accrual invoice, outside the strict cash lane) |
+| `invoice-credited` | 2 | manual: the offsetting payments of the one credit pair (see below) |
+
+Other facts from the same run (counts only): every payment is SEK, booked payments are 47 of
+49, none has write-offs, every paid invoice has 25 % VAT and no discount rows, and every
+payment amount equals its invoice total (no partial payments). All 233 captured vouchers carry
+`Year` (the financial-year id) and `VoucherSeries`.
+
+**Credited invoices.** The one credit pair is settled by two booked manual payments: a positive
+one on the original and a negative one on the credit note. Mirroring the positive one would
+mark a credited invoice as paid in Accounted, so the payment preflight and
+`AccountedInvoicePaymentAdapter` refuse a payment with `PAYMENT_INVOICE_CREDITED` when an
+earlier `creditInvoice` record names its invoice (the adapter looks only at records before the
+payment, so a claimed plan cannot change). The negative payment was already refused.
+
 ## Credit invoices (NOX-212): refused, API gap
 
 Credit invoices (`Credit` true, or a populated `CreditInvoiceReference`) are refused with
