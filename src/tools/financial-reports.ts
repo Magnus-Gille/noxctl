@@ -13,7 +13,12 @@ export function registerFinancialReportTools(
     'fortnox_income_statement',
     'Resultaträkning — visar intäkter, kostnader och resultat. Kan filtreras på period med fromDate/toDate.',
     {
-      financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
+      financialYear: z
+        .number()
+        .optional()
+        .describe(
+          'Räkenskapsår: Fortnox räkenskapsårs-id eller kalenderåret det börjar (t.ex. 2026). Default: nuvarande',
+        ),
       fromDate: z
         .string()
         .optional()
@@ -35,7 +40,12 @@ export function registerFinancialReportTools(
     'fortnox_balance_sheet',
     'Balansräkning — visar tillgångar, skulder och eget kapital. Kan filtreras med toDate för ställning per datum.',
     {
-      financialYear: z.number().optional().describe('Räkenskapsår (default: nuvarande)'),
+      financialYear: z
+        .number()
+        .optional()
+        .describe(
+          'Räkenskapsår: Fortnox räkenskapsårs-id eller kalenderåret det börjar (t.ex. 2026). Default: nuvarande',
+        ),
       toDate: z.string().optional().describe('Per datum (YYYY-MM-DD) — ställning vid detta datum'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
