@@ -399,7 +399,7 @@ program
   )
   .option(
     '--with-noxfinans',
-    'Also request the Fortnox Finans (noxfinansinvoice) scope — for `noxctl noxfinans`; requires Fortnox Finans activated and the "Invoice Noxfinans" permission on your Fortnox app',
+    'Also request the Fortnox Finans (noxfinansinvoice) scope — for `noxctl noxfinans`; requires Fortnox Finans activated and the "Faktura (Nox Finans)" permission (English portal: "Invoice Noxfinans") on your Fortnox app',
   )
   .action(
     async (initOpts: {
@@ -417,6 +417,9 @@ program
         ORDER_SCOPES,
         ARCHIVE_SCOPE,
         NOXFINANS_SCOPE,
+        effectiveScopes,
+        grantedOptIns,
+        initRerunCommand,
       } = await import('./auth.js');
       const { validateProfileName } = await import('./profile-name.js');
 
@@ -464,6 +467,27 @@ program
       const existing = inspection.credentials;
       if (existing) {
         console.log('Existing credentials found.');
+        {
+          // `init` replaces the scope set with exactly what this run's flags
+          // request, so show what the profile has and the line that keeps it
+          // (plus anything newly requested) before asking to re-run (NOX-231).
+          const current = effectiveScopes(existing);
+          const granted = grantedOptIns(current);
+          console.log(
+            `Opt-in scopes on this profile: ${
+              granted.length ? granted.map((g) => g.name).join(', ') : 'none'
+            }`,
+          );
+          const keep = initRerunCommand(`${current} ${scopes}`, targetProfile);
+          const dropped = granted.filter((g) => !grantedOptIns(scopes).includes(g));
+          if (dropped.length) {
+            console.log(
+              `This run would drop: ${dropped.map((g) => g.flag).join(' ')}. To keep them, run: ${keep}`,
+            );
+          } else {
+            console.log(`To keep your current opt-ins, re-run with: ${keep}`);
+          }
+        }
 
         if (process.stdin.isTTY && process.stdout.isTTY) {
           const rlExisting = createInterface({
@@ -1005,6 +1029,10 @@ program
     }
     const creds = inspection.credentials!;
     pass('Credentials', 'found');
+    {
+      const { effectiveScopes, optInSummary } = await import('./auth.js');
+      pass('Opt-in scopes', optInSummary(effectiveScopes(creds), resolvedProfileInfo.name));
+    }
     if (creds.company_name) {
       pass('Company (cached)', creds.company_name);
     }
