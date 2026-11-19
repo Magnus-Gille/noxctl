@@ -207,6 +207,166 @@ describe('invoice operations', () => {
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
       expect(calledUrl).toContain('invoices/1001/einvoice');
     });
+
+    function jsonOk(body: unknown) {
+      return {
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(body)),
+        json: () => Promise.resolve(body),
+      };
+    }
+
+    function calls() {
+      return (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map((c) => ({
+        url: c[0] as string,
+        method: ((c[1] as RequestInit | undefined)?.method ?? 'GET') as string,
+        body: (c[1] as RequestInit | undefined)?.body,
+      }));
+    }
+
+    it('applies the profile default BCC before an email send when the invoice has none', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonOk({
+            Invoice: { DocumentNumber: '1001', EmailInformation: { EmailAddressBCC: '' } },
+          }),
+        )
+        .mockResolvedValueOnce(jsonOk({ Invoice: { DocumentNumber: '1001' } }))
+        .mockResolvedValueOnce(jsonOk({ Invoice: { DocumentNumber: '1001', Sent: true } }));
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      await sendInvoice('1001', 'email', { defaultBcc: 'me@seller.example' });
+
+      const c = calls();
+      expect(c.map((x) => x.method)).toEqual(['GET', 'PUT', 'GET']);
+      expect(JSON.parse(c[1].body as string)).toEqual({
+        Invoice: { EmailInformation: { EmailAddressBCC: 'me@seller.example' } },
+      });
+      expect(c[2].url).toContain('invoices/1001/email');
+    });
+
+    it('does not overwrite a BCC already on the invoice with the profile default', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonOk({
+            Invoice: { DocumentNumber: '1001', EmailInformation: { EmailAddressBCC: 'x@y.se' } },
+          }),
+        )
+        .mockResolvedValueOnce(jsonOk({ Invoice: { DocumentNumber: '1001', Sent: true } }));
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      await sendInvoice('1001', 'email', { defaultBcc: 'me@seller.example' });
+
+      expect(calls().map((x) => x.method)).toEqual(['GET', 'GET']);
+      expect(calls()[1].url).toContain('invoices/1001/email');
+    });
+
+    it('clears the BCC on the invoice when noBcc is given', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce(
+          jsonOk({
+            Invoice: { DocumentNumber: '1001', EmailInformation: { EmailAddressBCC: 'x@y.se' } },
+          }),
+        )
+        .mockResolvedValueOnce(jsonOk({ Invoice: { DocumentNumber: '1001' } }))
+        .mockResolvedValueOnce(jsonOk({ Invoice: { DocumentNumber: '1001', Sent: true } }));
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      await sendInvoice('1001', 'email', { noBcc: true, defaultBcc: 'me@seller.example' });
+
+      const c = calls();
+      expect(JSON.parse(c[1].body as string)).toEqual({
+        Invoice: { EmailInformation: { EmailAddressBCC: '' } },
+      });
+    });
+
+    it('never retries the send call itself', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        headers: new Headers(),
+        text: () => Promise.resolve('{"message":"unavailable"}'),
+        json: () => Promise.resolve({ message: 'unavailable' }),
+      });
+      const { sendInvoice } = await import('../../src/operations/invoices.js');
+
+      await expect(sendInvoice('1001', 'email')).rejects.toThrow();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('previewInvoiceSend', () => {
+    function jsonOk(body: unknown) {
+      return {
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(body)),
+        json: () => Promise.resolve(body),
+      };
+    }
+
+    it('only reads from Fortnox and resolves the same fields the send would use', async () => {
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/customers/')) {
+          return Promise.resolve(
+            jsonOk({
+              Customer: { CustomerNumber: '25', DefaultDeliveryTypes: { Invoice: 'EMAIL' } },
+            }),
+          );
+        }
+        if (url.includes('attachments-v1')) {
+          return Promise.resolve(jsonOk([{ fileId: 'f1', includeOnSend: true }]));
+        }
+        return Promise.resolve(
+          jsonOk({
+            Invoice: {
+              DocumentNumber: '1001',
+              CustomerNumber: '25',
+              CustomerName: 'Kund AB',
+              EmailInformation: { EmailAddressTo: 'ap@kund.se', EmailAddressBCC: '' },
+            },
+          }),
+        );
+      });
+      const { previewInvoiceSend } = await import('../../src/operations/invoices.js');
+
+      const plan = await previewInvoiceSend('1001', 'email', { defaultBcc: 'me@seller.example' });
+
+      const methods = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') as string,
+      );
+      expect(methods.every((m) => m === 'GET')).toBe(true);
+      expect(plan.email?.to).toBe('ap@kund.se');
+      expect(plan.email?.bcc).toEqual({ value: 'me@seller.example', source: 'profile' });
+      expect(plan.attachments.files).toEqual([{ fileId: 'f1' }]);
+      expect(plan.customer.defaultDeliveryType).toBe('EMAIL');
+    });
+
+    it('reports a failed customer lookup as unavailable instead of failing the preview', async () => {
+      global.fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/customers/') || url.includes('attachments-v1')) {
+          return Promise.resolve({
+            ok: false,
+            status: 403,
+            text: () => Promise.resolve('{"message":"forbidden"}'),
+            json: () => Promise.resolve({ message: 'forbidden' }),
+          });
+        }
+        return Promise.resolve(
+          jsonOk({
+            Invoice: { DocumentNumber: '1001', CustomerNumber: '25', EmailInformation: {} },
+          }),
+        );
+      });
+      const { previewInvoiceSend } = await import('../../src/operations/invoices.js');
+
+      const plan = await previewInvoiceSend('1001', 'email', {});
+      expect(plan.unavailable.length).toBe(2);
+    });
   });
 
   describe('getInvoicePdf', () => {

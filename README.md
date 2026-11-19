@@ -431,19 +431,19 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Invoices
 
-| CLI                                                                                                               | MCP tool                           | Description                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `noxctl invoices list [--filter <status>] [--customer <number>]`                                                  | `fortnox_list_invoices`            | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked`                                                     |
-| `noxctl invoices get <docNumber>`                                                                                 | `fortnox_get_invoice`              | Get a single invoice                                                                                                                               |
-| `noxctl invoices preflight <docNumber>`                                                                           | `fortnox_preflight_invoice`        | Read-only e-invoice draft checks with explicit unknown/unsupported readiness ([details](docs/einvoice-readiness.md))                               |
-| `noxctl invoices create --customer <number> --input <file>`                                                       | `fortnox_create_invoice`           | Create an invoice (mutation)                                                                                                                       |
-| `noxctl invoices update <docNumber> --input <file>`                                                               | `fortnox_update_invoice`           | Update an invoice that has not been bookkeept (mutation)                                                                                           |
-| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>]` | `fortnox_send_invoice`             | Send via email (default), print, or e-invoice (mutation)                                                                                           |
-| `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]`                                                | `fortnox_invoice_pdf`              | Download the invoice PDF (via `/preview`, no side effect). `--mark-sent` also flags it as sent afterwards (mutation)                               |
-| `noxctl invoices bookkeep <docNumber>`                                                                            | `fortnox_bookkeep_invoice`         | Bookkeep an invoice (mutation)                                                                                                                     |
-| `noxctl invoices credit <docNumber>`                                                                              | `fortnox_credit_invoice`           | Credit an invoice (mutation)                                                                                                                       |
-| `noxctl invoices attach <docNumber> <file...> [--no-include-on-send]`                                             | `fortnox_attach_invoice_files`     | Upload receipt/underlag files and attach them to a customer invoice (mutation; needs the Fortnox **archive** scope — `noxctl init --with-archive`) |
-| `noxctl invoices attachments <docNumber>`                                                                         | `fortnox_list_invoice_attachments` | List files currently attached to a customer invoice                                                                                                |
+| CLI                                                                                                                         | MCP tool                           | Description                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `noxctl invoices list [--filter <status>] [--customer <number>]`                                                            | `fortnox_list_invoices`            | List/filter invoices. Filters: `cancelled`, `fullypaid`, `unpaid`, `unpaidoverdue`, `unbooked`                                                     |
+| `noxctl invoices get <docNumber>`                                                                                           | `fortnox_get_invoice`              | Get a single invoice                                                                                                                               |
+| `noxctl invoices preflight <docNumber>`                                                                                     | `fortnox_preflight_invoice`        | Read-only e-invoice draft checks with explicit unknown/unsupported readiness ([details](docs/einvoice-readiness.md))                               |
+| `noxctl invoices create --customer <number> --input <file>`                                                                 | `fortnox_create_invoice`           | Create an invoice (mutation)                                                                                                                       |
+| `noxctl invoices update <docNumber> --input <file>`                                                                         | `fortnox_update_invoice`           | Update an invoice that has not been bookkeept (mutation)                                                                                           |
+| `noxctl invoices send <docNumber> [--method email\|print\|einvoice] [--subject <s>] [--body <s>] [--bcc <email>\|--no-bcc]` | `fortnox_send_invoice`             | Send via email (default), print, or e-invoice (mutation). `--dry-run` previews customer, recipients, CC/BCC, subject, body, attachments and status |
+| `noxctl invoices pdf <docNumber> [--file <path>\|-] [--mark-sent]`                                                          | `fortnox_invoice_pdf`              | Download the invoice PDF (via `/preview`, no side effect). `--mark-sent` also flags it as sent afterwards (mutation)                               |
+| `noxctl invoices bookkeep <docNumber>`                                                                                      | `fortnox_bookkeep_invoice`         | Bookkeep an invoice (mutation)                                                                                                                     |
+| `noxctl invoices credit <docNumber>`                                                                                        | `fortnox_credit_invoice`           | Credit an invoice (mutation)                                                                                                                       |
+| `noxctl invoices attach <docNumber> <file...> [--no-include-on-send]`                                                       | `fortnox_attach_invoice_files`     | Upload receipt/underlag files and attach them to a customer invoice (mutation; needs the Fortnox **archive** scope — `noxctl init --with-archive`) |
+| `noxctl invoices attachments <docNumber>`                                                                                   | `fortnox_list_invoice_attachments` | List files currently attached to a customer invoice                                                                                                |
 
 ### Fortnox Finans / Fakturaservice
 
@@ -694,15 +694,16 @@ and only replace an existing regular file when `--overwrite` is explicit.
 
 ### Utility
 
-| CLI                                   | MCP tool         | Description                                                                                         |
-| ------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
-| `noxctl init`                         | —                | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
-| `noxctl doctor`                       | `fortnox_status` | Validate setup: Node version, credentials, token status, API connectivity, and scopes               |
-| `noxctl logout`                       | —                | Remove stored credentials from the OS keychain                                                      |
-| `noxctl profile use <name>`           | —                | Set the active profile (writes `~/.fortnox-mcp/active-profile`)                                     |
-| `noxctl profile current`              | —                | Show the currently resolved profile and where it came from                                          |
-| `noxctl profile list`                 | —                | List known profiles from the index                                                                  |
-| `noxctl completion <bash\|zsh\|fish>` | —                | Generate a shell completion script                                                                  |
+| CLI                                            | MCP tool         | Description                                                                                         |
+| ---------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------- |
+| `noxctl init`                                  | —                | Interactive setup wizard — connects to Fortnox, stores credentials, optionally registers MCP server |
+| `noxctl doctor`                                | `fortnox_status` | Validate setup: Node version, credentials, token status, API connectivity, and scopes               |
+| `noxctl logout`                                | —                | Remove stored credentials from the OS keychain                                                      |
+| `noxctl profile use <name>`                    | —                | Set the active profile (writes `~/.fortnox-mcp/active-profile`)                                     |
+| `noxctl profile current`                       | —                | Show the currently resolved profile and where it came from                                          |
+| `noxctl profile list`                          | —                | List known profiles from the index                                                                  |
+| `noxctl profile invoice-bcc [email] [--clear]` | —                | Show, set or clear this profile's default BCC for invoice emails sent via noxctl                    |
+| `noxctl completion <bash\|zsh\|fish>`          | —                | Generate a shell completion script                                                                  |
 
 ## CLI output
 
@@ -734,7 +735,7 @@ CLI:
 ```bash
 noxctl invoices send 1001                              # prompts: "Send invoice 1001 via email. Continue? [y/N]"
 noxctl invoices send 1001 --yes                        # skip prompt (scripting/AI)
-noxctl invoices send 1001 --dry-run                    # preview without sending
+noxctl invoices send 1001 --dry-run                    # preview recipients, BCC, subject, body (read-only)
 noxctl invoices pdf 1001                               # read-only, no prompt
 noxctl invoices pdf 1001 --mark-sent                   # prompts: also flags the invoice as sent
 noxctl customers update 42 --input customer.json       # prompts for confirmation

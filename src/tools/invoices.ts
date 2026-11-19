@@ -1,7 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
+import type { SendEmailOptions } from '../operations/invoices.js';
 import { privateOutputPath, writeBinaryFile } from '../safe-file-output.js';
+import { getResolvedProfile } from '../auth.js';
+import { readInvoiceSendDefaults } from '../invoice-send-defaults.js';
+import { formatInvoiceSendPlan } from '../invoice-send-plan.js';
 import {
   invoiceListColumns,
   invoiceDetailColumns,
@@ -77,9 +81,25 @@ const InvoiceRowSchema = z.strictObject({
 
 const DocumentNumberSchema = z.string().regex(/^\d+$/, 'Document number must be numeric');
 
+export interface InvoiceToolOptions {
+  /**
+   * Source of the local per-profile send defaults (default BCC). Only local
+   * stdio servers pass this; a tenant-bound embedded server must never read
+   * this process's local profile state, so it gets no defaults at all.
+   */
+  sendDefaults?: () => Promise<{ profile: string; bcc?: string }>;
+}
+
+/** Send defaults for the locally resolved profile (local stdio server only). */
+export async function localInvoiceSendDefaults(): Promise<{ profile: string; bcc?: string }> {
+  const profile = getResolvedProfile();
+  return { profile, ...(await readInvoiceSendDefaults(profile)) };
+}
+
 export function registerInvoiceTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
+  options: InvoiceToolOptions = {},
 ): void {
   const {
     listInvoices,
@@ -88,6 +108,7 @@ export function registerInvoiceTools(
     createInvoice,
     updateInvoice,
     sendInvoice,
+    previewInvoiceSend,
     getInvoicePdf,
     markInvoicePrinted,
     bookkeepInvoice,
@@ -224,7 +245,7 @@ export function registerInvoiceTools(
 
   server.tool(
     'fortnox_send_invoice',
-    'Skicka en faktura via e-post (eller markera för utskrift)',
+    'Skicka en faktura via e-post (eller markera för utskrift / skicka som e-faktura). Kör först med dryRun: true för en förhandsgranskning som visar kund, mottagare, CC/BCC (och varifrån BCC kommer), ämne, mejltext, bilagor och fakturastatus utan att något ändras. Profilens standard-BCC (sätts med `noxctl profile invoice-bcc`) används bara vid e-post när fakturan saknar BCC. Ämne och mejltext gäller endast denna faktura. Gäller bara utskick via noxctl, inte Fortnox webbgränssnitt.',
     {
       documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
       method: z
@@ -234,11 +255,26 @@ export function registerInvoiceTools(
       emailSubject: z
         .string()
         .optional()
-        .describe('E-postens ämnesrad (default: behåller befintlig)'),
-      emailBody: z.string().optional().describe('E-postens brödtext'),
-      emailBcc: z.string().optional().describe('BCC-adress för kopia'),
+        .describe('E-postens ämnesrad för just denna faktura (default: behåller befintlig)'),
+      emailBody: z
+        .string()
+        .optional()
+        .describe('E-postens brödtext för just denna faktura (default: behåller befintlig)'),
+      emailBcc: z
+        .string()
+        .optional()
+        .describe('BCC-adress för kopia; ersätter fakturans BCC och standard-BCC'),
+      noBcc: z
+        .boolean()
+        .optional()
+        .describe(
+          'Skicka utan BCC: hoppar över standard-BCC och tar bort BCC som redan finns på fakturan',
+        ),
       confirm: z.boolean().optional().describe('Bekräfta att fakturan ska skickas'),
-      dryRun: z.boolean().optional().describe('Visa åtgärden utan att skicka fakturan'),
+      dryRun: z
+        .boolean()
+        .optional()
+        .describe('Förhandsgranska utskicket (endast läsningar) utan att skicka fakturan'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
     },
     async ({
@@ -247,20 +283,32 @@ export function registerInvoiceTools(
       emailSubject,
       emailBody,
       emailBcc,
+      noBcc,
       confirm,
       dryRun,
       includeRaw,
     }) => {
       const sendMethod = method || 'email';
+      if (emailBcc && noBcc) {
+        throw new Error('Ange antingen emailBcc eller noBcc, inte båda.');
+      }
+      const defaults = options.sendDefaults ? await options.sendDefaults() : undefined;
+      const profile = defaults?.profile;
+      const emailOptions: SendEmailOptions = {
+        subject: emailSubject,
+        body: emailBody,
+        bcc: emailBcc,
+        noBcc,
+        defaultBcc: defaults?.bcc,
+      };
       if (dryRun) {
-        return dryRunResponse(`send invoice ${documentNumber} via ${sendMethod}`);
+        const plan = await previewInvoiceSend(documentNumber, sendMethod, emailOptions, profile);
+        let text = `Dry run: send invoice ${documentNumber} via ${sendMethod}. Nothing was changed or sent in Fortnox (read-only lookups only).\n\n${formatInvoiceSendPlan(plan)}`;
+        if (includeRaw) text += `\n\nRaw preview:\n${JSON.stringify(plan, null, 2)}`;
+        return textResponse(text);
       }
       if (!confirm) requireConfirmation(`send invoice ${documentNumber} via ${sendMethod}`);
 
-      const emailOptions =
-        emailSubject || emailBody || emailBcc
-          ? { subject: emailSubject, body: emailBody, bcc: emailBcc }
-          : undefined;
       const invoice = await sendInvoice(documentNumber, sendMethod, emailOptions);
       return confirmationResponse(
         `Faktura ${documentNumber} skickad via ${sendMethod}.`,

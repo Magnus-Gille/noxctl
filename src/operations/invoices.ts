@@ -8,6 +8,12 @@ import {
 } from '../operation-file.js';
 import { createCustomerOperations } from './customers.js';
 import { assessEinvoiceDraft } from '../einvoice-preflight.js';
+import {
+  buildInvoiceSendPlan,
+  resolveInvoiceEmail,
+  type InvoiceSendOptions,
+  type InvoiceSendPlan,
+} from '../invoice-send-plan.js';
 
 interface InvoiceResponse {
   Invoice: Record<string, unknown>;
@@ -30,11 +36,8 @@ export interface ListInvoicesParams {
 
 export type SendMethod = 'email' | 'print' | 'einvoice';
 
-export interface SendEmailOptions {
-  subject?: string;
-  body?: string;
-  bcc?: string;
-}
+/** See InvoiceSendOptions: subject/body/bcc for this send, noBcc, and the profile default BCC. */
+export type SendEmailOptions = InvoiceSendOptions;
 
 export interface MarkInvoicePrintedResult {
   /** The invoice's state after printing. */
@@ -150,37 +153,84 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const documentId = documentSegment(documentNumber);
 
-    // Update EmailInformation before sending if any email options are provided
-    if (emailOptions && (emailOptions.subject || emailOptions.body || emailOptions.bcc)) {
+    if (method !== 'email' && method !== 'print' && method !== 'einvoice') {
+      throw new Error(`Unsupported send method: ${String(method)}`);
+    }
+
+    // Write EmailInformation before sending when this send changes it: an
+    // explicit subject/body/BCC, no-BCC, or the profile default BCC for an
+    // email send. Resolution is shared with previewInvoiceSend so the preview
+    // shows exactly what is written here.
+    const opts = emailOptions ?? {};
+    const mayChange =
+      Boolean(opts.subject || opts.body || opts.bcc || opts.noBcc) ||
+      (method === 'email' && Boolean(opts.defaultBcc));
+    if (mayChange) {
       const current = await transport.request<InvoiceResponse>(`invoices/${documentId}`);
-      const existing = (current.Invoice?.EmailInformation as Record<string, unknown>) || {};
-      const emailInfo: Record<string, unknown> = { ...existing };
-      if (emailOptions.subject) emailInfo.EmailSubject = emailOptions.subject;
-      if (emailOptions.body) emailInfo.EmailBody = emailOptions.body;
-      if (emailOptions.bcc) emailInfo.EmailAddressBCC = emailOptions.bcc;
-      await transport.request<InvoiceResponse>(`invoices/${documentId}`, {
-        method: 'PUT',
-        body: { Invoice: { EmailInformation: emailInfo } },
-      });
+      const { update } = resolveInvoiceEmail(
+        current.Invoice?.EmailInformation as Record<string, unknown> | undefined,
+        opts,
+        method,
+      );
+      if (update) {
+        await transport.request<InvoiceResponse>(`invoices/${documentId}`, {
+          method: 'PUT',
+          body: { Invoice: { EmailInformation: update } },
+        });
+      }
     }
 
     if (method === 'print') {
       return (await markInvoicePrinted(documentNumber)).invoice;
     }
 
-    // Exhaustive on purpose: no silent fallback. 'email' and 'einvoice' both send
-    // the invoice to the customer, so an unrecognised method must fail loudly
-    // rather than pick one of them.
-    if (method !== 'email' && method !== 'einvoice') {
-      throw new Error(`Unsupported send method: ${String(method)}`);
-    }
-
+    // Exhaustive on purpose (checked above): no silent fallback. 'email' and
+    // 'einvoice' both send the invoice to the customer, so an unrecognised
+    // method must fail loudly rather than pick one of them.
     const data = await transport.request<InvoiceResponse>(`invoices/${documentId}/${method}`, {
       // Fortnox models these delivery actions as GET, but they send an invoice
       // to a customer. Never retry them automatically after an ambiguous error.
       mutation: true,
     });
     return data?.Invoice || {};
+  }
+
+  /**
+   * Read-only preview of a send: everything sendInvoice would use, resolved
+   * the same way, plus customer, status and attachment details. Never writes
+   * to Fortnox. Customer and attachment lookups that fail are reported as
+   * unavailable rather than failing the preview.
+   */
+  async function previewInvoiceSend(
+    documentNumber: string,
+    method: SendMethod = 'email',
+    emailOptions: SendEmailOptions = {},
+    profile?: string,
+  ): Promise<InvoiceSendPlan> {
+    if (method !== 'email' && method !== 'print' && method !== 'einvoice') {
+      throw new Error(`Unsupported send method: ${String(method)}`);
+    }
+    const invoice = await getInvoice(documentNumber);
+    const reason = (err: unknown) => (err instanceof Error ? err.message : String(err));
+    const customerNumber = invoice.CustomerNumber;
+    const [customer, attachments] = await Promise.all([
+      typeof customerNumber === 'string' && customerNumber.trim()
+        ? createCustomerOperations(transport)
+            .getCustomer(customerNumber)
+            .catch((err: unknown) => ({ unavailable: reason(err) }))
+        : Promise.resolve({ unavailable: 'the invoice has no customer number' }),
+      listDocumentAttachments(documentNumber, 'F').catch((err: unknown) => ({
+        unavailable: reason(err),
+      })),
+    ]);
+    return buildInvoiceSendPlan({
+      invoice,
+      customer,
+      attachments,
+      method,
+      options: emailOptions,
+      profile,
+    });
   }
 
   /**
@@ -462,6 +512,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     createInvoice,
     updateInvoice,
     sendInvoice,
+    previewInvoiceSend,
     getInvoicePdf,
     markInvoicePrinted,
     bookkeepInvoice,
@@ -488,6 +539,7 @@ export const {
   createInvoice,
   updateInvoice,
   sendInvoice,
+  previewInvoiceSend,
   getInvoicePdf,
   markInvoicePrinted,
   bookkeepInvoice,

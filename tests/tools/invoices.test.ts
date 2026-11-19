@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -310,6 +310,128 @@ describe('invoice tools', () => {
   });
 
   describe('fortnox_send_invoice', () => {
+    let sendHome: string;
+    const ORIGINAL_HOME = process.env.HOME;
+    const ORIGINAL_USERPROFILE = process.env.USERPROFILE;
+    beforeEach(() => {
+      sendHome = mkdtempSync(join(tmpdir(), 'noxctl-send-home-'));
+      process.env.HOME = sendHome;
+      process.env.USERPROFILE = sendHome;
+    });
+    afterEach(() => {
+      process.env.HOME = ORIGINAL_HOME;
+      process.env.USERPROFILE = ORIGINAL_USERPROFILE;
+      rmSync(sendHome, { recursive: true, force: true });
+    });
+
+    function jsonOk(body: unknown) {
+      return {
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(body)),
+        json: () => Promise.resolve(body),
+      };
+    }
+
+    function invoiceFetch(emailInformation: Record<string, unknown>) {
+      global.fetch = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+        if (url.includes('/customers/')) {
+          return Promise.resolve(
+            jsonOk({
+              Customer: { CustomerNumber: '25', DefaultDeliveryTypes: { Invoice: 'EMAIL' } },
+            }),
+          );
+        }
+        if (url.includes('attachments-v1')) return Promise.resolve(jsonOk([]));
+        if (init?.method === 'PUT') return Promise.resolve(jsonOk({ Invoice: {} }));
+        return Promise.resolve(
+          jsonOk({
+            Invoice: {
+              DocumentNumber: '1001',
+              CustomerNumber: '25',
+              CustomerName: 'Kund AB',
+              Sent: false,
+              EmailInformation: emailInformation,
+            },
+          }),
+        );
+      });
+    }
+
+    it('previews recipient, BCC from the profile default, subject and body on dry run', async () => {
+      const { setInvoiceDefaultBcc } = await import('../../src/invoice-send-defaults.js');
+      await setInvoiceDefaultBcc('default', 'me@seller.example');
+      invoiceFetch({ EmailAddressTo: 'ap@kund.se', EmailSubject: 'Faktura', EmailBody: 'Hej' });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_send_invoice',
+        arguments: { documentNumber: '1001', dryRun: true, emailSubject: 'Ämne för Kund AB' },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('Kund AB');
+      expect(text).toContain('ap@kund.se');
+      expect(text).toContain('me@seller.example');
+      expect(text).toContain('Ämne för Kund AB');
+      expect(text).toContain('Hej');
+      const methods = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.map(
+        (c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') as string,
+      );
+      expect(methods.every((m) => m === 'GET')).toBe(true);
+    });
+
+    it('applies the profile default BCC on a confirmed email send', async () => {
+      const { setInvoiceDefaultBcc } = await import('../../src/invoice-send-defaults.js');
+      await setInvoiceDefaultBcc('default', 'me@seller.example');
+      invoiceFetch({ EmailAddressTo: 'ap@kund.se', EmailAddressBCC: '' });
+
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_send_invoice',
+        arguments: { documentNumber: '1001', confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const put = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => (c[1] as RequestInit | undefined)?.method === 'PUT',
+      );
+      expect(JSON.parse((put![1] as RequestInit).body as string)).toEqual({
+        Invoice: {
+          EmailInformation: { EmailAddressTo: 'ap@kund.se', EmailAddressBCC: 'me@seller.example' },
+        },
+      });
+    });
+
+    it('noBcc skips the profile default', async () => {
+      const { setInvoiceDefaultBcc } = await import('../../src/invoice-send-defaults.js');
+      await setInvoiceDefaultBcc('default', 'me@seller.example');
+      invoiceFetch({ EmailAddressTo: 'ap@kund.se', EmailAddressBCC: '' });
+
+      const { client } = await setupClientServer();
+      await client.callTool({
+        name: 'fortnox_send_invoice',
+        arguments: { documentNumber: '1001', confirm: true, noBcc: true },
+      });
+
+      const put = (global.fetch as ReturnType<typeof vi.fn>).mock.calls.find(
+        (c) => (c[1] as RequestInit | undefined)?.method === 'PUT',
+      );
+      expect(put).toBeUndefined();
+    });
+
+    it('rejects emailBcc together with noBcc without calling Fortnox', async () => {
+      invoiceFetch({});
+      const { client } = await setupClientServer();
+      const result = await client.callTool({
+        name: 'fortnox_send_invoice',
+        arguments: { documentNumber: '1001', confirm: true, noBcc: true, emailBcc: 'a@b.se' },
+      });
+      expect(result.isError).toBe(true);
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
     it('sends invoice via email by default', async () => {
       mockFetch({ Invoice: { DocumentNumber: '1001', Sent: true } });
 
@@ -567,7 +689,11 @@ describe('invoice tools', () => {
 
       expect(result.isError).toBeFalsy();
       expect((result.content as { type: string; text: string }[])[0].text).toContain('Dry run');
-      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+      // A dry run may read the invoice to preview it, but never writes or sends.
+      for (const call of (global.fetch as ReturnType<typeof vi.fn>).mock.calls) {
+        expect(((call[1] as RequestInit | undefined)?.method ?? 'GET') as string).toBe('GET');
+        expect(call[0] as string).not.toMatch(/\/(email|print|einvoice)(\?|$)/);
+      }
     });
   });
 
