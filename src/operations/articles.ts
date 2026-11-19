@@ -1,3 +1,4 @@
+import { documentResource } from '../document-api-version.js';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { pathSegment } from '../identifiers.js';
 
@@ -25,7 +26,7 @@ export function createArticleOperations(transport: FortnoxTransport) {
 
     if (params.all) {
       const { items, totalResources } = await transport.fetchAllPages<Record<string, unknown>>(
-        'articles',
+        documentResource('articles'),
         'Articles',
         queryParams,
       );
@@ -35,20 +36,20 @@ export function createArticleOperations(transport: FortnoxTransport) {
       };
     }
 
-    return transport.request<ArticlesResponse>('articles', {
+    return transport.request<ArticlesResponse>(documentResource('articles'), {
       params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
     });
   }
 
   async function getArticle(articleNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<ArticleResponse>(
-      `articles/${pathSegment('article number', articleNumber)}`,
+      `${documentResource('articles')}/${pathSegment('article number', articleNumber)}`,
     );
     return data.Article;
   }
 
   async function createArticle(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const data = await transport.request<ArticleResponse>('articles', {
+    const data = await transport.request<ArticleResponse>(documentResource('articles'), {
       method: 'POST',
       body: { Article: params },
     });
@@ -61,7 +62,7 @@ export function createArticleOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { ArticleNumber: _, ...body } = fields;
     const data = await transport.request<ArticleResponse>(
-      `articles/${pathSegment('article number', articleNumber)}`,
+      `${documentResource('articles')}/${pathSegment('article number', articleNumber)}`,
       {
         method: 'PUT',
         body: { Article: body },
@@ -71,9 +72,12 @@ export function createArticleOperations(transport: FortnoxTransport) {
   }
 
   async function deleteArticle(articleNumber: string): Promise<void> {
-    await transport.request(`articles/${pathSegment('article number', articleNumber)}`, {
-      method: 'DELETE',
-    });
+    await transport.request(
+      `${documentResource('articles')}/${pathSegment('article number', articleNumber)}`,
+      {
+        method: 'DELETE',
+      },
+    );
   }
 
   return { listArticles, getArticle, createArticle, updateArticle, deleteArticle };

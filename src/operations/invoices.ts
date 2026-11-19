@@ -1,3 +1,4 @@
+import { documentResource } from '../document-api-version.js';
 import { extname } from 'node:path';
 import { defaultFortnoxTransport, type FortnoxTransport } from '../fortnox-client.js';
 import { documentSegment, pathSegment } from '../identifiers.js';
@@ -91,7 +92,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
 
     if (params.all) {
       const { items, totalResources } = await transport.fetchAllPages<Record<string, unknown>>(
-        'invoices',
+        documentResource('invoices'),
         'Invoices',
         queryParams,
       );
@@ -101,20 +102,20 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
       };
     }
 
-    return transport.request<InvoicesResponse>('invoices', {
+    return transport.request<InvoicesResponse>(documentResource('invoices'), {
       params: { ...queryParams, page: params.page || 1, limit: params.limit || 100 },
     });
   }
 
   async function getInvoice(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<InvoiceResponse>(
-      `invoices/${documentSegment(documentNumber)}`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}`,
     );
     return data.Invoice;
   }
 
   async function createInvoice(params: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const data = await transport.request<InvoiceResponse>('invoices', {
+    const data = await transport.request<InvoiceResponse>(documentResource('invoices'), {
       method: 'POST',
       body: { Invoice: params },
     });
@@ -137,7 +138,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
   ): Promise<Record<string, unknown>> {
     const { documentNumber: _, ...body } = fields;
     const data = await transport.request<InvoiceResponse>(
-      `invoices/${documentSegment(documentNumber)}`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}`,
       {
         method: 'PUT',
         body: { Invoice: body },
@@ -166,14 +167,16 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
       Boolean(opts.subject || opts.body || opts.bcc || opts.noBcc) ||
       (method === 'email' && Boolean(opts.defaultBcc));
     if (mayChange) {
-      const current = await transport.request<InvoiceResponse>(`invoices/${documentId}`);
+      const current = await transport.request<InvoiceResponse>(
+        `${documentResource('invoices')}/${documentId}`,
+      );
       const { update } = resolveInvoiceEmail(
         current.Invoice?.EmailInformation as Record<string, unknown> | undefined,
         opts,
         method,
       );
       if (update) {
-        await transport.request<InvoiceResponse>(`invoices/${documentId}`, {
+        await transport.request<InvoiceResponse>(`${documentResource('invoices')}/${documentId}`, {
           method: 'PUT',
           body: { Invoice: { EmailInformation: update } },
         });
@@ -187,11 +190,14 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     // Exhaustive on purpose (checked above): no silent fallback. 'email' and
     // 'einvoice' both send the invoice to the customer, so an unrecognised
     // method must fail loudly rather than pick one of them.
-    const data = await transport.request<InvoiceResponse>(`invoices/${documentId}/${method}`, {
-      // Fortnox models these delivery actions as GET, but they send an invoice
-      // to a customer. Never retry them automatically after an ambiguous error.
-      mutation: true,
-    });
+    const data = await transport.request<InvoiceResponse>(
+      `${documentResource('invoices')}/${documentId}/${method}`,
+      {
+        // Fortnox models these delivery actions as GET, but they send an invoice
+        // to a customer. Never retry them automatically after an ambiguous error.
+        mutation: true,
+      },
+    );
     return data?.Invoice || {};
   }
 
@@ -243,7 +249,9 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
    * path leaves an invoice flagged as sent with no PDF to show for it.
    */
   async function getInvoicePdf(documentNumber: string): Promise<Buffer> {
-    return transport.requestPdf(`invoices/${documentSegment(documentNumber)}/preview`);
+    return transport.requestPdf(
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}/preview`,
+    );
   }
 
   /**
@@ -259,7 +267,9 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
   async function markInvoicePrinted(documentNumber: string): Promise<MarkInvoicePrintedResult> {
     const documentId = documentSegment(documentNumber);
 
-    const pdf = await transport.requestPdfFromMutation(`invoices/${documentId}/print`);
+    const pdf = await transport.requestPdfFromMutation(
+      `${documentResource('invoices')}/${documentId}/print`,
+    );
 
     try {
       return { invoice: await getInvoice(documentNumber), confirmed: true, pdf };
@@ -283,7 +293,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
 
   async function bookkeepInvoice(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<InvoiceResponse>(
-      `invoices/${documentSegment(documentNumber)}/bookkeep`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}/bookkeep`,
       {
         method: 'PUT',
       },
@@ -293,7 +303,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
 
   async function creditInvoice(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<InvoiceResponse>(
-      `invoices/${documentSegment(documentNumber)}/credit`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}/credit`,
       {
         method: 'PUT',
       },
@@ -306,7 +316,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
     action: 'cancel' | 'externalprint',
   ): Promise<Record<string, unknown>> {
     const data = await transport.request<InvoiceResponse>(
-      `invoices/${documentSegment(documentNumber)}/${action}`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}/${action}`,
       { method: 'PUT' },
     );
     return data.Invoice ?? {};
@@ -318,7 +328,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
 
   async function eprintInvoice(documentNumber: string): Promise<Record<string, unknown>> {
     const data = await transport.request<InvoiceResponse>(
-      `invoices/${documentSegment(documentNumber)}/eprint`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}/eprint`,
       { mutation: true },
     );
     return data.Invoice ?? {};
@@ -326,7 +336,7 @@ export function createInvoiceOperations(transport: FortnoxTransport) {
 
   async function getInvoiceReminderPdf(documentNumber: string): Promise<Buffer | undefined> {
     return transport.requestPdfFromMutation(
-      `invoices/${documentSegment(documentNumber)}/printreminder`,
+      `${documentResource('invoices')}/${documentSegment(documentNumber)}/printreminder`,
     );
   }
 
