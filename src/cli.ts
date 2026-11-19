@@ -916,6 +916,53 @@ profile
     }
   });
 
+profile
+  .command('invoice-bcc [email]')
+  .description(
+    'Show, set or clear the default BCC for invoice emails sent via noxctl with this profile',
+  )
+  .option('--clear', 'Remove the default BCC for this profile')
+  .addHelpText(
+    'after',
+    `
+The default is stored locally per profile and only used for \`invoices send\`
+with --method email when the invoice has no BCC of its own. Override it per
+send with --bcc <email>, or skip it with --no-bcc.`,
+  )
+  .action(async (email: string | undefined, opts: { clear?: boolean }) => {
+    const { readInvoiceSendDefaults, setInvoiceDefaultBcc, clearInvoiceDefaultBcc } =
+      await import('./invoice-send-defaults.js');
+    const name = resolvedProfileInfo.name;
+    if (email && opts.clear) {
+      fail('Give either an email address or --clear, not both.');
+    }
+    if (opts.clear) {
+      await clearInvoiceDefaultBcc(name);
+      if (json()) console.log(JSON.stringify({ profile: name, invoiceBcc: null }));
+      else console.log(`Default invoice BCC cleared for profile "${name}".`);
+      return;
+    }
+    if (email) {
+      let bcc: string;
+      try {
+        bcc = await setInvoiceDefaultBcc(name, email);
+      } catch (err) {
+        fail(err instanceof Error ? err.message : String(err));
+      }
+      if (json()) console.log(JSON.stringify({ profile: name, invoiceBcc: bcc }));
+      else console.log(`Default invoice BCC for profile "${name}" set to ${bcc}.`);
+      return;
+    }
+    const current = await readInvoiceSendDefaults(name);
+    if (json()) console.log(JSON.stringify({ profile: name, invoiceBcc: current.bcc ?? null }));
+    else
+      console.log(
+        current.bcc
+          ? `${current.bcc} (profile "${name}")`
+          : `No default invoice BCC for profile "${name}".`,
+      );
+  });
+
 // --- doctor ---
 program
   .command('doctor')
@@ -1597,17 +1644,31 @@ Examples:
 
 invoices
   .command('send <documentNumber>')
-  .description('Send an invoice')
+  .description(
+    'Send an invoice (run with --dry-run first to preview recipients, BCC, subject and body)',
+  )
   .addOption(
     new Option('--method <method>', 'Send method: email, print, einvoice')
       .choices(['email', 'print', 'einvoice'])
       .default('email'),
   )
-  .option('--subject <subject>', 'Email subject (default: keeps existing)')
-  .option('--body <body>', 'Email body text')
-  .option('--bcc <email>', 'BCC email address')
+  .option('--subject <subject>', 'Email subject for this invoice only (default: keeps existing)')
+  .option('--body <body>', 'Email body text for this invoice only (default: keeps existing)')
+  .option('--bcc <email>', 'BCC address; overrides the invoice and the profile default')
+  .option('--no-bcc', 'Send without BCC: skip the profile default and clear any BCC on the invoice')
   .option('-y, --yes', 'Skip confirmation prompt')
-  .option('--dry-run', 'Preview the action without sending it')
+  .option('--dry-run', 'Preview the send (read-only lookups) without sending it')
+  .addHelpText(
+    'after',
+    `
+BCC precedence for email sends:
+  1. --bcc <email> (or --no-bcc to send without a copy)
+  2. A BCC already on the invoice (never overwritten by the profile default)
+  3. The profile default from \`noxctl profile invoice-bcc <email>\`
+
+Subject and body only ever apply to the invoice being sent. This affects sends
+made through noxctl only, not sends from the Fortnox web interface.`,
+  )
   .action(
     async (
       documentNumber: string,
@@ -1615,24 +1676,48 @@ invoices
         method: string;
         subject?: string;
         body?: string;
-        bcc?: string;
+        bcc?: string | boolean;
         yes?: boolean;
         dryRun?: boolean;
       },
     ) => {
-      const { sendInvoice } = defaultFortnoxOperations;
-      if (!(await confirmMutation(`Send invoice ${documentNumber} via ${opts.method}`, opts))) {
+      const { sendInvoice, previewInvoiceSend } = defaultFortnoxOperations;
+      const { readInvoiceSendDefaults } = await import('./invoice-send-defaults.js');
+      const { formatInvoiceSendPlan } = await import('./invoice-send-plan.js');
+      const method = opts.method as 'email' | 'print' | 'einvoice';
+      const profileName = resolvedProfileInfo.name;
+      const defaults = await readInvoiceSendDefaults(profileName);
+      const emailOptions = {
+        subject: opts.subject,
+        body: opts.body,
+        bcc: typeof opts.bcc === 'string' ? opts.bcc : undefined,
+        noBcc: opts.bcc === false,
+        defaultBcc: defaults.bcc,
+      };
+      const action = `Send invoice ${documentNumber} via ${opts.method}`;
+
+      const interactive = !opts.yes && process.stdin.isTTY && process.stdout.isTTY;
+      if (opts.dryRun || interactive) {
+        const plan = await previewInvoiceSend(documentNumber, method, emailOptions, profileName);
+        if (opts.dryRun) {
+          if (json()) {
+            console.log(JSON.stringify({ dryRun: true, action, preview: plan }, null, 2));
+          } else {
+            console.log(
+              `Dry run: ${action}. Nothing was changed or sent in Fortnox (read-only lookups only).\n`,
+            );
+            console.log(formatInvoiceSendPlan(plan));
+          }
+          return;
+        }
+        console.log(formatInvoiceSendPlan(plan));
+        console.log();
+      }
+
+      if (!(await confirmMutation(action, opts))) {
         return;
       }
-      const emailOptions =
-        opts.subject || opts.body || opts.bcc
-          ? { subject: opts.subject, body: opts.body, bcc: opts.bcc }
-          : undefined;
-      const data = await sendInvoice(
-        documentNumber,
-        opts.method as 'email' | 'print' | 'einvoice',
-        emailOptions,
-      );
+      const data = await sendInvoice(documentNumber, method, emailOptions);
       outputConfirmation(
         `Invoice ${documentNumber} sent via ${opts.method}.`,
         json(),

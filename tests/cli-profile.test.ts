@@ -412,6 +412,48 @@ describe('logout --all', () => {
   });
 });
 
+describe('profile invoice-bcc', () => {
+  it('sets, shows and clears the default BCC per profile', () => {
+    expect(JSON.parse(run(['profile', 'invoice-bcc']).stdout.trim())).toEqual({
+      profile: 'default',
+      invoiceBcc: null,
+    });
+
+    const set = run(['--profile', 'work', 'profile', 'invoice-bcc', 'copy@example.com']);
+    expect(set.status).toBe(0);
+    expect(JSON.parse(set.stdout.trim())).toEqual({
+      profile: 'work',
+      invoiceBcc: 'copy@example.com',
+    });
+
+    // Another profile is unaffected.
+    expect(JSON.parse(run(['profile', 'invoice-bcc']).stdout.trim()).invoiceBcc).toBeNull();
+    expect(
+      JSON.parse(run(['--profile', 'work', 'profile', 'invoice-bcc']).stdout.trim()).invoiceBcc,
+    ).toBe('copy@example.com');
+
+    const cleared = run(['--profile', 'work', 'profile', 'invoice-bcc', '--clear']);
+    expect(cleared.status).toBe(0);
+    expect(
+      JSON.parse(run(['--profile', 'work', 'profile', 'invoice-bcc']).stdout.trim()).invoiceBcc,
+    ).toBeNull();
+  });
+
+  it('rejects an invalid address', () => {
+    const res = run(['profile', 'invoice-bcc', 'not-an-address']);
+    expect(res.status).not.toBe(0);
+  });
+});
+
+describe('invoices send help', () => {
+  it('documents the BCC precedence and the no-BCC opt-out', () => {
+    const res = run(['invoices', 'send', '--help']);
+    expect(res.stdout).toContain('--no-bcc');
+    expect(res.stdout).toMatch(/BCC precedence/);
+    expect(res.stdout).toMatch(/profile invoice-bcc/);
+  });
+});
+
 // NOX-231: `init` replaces the scope set with exactly what its flags request,
 // so doctor and init show the granted opt-ins and the line that keeps them.
 describe('opt-in scope reporting', () => {

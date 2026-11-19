@@ -7,7 +7,7 @@ import type { FortnoxTransport } from './fortnox-client.js';
 import { VERSION } from './version.js';
 import { createFortnoxOperations, defaultFortnoxOperations } from './operations/index.js';
 import { registerCustomerTools } from './tools/customers.js';
-import { registerInvoiceTools } from './tools/invoices.js';
+import { localInvoiceSendDefaults, registerInvoiceTools } from './tools/invoices.js';
 import { registerBookkeepingTools } from './tools/bookkeeping.js';
 import { registerTaxTools } from './tools/tax.js';
 import { registerCompanyTools } from './tools/company.js';
@@ -73,7 +73,13 @@ export function createServer(options: CreateServerOptions = {}): McpServer {
     : defaultFortnoxOperations;
 
   registerCustomerTools(server, operations);
-  registerInvoiceTools(server, operations);
+  // Local per-profile send defaults are host state: only a local (not
+  // tenant-bound) server may apply them.
+  registerInvoiceTools(
+    server,
+    operations,
+    options.transport ? {} : { sendDefaults: localInvoiceSendDefaults },
+  );
   registerNoxFinansInvoiceTools(server, operations);
   registerBookkeepingTools(server, operations);
   registerTaxTools(server, operations);

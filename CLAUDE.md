@@ -23,6 +23,8 @@ noxctl invoices pdf 28 --mark-sent --yes     # ALSO flags it as sent (mutation)
 echo '{"InvoiceRows": [...]}' | noxctl invoices update 28 --input - --yes
 noxctl invoices send 28              # prompts: Continue? [y/N]
 noxctl invoices send 28 --yes        # skip prompt (non-interactive/scripting)
+noxctl invoices send 28 --dry-run    # read-only preview: recipients, BCC, subject, body, status
+noxctl profile invoice-bcc me@example.com   # per-profile default BCC (email sends only)
 
 # Dry run first
 noxctl invoices create --customer 25 --input data.json --dry-run

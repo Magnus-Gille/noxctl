@@ -120,6 +120,7 @@ export const OPERATION_CATALOGUE: Readonly<Record<string, 'read' | 'write' | 'mo
           'listVouchers',
           'listWaysOfDelivery',
           'preflightInvoice',
+          'previewInvoiceSend',
         ] as const
       ).map((name) => [name, 'read'] as const),
     ),

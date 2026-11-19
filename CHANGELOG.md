@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Default BCC per profile for invoice emails, and a complete send preview.**
+  `noxctl profile invoice-bcc <email>` stores a default copy address locally for
+  the resolved profile (`--clear` removes it; nothing is hard-coded). It is used
+  by `noxctl invoices send` / `fortnox_send_invoice` only for email sends where
+  the invoice has no BCC of its own. Precedence: `--bcc <email>` /
+  `emailBcc` → a BCC already on the invoice (never overwritten) → the profile
+  default. `--no-bcc` / `noBcc` sends without a copy and clears one already on
+  the invoice. Tenant-bound embedded servers never read local profile defaults.
+- `invoices send --dry-run` / `dryRun: true` now shows the real send: customer,
+  status (sent/booked/cancelled, amounts), delivery method, From/To/CC/BCC with
+  where the BCC comes from, subject and body (and whether they are given for
+  this invoice only, already on the invoice, or Fortnox's template), attachments
+  included on send, the exact `EmailInformation` update, and warnings (already
+  sent, cancelled, no recipient, customer default delivery mismatch). It only
+  reads from Fortnox; details that cannot be read are listed as unavailable.
+  Interactive sends show the same preview before the confirmation prompt.
+  This covers sends made through noxctl only, not the Fortnox web interface.
 - **Opt-in Fortnox v2 document endpoints (NOX-219, NOX-220, NOX-221, NOX-222).**
   Set `NOXCTL_FORTNOX_DOCUMENT_API=v2` to route every invoice, offer, order and
   article call to `/3/invoices-v2`, `/3/offers-v2`, `/3/orders-v2` and

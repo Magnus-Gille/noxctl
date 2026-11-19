@@ -104,4 +104,50 @@ describe('tenant-bound MCP servers', () => {
     expect(tools.tools.map((tool) => tool.name)).toContain('fortnox_status');
     await client.close();
   });
+
+  it('never applies local profile send defaults (BCC) in a tenant-bound server', async () => {
+    const { mkdtemp, rm } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const home = await mkdtemp(join(tmpdir(), 'noxctl-tenant-bcc-'));
+    const originalHome = process.env.HOME;
+    const originalUserProfile = process.env.USERPROFILE;
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    try {
+      const { setInvoiceDefaultBcc } = await import('../../src/invoice-send-defaults.js');
+      await setInvoiceDefaultBcc('default', 'host-copy@example.com');
+
+      const fetch = vi.fn().mockImplementation(async (url: string) => {
+        if (url.includes('attachments-v1')) return new Response('[]');
+        if (url.includes('/customers/')) return new Response(JSON.stringify({ Customer: {} }));
+        return new Response(
+          JSON.stringify({
+            Invoice: { DocumentNumber: '7', EmailInformation: { EmailAddressTo: 'a@b.se' } },
+          }),
+        );
+      });
+      const transport = createFortnoxClient({
+        getAccessToken: async () => 'tenant-token',
+        fetch,
+        contextLabel: 'Tenant',
+      });
+      const server = createServer({ transport });
+      const client = new Client({ name: 'test-bcc', version: '1.0.0' });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+      const result = await client.callTool({
+        name: 'fortnox_send_invoice',
+        arguments: { documentNumber: '7', dryRun: true },
+      });
+      expect(result.isError).toBeFalsy();
+      expect(JSON.stringify(result.content)).not.toContain('host-copy@example.com');
+      await client.close();
+    } finally {
+      process.env.HOME = originalHome;
+      process.env.USERPROFILE = originalUserProfile;
+      await rm(home, { recursive: true, force: true });
+    }
+  });
 });
