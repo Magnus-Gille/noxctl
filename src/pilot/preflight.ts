@@ -7,7 +7,11 @@ import { decode, canonicalEncode } from '../shadow/codec.js';
 import type { ShadowIdentityResolution, ShadowResourceKind } from '../shadow/identity.js';
 import { CUSTOMER_COUNTRY_UNVERIFIED } from '../shadow/accounted-adapter.js';
 import { mapInvoiceDraft, preflightInvoiceDraft } from '../shadow/invoice-draft-mapping.js';
-import { PAYMENT_OPERATIONS } from '../shadow/payment-queue-plan.js';
+import {
+  PAYMENT_INVOICE_CREDITED,
+  PAYMENT_OPERATIONS,
+  creditOfInvoice,
+} from '../shadow/payment-queue-plan.js';
 import type { ShadowAdapter, ShadowBinding, ShadowRecord } from '../shadow/types.js';
 
 export interface PreflightDeps {
@@ -154,6 +158,11 @@ function preflightInvoicePayment(
   if (mapped.expected.currency !== 'SEK') return 'Only SEK invoice payments are supported';
   if (amount !== mapped.expected.total)
     return 'Only the exact full payment of the mirrored invoice is supported';
+  const credit = creditOfInvoice(deps.records(), sourceInvoiceId);
+  if (credit && 'malformed' in credit)
+    return `Credit record ${credit.malformed.id} has a malformed invoice number; resolve it before a new payment`;
+  if (credit)
+    return `${PAYMENT_INVOICE_CREDITED}: Invoice ${sourceInvoiceId} has credit record ${credit.credited.id}; credited invoices are settled manually`;
   // One payment per invoice: any earlier payment-chain record (even a refused one) forbids another.
   // Every identifier a payment record carries is compared independently (receipt, create args,
   // update fields), so contradictory evidence cannot hide a match; a payment record whose invoice

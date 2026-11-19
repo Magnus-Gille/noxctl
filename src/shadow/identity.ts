@@ -34,7 +34,13 @@ export interface ShadowSourceCustomer {
   City: string;
 }
 
-type CreatorIdentity = { kind: ShadowResourceKind; sourceField: string; allowNumeric?: boolean };
+type CreatorIdentity = {
+  kind: ShadowResourceKind;
+  sourceField: string;
+  allowNumeric?: boolean;
+  /** Fortnox writes "0" for an absent reference; it never identifies a document. */
+  rejectZero?: boolean;
+};
 
 /**
  * Identity sources: operations whose applied receipt may establish a source-to-target identity.
@@ -46,7 +52,9 @@ const CREATOR_IDENTITIES: Readonly<Record<string, CreatorIdentity>> = Object.fre
   createSupplier: { kind: 'supplier', sourceField: 'SupplierNumber' },
   createArticle: { kind: 'article', sourceField: 'ArticleNumber', allowNumeric: false },
   createInvoice: { kind: 'invoice', sourceField: 'DocumentNumber' },
-  creditInvoice: { kind: 'invoice', sourceField: 'DocumentNumber' },
+  // PUT /invoices/{n}/credit answers with the updated ORIGINAL (DocumentNumber = n); the new credit
+  // note is only named by its CreditInvoiceReference (Fortnox spec and the real export, 2026-11-19).
+  creditInvoice: { kind: 'invoice', sourceField: 'CreditInvoiceReference', rejectZero: true },
   createInvoicePayment: { kind: 'invoice-payment', sourceField: 'Number' },
   baselineCustomer: { kind: 'customer', sourceField: 'CustomerNumber' },
   baselineArticle: { kind: 'article', sourceField: 'ArticleNumber', allowNumeric: false },
@@ -104,9 +112,11 @@ function sourceIdentity(
   record: ShadowRecord,
   sourceField: string,
   allowNumeric = true,
+  rejectZero = false,
 ): string | undefined {
   if (!isPlainObject(record.sourceResult)) return undefined;
   const value = record.sourceResult[sourceField];
+  if (rejectZero && /^0+$/.test(String(value))) return undefined;
   if (isValidIdentityString(value)) return value;
   // Catalog numbers are opaque strings; numeric coercion can lose leading zeros.
   if (allowNumeric && typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
@@ -173,7 +183,10 @@ export function resolveShadowIdentity(
 
   const matching = relevant.filter((record) => {
     const creator = CREATOR_IDENTITIES[record.operation]!;
-    return sourceIdentity(record, creator.sourceField, creator.allowNumeric) === sourceId;
+    return (
+      sourceIdentity(record, creator.sourceField, creator.allowNumeric, creator.rejectZero) ===
+      sourceId
+    );
   });
 
   if (matching.length > 1) {
@@ -193,6 +206,7 @@ export function resolveShadowIdentity(
         other,
         otherCreator.sourceField,
         otherCreator.allowNumeric,
+        otherCreator.rejectZero,
       );
       return otherSourceId !== sourceId;
     });
@@ -247,13 +261,25 @@ export function competingIdentitySources(
 ): ShadowRecord[] {
   const creator = CREATOR_IDENTITIES[record.operation];
   if (!creator) return [];
-  const sourceId = sourceIdentity(record, creator.sourceField, creator.allowNumeric);
+  const sourceId = sourceIdentity(
+    record,
+    creator.sourceField,
+    creator.allowNumeric,
+    creator.rejectZero,
+  );
   if (sourceId === undefined) return [];
   return records.filter((other) => {
     if (other.id === record.id || other.state === 'source_cancelled') return false;
     const otherCreator = CREATOR_IDENTITIES[other.operation];
     if (!otherCreator || otherCreator.kind !== creator.kind) return false;
-    return sourceIdentity(other, otherCreator.sourceField, otherCreator.allowNumeric) === sourceId;
+    return (
+      sourceIdentity(
+        other,
+        otherCreator.sourceField,
+        otherCreator.allowNumeric,
+        otherCreator.rejectZero,
+      ) === sourceId
+    );
   });
 }
 

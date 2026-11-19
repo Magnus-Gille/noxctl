@@ -282,8 +282,9 @@ Customer invoice payments are **not yet part of the pilot**. What exists:
   any key other than `InvoiceNumber`, `Amount`, `PaymentDate` and `Source`; a non-positive-integer
   invoice number; an amount that is not positive whole cents; a non-calendar date; an invoice
   without an applied `createInvoice` record that maps as a strict SEK invoice; an amount other than
-  the mirrored invoice total (full payment only); and any invoice that already has a payment-chain
-  record, refused ones included. Every invoice number a payment record carries (receipt, create
+  the mirrored invoice total (full payment only); any invoice that already has a payment-chain
+  record, refused ones included; and any invoice named by a `creditInvoice` record
+  (`PAYMENT_INVOICE_CREDITED`; a credit record with an unreadable invoice number blocks every payment). Every invoice number a payment record carries (receipt, create
   args, update fields) is compared independently, so contradictory evidence cannot hide a match, and
   a payment record that names no invoice (for example an unreceipted bookkeep), or one whose invoice
   numbers are malformed (not a canonical positive integer) or disagree, blocks every new payment

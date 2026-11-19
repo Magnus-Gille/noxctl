@@ -152,6 +152,16 @@ export function measurePaymentMapping(data: unknown): PaymentMeasurement {
       refuse('voucher-missing-from-export');
       continue;
     }
+    // A credited original or a credit note is settled manually (PAYMENT_INVOICE_CREDITED).
+    const reference = invoice.CreditInvoiceReference;
+    if (
+      invoice.Credit === true ||
+      invoice.Credit === 'true' ||
+      (reference !== undefined && reference !== null && !/^0*$/.test(String(reference)))
+    ) {
+      refuse('invoice-credited');
+      continue;
+    }
     const derived = deriveExpected(invoice);
     if ('label' in derived) {
       refuse(derived.label);
