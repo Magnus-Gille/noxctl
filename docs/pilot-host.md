@@ -43,6 +43,7 @@ is used for the company check and the POST, so both requests always carry the sa
 | `baseline-customer <CustomerNumber>`  | Reads the Fortnox customer and records a `baselineCustomer` intent (pending). No Accounted request.                                                                                                                                                                                                        |
 | `link-article <ArticleNumber> <uuid>` | Reads the Fortnox article and records a `baselineArticle` intent (pending). No Accounted request.                                                                                                                                                                                                          |
 | `reconcile <id>`                      | Only for a `target_unknown` record that kept its target identity and receipt. Reads the target with the adapter's verifier (GET only, never another mutation); on a match the record becomes `applied`, otherwise it stays unknown. Backs up afterwards.                                                   |
+| `capture <id>`                        | For a payment record whose Fortnox receipt is booked, or a `creditInvoice` record: reads (GET only) the voucher or the credit note it refers to and pins it as evidence (see "Captured source evidence"). Not blocked by queue states; every other gate condition applies. Backs up. No Accounted request. |
 | `refuse <id> <reason>`                | Closes the OLDEST unresolved record, state `pending`, with no target attempt or identity, when the adapter still refuses to map it (see "Preflight and refuse"). Marks it `blocked` (`OPERATOR_REFUSED: <reason> (mapping: <mapping reason>)`), journals it and backs up. No Fortnox or Accounted request. |
 | `backup`                              | Manual backup.                                                                                                                                                                                                                                                                                             |
 
@@ -305,8 +306,30 @@ exemption (`exceptId`/`exceptStates`) can let a `deferred` record through, and `
 never applies to it (it only covers `blocked` records). This is still a refusal, not a resolution:
 nothing in the pilot can advance a deferred payment yet.
 
+### Captured source evidence
+
+A payment's Fortnox receipt names its voucher (`VoucherYear`, `VoucherSeries`, `VoucherNumber`)
+but does not contain it, and a credit receipt names its credit note (`CreditInvoiceReference`). The
+adapters need those objects, and they must not change between preview and drain, so they are read
+once by `capture <id>` and stored in the `evidence` table of `queue/shadow.sqlite`:
+
+- key `year:series:number` for `payment-voucher` (the voucher year is the financial year id that
+  Fortnox puts in `VoucherYear`), the credit note number for `credit-note`;
+- canonical JSON with its sha256 and capture time; at most 1 MiB; insert-only;
+- the read must match the receipt (voucher year/series/number, `ReferenceType` `INVOICEPAYMENT`
+  and the payment's invoice; credit note number, `Credit` `"true"` and `InvoiceReference` = the
+  credited invoice), otherwise nothing is stored;
+- a later capture that reads a different object is refused and the first copy is kept: it may
+  already have been mirrored. Resolve by hand.
+
+`evidenceVoucherLookup(queue)` and `evidenceCreditNoteLookup(queue)` in
+`src/shadow/source-evidence.ts` are the adapters' `voucherLookup` and `creditNoteLookup`. A
+restored backup without the evidence makes the adapters refuse ("not captured") until it is
+captured again. Capture runs under the pilot lock and backs up like every other local change; it is
+not blocked by `deferred` payment records, since the voucher is needed precisely while they wait.
+
 Remaining before payments can be enabled in the pilot: bookkeep staging (a created payment is
-unbooked until `bookkeepInvoicePayment`), a durable captured-voucher source for
+unbooked until `bookkeepInvoicePayment`), wiring the captured evidence into the host's
 `AccountedInvoicePaymentAdapter`, a hash-bound payment variant of `preview` and `drain-one`
 over `drainPaymentAware` (with the dispatch journal written before the target request), and
 operator refusal and reconciliation for payment groups.

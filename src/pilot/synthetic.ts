@@ -1,6 +1,7 @@
 /**
  * Deterministic in-memory Fortnox transport for rehearsal (`server --synthetic-source`) and tests.
- * Models only what the pilot touches: companyinformation, customers, articles and invoices.
+ * Models only what the pilot touches: companyinformation, customers, articles, invoices and
+ * (read-only) vouchers.
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import type { FortnoxTransport, RequestOptions } from '../fortnox-client.js';
@@ -13,6 +14,8 @@ export interface SyntheticFortnox {
     customers: Map<string, Entity>;
     articles: Map<string, Entity>;
     invoices: Map<string, Entity>;
+    /** Keyed "financialYear:series:number" (read-only; tests seed them). */
+    vouchers: Map<string, Entity>;
     /** "METHOD endpoint" for every request. */
     requests: string[];
     /** Mutable so tests can simulate the Fortnox company changing underneath the host. */
@@ -62,6 +65,7 @@ export function createSyntheticFortnox(
       ['A-1', { ArticleNumber: 'A-1', Description: 'Synthetic' }],
     ]),
     invoices: new Map<string, Entity>(),
+    vouchers: new Map<string, Entity>(),
     requests: [],
     orgNr,
   };
@@ -179,6 +183,15 @@ export function createSyntheticFortnox(
       return found(state.articles, last(endpoint), 'Article');
     if (method === 'GET' && endpoint.startsWith('invoices/'))
       return found(state.invoices, last(endpoint), 'Invoice');
+    const voucher = endpoint.match(/^vouchers\/([^/]+)\/([^/]+)$/);
+    if (method === 'GET' && voucher) {
+      const year = options.params?.financialyear;
+      return found(
+        state.vouchers,
+        `${String(year)}:${decodeURIComponent(voucher[1]!)}:${decodeURIComponent(voucher[2]!)}`,
+        'Voucher',
+      );
+    }
     if (method === 'POST' && endpoint === 'customers') {
       const input = body!.Customer!;
       const customer: Entity = {
