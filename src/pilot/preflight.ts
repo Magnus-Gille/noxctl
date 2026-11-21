@@ -72,6 +72,7 @@ export function preflightStagedCall(
     if (operation === 'createInvoicePayment') return preflightInvoicePayment(deps, payload);
     if (operation === 'bookkeepInvoicePayment') return preflightBookkeep(deps, payload);
     if (operation === 'creditInvoice') return preflightCredit(deps, payload);
+    if (operation === 'markInvoicePrinted') return preflightIssue(deps, payload);
   } catch (error) {
     return `Preflight failed (${error instanceof Error ? error.name : 'Error'})`;
   }
@@ -337,5 +338,39 @@ function preflightCredit(
   );
   if (!issued)
     return `CREDIT_ORIGINAL_NOT_ISSUED: Invoice ${number} has no applied issue (markInvoicePrinted) record; the pilot cannot mirror invoice issuing yet`;
+  return undefined;
+}
+
+const ISSUE_INPUT_KEYS = new Set(['documentNumber', 'markSent']);
+/**
+ * Marking a mirrored invoice as sent (`fortnox_invoice_pdf` with `markSent`; Fortnox /print),
+ * mirrored later onto Accounted mark-sent. Only an applied strict invoice, once. No output path:
+ * the /preview copy goes to a fresh private temporary directory on the host.
+ */
+function preflightIssue(deps: PreflightDeps, payload: Record<string, unknown>): string | undefined {
+  const unsupported = Object.keys(payload).filter((key) => !ISSUE_INPUT_KEYS.has(key));
+  if (unsupported.length) return `Unsupported issue input fields: ${unsupported.sort().join(', ')}`;
+  if (payload.markSent !== true) return 'markSent must be true: only the issue step is staged';
+  const number = payload.documentNumber;
+  if (typeof number !== 'string' || !CANONICAL_NUMBER.test(number))
+    return 'documentNumber must be a canonical positive integer string';
+  if (!deps.getRecord || !deps.records) return 'No invoice issue mapping is available';
+  const invoice = deps.resolveIdentity('invoice', number);
+  if (invoice.state !== 'ready')
+    return `Invoice ${number} is not mirrored (identity is ${invoice.state})`;
+  const creator = deps.getRecord(invoice.intentId);
+  if (!creator || creator.operation !== 'createInvoice' || creator.state !== 'applied')
+    return `Invoice ${number} has no applied strict invoice record`;
+  const mapped = mapInvoiceDraft(creator, deps.binding, (resource, id) =>
+    deps.resolveIdentity(resource, id),
+  );
+  if ('blocked' in mapped)
+    return `Invoice ${number} is not a supported strict invoice: ${mapped.blocked}`;
+  for (const record of deps.records()) {
+    if (record.state === 'source_cancelled' || record.operation !== 'markInvoicePrinted') continue;
+    const args = Array.isArray(record.args) ? record.args : [];
+    if (canonicalNumber(args[0]) === number || canonicalNumber(args[0]) === undefined)
+      return `Invoice ${number} already has issue record ${record.id}`;
+  }
   return undefined;
 }

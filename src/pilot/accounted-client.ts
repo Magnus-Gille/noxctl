@@ -41,6 +41,12 @@ export interface AccountedClientOptions {
   apiKey: () => Promise<string>;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
+  /**
+   * Extra request shapes for the opt-in stages (default none, and the operator bootstrap sets
+   * none): `issue` = POST invoices/{id}/mark-sent; `payments` = mark-paid (and its dry run) plus
+   * the payment readbacks; `credits` = POST invoices/{id}/credit.
+   */
+  stages?: { issue?: boolean; payments?: boolean; credits?: boolean };
 }
 
 const UUID_SOURCE = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
@@ -84,6 +90,16 @@ export function createAccountedClient(options: AccountedClientOptions): Accounte
     new RegExp(`^/api/v1/companies/${company}/articles\\?include_inactive=true$`),
   ];
   const allowedPost = [new RegExp(`^/api/v1/companies/${company}/(customers|invoices)$`)];
+  const invoice = `^/api/v1/companies/${company}/invoices/${UUID_SOURCE}`;
+  if (options.stages?.issue === true) allowedPost.push(new RegExp(`${invoice}/mark-sent$`, 'i'));
+  if (options.stages?.credits === true) allowedPost.push(new RegExp(`${invoice}/credit$`, 'i'));
+  if (options.stages?.payments === true) {
+    allowedPost.push(new RegExp(`${invoice}/mark-paid(\\?dry_run=true)?$`, 'i'));
+    allowedGet.push(
+      new RegExp(`${invoice}\\?expand=(items,payments|payments)$`, 'i'),
+      new RegExp(`^/api/v1/companies/${company}/journal-entries/${UUID_SOURCE}$`, 'i'),
+    );
+  }
 
   function assertAllowed(request: AccountedRequest): void {
     const { method, path } = request;

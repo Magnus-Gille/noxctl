@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Pilot (unpublished): an invoice issue stage behind `enableInvoiceIssue` (off by default, never
+  set by the CLI). It stages `fortnox_invoice_pdf` with `markSent` and drains it through
+  `AccountedInvoiceIssueAdapter` (mark-sent). The Accounted client gains opt-in `stages`
+  allowlists for issue, payments and credits; the bootstrap enables none.
 - Pilot (unpublished): invoice credits can be staged behind `enableInvoiceCredits` (off by
   default, never set by the CLI) and drained through `AccountedInvoiceCreditAdapter` with the
   captured credit note. The preflight refuses every credit until the pilot can mirror invoice

@@ -35,6 +35,7 @@ import { AccountedInvoiceDraftAdapter } from '../shadow/invoice-draft-adapter.js
 import type { ShadowQueue } from '../shadow/queue.js';
 import { AccountedInvoicePaymentAdapter } from '../shadow/invoice-payment-adapter.js';
 import { AccountedInvoiceCreditAdapter } from '../shadow/invoice-credit-adapter.js';
+import { AccountedInvoiceIssueAdapter } from '../shadow/invoice-issue-adapter.js';
 import { evidenceCreditNoteLookup, evidenceVoucherLookup } from '../shadow/source-evidence.js';
 import type {
   ShadowAdapter,
@@ -144,6 +145,11 @@ export interface PilotHostDeps {
   enableInvoicePayments?: boolean;
   /** Stage full invoice credits (NOX-212). Default off; the operator CLI never sets it. */
   enableInvoiceCredits?: boolean;
+  /**
+   * Stage marking an invoice as sent (`fortnox_invoice_pdf` with `markSent`) and mirror it onto
+   * Accounted mark-sent. Default off; the operator CLI never sets it.
+   */
+  enableInvoiceIssue?: boolean;
   /** Replaces the default payment adapter (tests and rehearsal only). */
   paymentAdapter?: ShadowPaymentAdapter;
 }
@@ -353,6 +359,7 @@ export async function createPilotHost(
     fortnox_create_invoice_payment: 'createInvoicePayment',
     fortnox_bookkeep_invoice_payment: 'bookkeepInvoicePayment',
     fortnox_credit_invoice: 'creditInvoice',
+    fortnox_invoice_pdf: 'markInvoicePrinted',
   };
   function stagedTool(record: unknown): string | undefined {
     try {
@@ -507,7 +514,10 @@ export async function createPilotHost(
     // Every staged prepare/execute holds pilot.lock (authorize) until its response is sent.
     ...(deps.enableInvoicePayments === true ? { enableInvoicePayments: true } : {}),
     ...(deps.enableInvoiceCredits === true ? { enableInvoiceCredits: true } : {}),
-    ...(deps.enableInvoicePayments === true || deps.enableInvoiceCredits === true
+    ...(deps.enableInvoiceIssue === true ? { enableInvoiceIssue: true } : {}),
+    ...(deps.enableInvoicePayments === true ||
+    deps.enableInvoiceCredits === true ||
+    deps.enableInvoiceIssue === true
       ? { serializedExecution: true }
       : {}),
     preflight: ({ operation, args }) => {
@@ -538,6 +548,12 @@ export async function createPilotHost(
     deps.accounted,
   );
 
+  const issues = new AccountedInvoiceIssueAdapter(
+    binding,
+    (kind, id) => queue.resolveIdentity(kind, id),
+    (id) => queue.get(id),
+    deps.accounted,
+  );
   const credits = new AccountedInvoiceCreditAdapter(
     binding,
     (kind, id) => queue.resolveIdentity(kind, id),
@@ -650,6 +666,7 @@ export async function createPilotHost(
       if (operation === 'baselineArticle') return articles;
       if (operation === 'createInvoice') return invoices;
       if (operation === 'creditInvoice') return credits;
+      if (operation === 'markInvoicePrinted') return issues;
       return undefined;
     },
     checkGate: (exceptId, exceptStates) => gateWith(exceptId, undefined, false, exceptStates),

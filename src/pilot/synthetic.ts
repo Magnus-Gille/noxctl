@@ -335,11 +335,33 @@ export function createSyntheticFortnox(
   const unsupported = async () => {
     throw new Error('Synthetic Fortnox does not support this request kind');
   };
+  const pdfOf = (endpoint: string, action: 'preview' | 'print'): Entity => {
+    const match = endpoint.match(new RegExp(`^invoices(?:-v2)?/([^/]+)/${action}$`));
+    const invoice = match ? state.invoices.get(decodeURIComponent(match[1]!)) : undefined;
+    if (!invoice) throw new Error(`Synthetic Fortnox does not support ${action} ${endpoint}`);
+    return invoice;
+  };
+  /** /preview: read-only PDF. */
+  async function requestPdf(endpoint: string): Promise<Buffer> {
+    load();
+    state.requests.push(`GET ${endpoint}`);
+    const invoice = pdfOf(endpoint, 'preview');
+    return Buffer.from(`%PDF-synthetic ${String(invoice.DocumentNumber)}`);
+  }
+  /** /print: a GET that marks the invoice as sent. */
+  async function requestPdfFromMutation(endpoint: string): Promise<Buffer> {
+    load();
+    state.requests.push(`GET ${endpoint}`);
+    const invoice = pdfOf(endpoint, 'print');
+    invoice.Sent = true;
+    save();
+    return Buffer.from(`%PDF-synthetic ${String(invoice.DocumentNumber)}`);
+  }
   const transport = {
     request,
     requestWithMetadata: unsupported,
-    requestPdf: unsupported,
-    requestPdfFromMutation: unsupported,
+    requestPdf,
+    requestPdfFromMutation,
     requestFile: unsupported,
     fetchAllPages: unsupported,
   } as unknown as FortnoxTransport;
