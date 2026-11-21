@@ -33,7 +33,14 @@ import {
 import { AccountedArticleLinkAdapter } from '../shadow/article-link-adapter.js';
 import { AccountedInvoiceDraftAdapter } from '../shadow/invoice-draft-adapter.js';
 import type { ShadowQueue } from '../shadow/queue.js';
-import type { ShadowAdapter, ShadowRecord } from '../shadow/types.js';
+import { AccountedInvoicePaymentAdapter } from '../shadow/invoice-payment-adapter.js';
+import { evidenceVoucherLookup } from '../shadow/source-evidence.js';
+import type {
+  ShadowAdapter,
+  ShadowPaymentAdapter,
+  ShadowPaymentGroup,
+  ShadowRecord,
+} from '../shadow/types.js';
 import { createStagedServer, type StagedServer } from '../staged-server.js';
 import { PilotNotDispatchedError } from './accounted-client.js';
 import { checkFortnoxCompany, checkWriteGate, type GateResult } from './gate.js';
@@ -134,6 +141,8 @@ export interface PilotHostDeps {
    * sets it: payments stay disabled in the pilot until the operator decides otherwise.
    */
   enableInvoicePayments?: boolean;
+  /** Replaces the default payment adapter (tests and rehearsal only). */
+  paymentAdapter?: ShadowPaymentAdapter;
 }
 export type BackupResult = { ok: true; directory: string } | { ok: false; reason: string };
 
@@ -148,7 +157,15 @@ export interface PilotHost {
   readonly log: (line: string) => void;
   adapterFor(operation: string): ShadowAdapter | undefined;
   /** Queue/storage/restore gate plus the Fortnox company identity read. */
-  checkGate(exceptId?: string, exceptStates?: readonly string[]): Promise<GateResult>;
+  checkGate(
+    exceptId?: string | readonly string[],
+    exceptStates?: readonly string[],
+  ): Promise<GateResult>;
+  /**
+   * The payment group adapter (NOX-211): AccountedInvoicePaymentAdapter over the captured voucher
+   * evidence, refusing before any claim while the invoice has no applied issue record.
+   */
+  readonly paymentAdapter: ShadowPaymentAdapter;
   /**
    * Every gate condition except the queue's own record states: storage, staged calls, journal,
    * newest backup, restore acknowledgement and the Fortnox company. For steps that change only
@@ -435,7 +452,7 @@ export async function createPilotHost(
   }
 
   async function gateWith(
-    exceptId?: string,
+    exceptId?: string | readonly string[],
     stagedExclude?: string,
     ownMarker = false,
     exceptStates?: readonly string[],
@@ -514,6 +531,18 @@ export async function createPilotHost(
     (kind, id) => queue.resolveIdentity(kind, id),
     deps.accounted,
   );
+
+  const paymentAdapter: ShadowPaymentAdapter =
+    deps.paymentAdapter ??
+    issueGated(
+      new AccountedInvoicePaymentAdapter(
+        binding,
+        () => queue.snapshot(),
+        evidenceVoucherLookup(queue),
+        deps.accounted,
+      ),
+      () => queue.snapshot().map(({ record }) => record),
+    );
 
   async function backupLocked(): Promise<BackupResult> {
     let dir: string | undefined;
@@ -598,6 +627,7 @@ export async function createPilotHost(
     queue,
     staged,
     operations: createFortnoxOperations(deps.fortnox),
+    paymentAdapter,
     now,
     osUser,
     log,
@@ -783,4 +813,35 @@ export async function createPilotHost(
   needsAck = acknowledged === undefined ? !empty : acknowledged !== current;
   if (needsAck) log('pilot: queue differs from the last acknowledged state; run `status`');
   return host;
+}
+
+export const PAYMENT_INVOICE_NOT_ISSUED = 'PAYMENT_INVOICE_NOT_ISSUED';
+/**
+ * AccountedInvoicePaymentAdapter.apply needs the invoice issued in Accounted (an applied
+ * `markInvoicePrinted`), which the pilot cannot mirror yet. Refusing in `prepare`, before the group
+ * is claimed, keeps a payment from ending as `target_unknown` on that precondition.
+ */
+function issueGated(
+  inner: ShadowPaymentAdapter,
+  records: () => readonly ShadowRecord[],
+): ShadowPaymentAdapter {
+  const issued = (group: ShadowPaymentGroup) =>
+    records().some(
+      (record) =>
+        record.operation === 'markInvoicePrinted' &&
+        record.state === 'applied' &&
+        Array.isArray(record.args) &&
+        String(record.args[0]) === group.sourceInvoiceId,
+    );
+  return {
+    prepare(group) {
+      const prepared = inner.prepare(group);
+      if ('blocked' in prepared || issued(group)) return prepared;
+      return {
+        blocked: `${PAYMENT_INVOICE_NOT_ISSUED}: invoice ${group.sourceInvoiceId} has no applied issue (markInvoicePrinted) record; the pilot cannot mirror invoice issuing yet`,
+      };
+    },
+    apply: (group, request) => inner.apply(group, request),
+    ...(inner.verify ? { verify: inner.verify.bind(inner) } : {}),
+  };
 }

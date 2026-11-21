@@ -9,6 +9,7 @@ import type { FortnoxTransport } from '../../src/fortnox-client.js';
 import { createAccountedClient } from '../../src/pilot/accounted-client.js';
 import { createPilotHost, loadPilotConfig, type PilotHost } from '../../src/pilot/host.js';
 import { createSyntheticFortnox } from '../../src/pilot/synthetic.js';
+import type { ShadowPaymentAdapter } from '../../src/shadow/types.js';
 
 export const COMPANY = '33333333-3333-4333-8333-333333333333';
 export const ORIGIN = 'https://accounted.test';
@@ -229,6 +230,7 @@ export interface HarnessOptions {
   configOverrides?: Record<string, unknown>;
   fsync?: (fd: number) => void;
   enableInvoicePayments?: boolean;
+  paymentAdapter?: ShadowPaymentAdapter;
 }
 export async function makeHost(options: HarnessOptions = {}) {
   const root = options.root ?? tempRoot();
@@ -255,6 +257,7 @@ export async function makeHost(options: HarnessOptions = {}) {
     headDir,
     ...(options.fsync ? { fsync: options.fsync } : {}),
     ...(options.enableInvoicePayments ? { enableInvoicePayments: true } : {}),
+    ...(options.paymentAdapter ? { paymentAdapter: options.paymentAdapter } : {}),
   });
   hosts.push(host);
   return { host, root, config, synthetic, accounted, clock, stderr, headDir };

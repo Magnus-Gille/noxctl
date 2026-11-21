@@ -19,6 +19,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Pilot (unpublished): `refuse` closes the whole payment chain at the head of the queue when it
+  cannot be drained (all members blocked with `OPERATOR_REFUSED:`, journaled one by one), and
+  `reconcile` verifies a `target_unknown` payment group read-only. The payment plan skips
+  operator-refused records (NOX-211).
+- Pilot (unpublished): `preview`/`drain-one` take a whole invoice payment group when a payment
+  record is at the head of the queue. One transaction defers, prepares and claims only the
+  previewed group (hash over members, plan, companies, revision); every member is journaled
+  before any Accounted request; the payment is re-read in Fortnox first. The default payment
+  adapter refuses before the claim while the invoice has no issue stage (NOX-211).
 - Pilot (unpublished): `fortnox_bookkeep_invoice_payment` can be staged next to
   `fortnox_create_invoice_payment` when the host is created with `enableInvoicePayments` (off by
   default, never set by the operator CLI). Its preflight books only the one pending, unbooked

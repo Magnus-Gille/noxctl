@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { canonicalEncode, decode } from './codec.js';
+import { isOperatorRefused } from './operator-refusal.js';
 import { projectInvoicePaymentLifecycle } from './payment-source-lifecycle.js';
 import type {
   PaymentGroupDescriptor,
@@ -247,6 +248,8 @@ export function planPaymentQueue(
   for (const row of snapshot) {
     const record = row.record;
     if (record.state === 'applied' || record.state === 'source_cancelled') continue;
+    // Closed by the operator without target contact: evidence only, never a queue decision.
+    if (isOperatorRefused(record)) continue;
     if (record.state === 'deferred') {
       if (!validDeferred(row, snapshot, binding))
         return {
