@@ -5,6 +5,7 @@ import { openPilotHost } from './bootstrap.js';
 import {
   backupCommand,
   baselineCustomerCommand,
+  captureCommand,
   drainOneCommand,
   linkArticleCommand,
   reconcileCommand,
@@ -21,6 +22,7 @@ const USAGE = `usage: node dist/pilot/cli.js --config <file> [--synthetic-source
   baseline-customer <CustomerNumber>
   link-article <ArticleNumber> <targetArticleUuid>
   reconcile <id>
+  capture <id>
   refuse <id> <reason>
   backup`;
 
@@ -43,6 +45,7 @@ export async function main(argv: string[]): Promise<number> {
     'baseline-customer': 1,
     'link-article': 2,
     reconcile: 1,
+    capture: 1,
     refuse: 2,
     backup: 0,
   };
@@ -71,6 +74,9 @@ export async function main(argv: string[]): Promise<number> {
         break;
       case 'reconcile':
         result = await reconcileCommand(host, params[0]!);
+        break;
+      case 'capture':
+        result = await captureCommand(host, params[0]!);
         break;
       case 'refuse':
         result = await refuseCommand(host, params[0]!, params[1]!);

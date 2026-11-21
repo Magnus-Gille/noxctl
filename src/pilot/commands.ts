@@ -9,6 +9,9 @@ import { join } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { canonicalEncode, decode } from '../shadow/codec.js';
 import { isOperatorRefused } from '../shadow/operator-refusal.js';
+import { PAYMENT_OPERATIONS } from '../shadow/payment-queue-plan.js';
+import type { SourceEvidenceKind } from '../shadow/queue.js';
+import { creditNoteNumber, paymentVoucherRef } from '../shadow/source-evidence.js';
 import type { ShadowRecord, ShadowState } from '../shadow/types.js';
 import type { PilotHost } from './host.js';
 import { PilotLockError } from './lock.js';
@@ -424,6 +427,97 @@ export async function reconcileCommand(host: PilotHost, id: string): Promise<Com
       state,
       message: `${id}: still ${state}${failure ? ` (${failure})` : ' (target does not match)'}; nothing was sent`,
     };
+  });
+}
+
+const plainObject = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+const sameId = (a: unknown, b: unknown) =>
+  (typeof a === 'string' || typeof a === 'number') && String(a) === String(b);
+
+/**
+ * Reads, read-only, the Fortnox object that a record's source receipt only refers to and pins it as
+ * evidence: the voucher of a booked payment, or the credit note of a credit. Nothing is sent to
+ * Accounted. A later read that differs from the pinned copy is refused and the copy is kept.
+ */
+export async function captureCommand(host: PilotHost, id: string): Promise<CommandResult> {
+  if (!ID.test(id)) return refuse('invalid record id');
+  return locked(host, 'capture', async () => {
+    const record = host.queue.get(id);
+    if (!record) return refuse(`no record ${id}`);
+    const source = record.sourceResult;
+    let kind: SourceEvidenceKind;
+    let key: string;
+    let read: () => Promise<Record<string, unknown>>;
+    let matches: (data: Record<string, unknown>) => boolean;
+    let what: string;
+    if (PAYMENT_OPERATIONS.has(record.operation)) {
+      const ref = paymentVoucherRef(source);
+      if (!ref)
+        return refuse(
+          `${id} has no booked voucher reference in its Fortnox receipt; capture after bookkeeping`,
+        );
+      const invoice = (source as Record<string, unknown>).InvoiceNumber;
+      kind = 'payment-voucher';
+      key = ref.key;
+      what = 'payment';
+      read = () => host.operations.getVoucher(ref.series, ref.number, Number(ref.year));
+      matches = (data) =>
+        sameId(data.Year, ref.year) &&
+        data.VoucherSeries === ref.series &&
+        sameId(data.VoucherNumber, ref.number) &&
+        data.ReferenceType === 'INVOICEPAYMENT' &&
+        sameId(data.ReferenceNumber, invoice);
+    } else if (record.operation === 'creditInvoice') {
+      const original = plainObject(source) ? source.DocumentNumber : undefined;
+      const number = plainObject(source)
+        ? creditNoteNumber(source.CreditInvoiceReference)
+        : undefined;
+      if (!number || typeof original !== 'string')
+        return refuse(`${id} has no credit note number in its Fortnox receipt`);
+      kind = 'credit-note';
+      key = number;
+      what = 'credit';
+      read = () => host.operations.getInvoice(number);
+      matches = (data) =>
+        data.DocumentNumber === number &&
+        data.Credit === 'true' &&
+        data.InvoiceReference === original;
+    } else return refuse(`operation ${record.operation} has no source evidence to capture`);
+    const gate = await host.checkIntegrity();
+    if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
+    let data: Record<string, unknown>;
+    try {
+      data = await read();
+    } catch (error) {
+      return refuse(
+        `${kind} ${key} could not be read from Fortnox; nothing was stored (${error instanceof Error ? error.name : 'Error'})`,
+      );
+    }
+    if (!plainObject(data) || !matches(data))
+      return refuse(
+        `the ${kind} ${key} read from Fortnox does not match the ${what}; nothing was stored`,
+      );
+    try {
+      host.beginMutation();
+    } catch {
+      return refuse('nothing was stored: backup marker could not be made durable');
+    }
+    let outcome: ReturnType<typeof host.queue.recordEvidence> | undefined;
+    let failure: string | undefined;
+    try {
+      outcome = host.queue.recordEvidence(kind, key, data);
+    } catch (error) {
+      failure = error instanceof Error ? error.message : 'Error';
+    } finally {
+      const backup = await host.afterMutation();
+      if (!backup.ok) failure = `${failure ? `${failure}; ` : ''}backup failed: ${backup.reason}`;
+    }
+    if (!outcome?.ok) return refuse(outcome ? outcome.reason : `nothing was stored: ${failure}`);
+    const message = `${id}: ${outcome.created ? 'captured' : 'already captured'} ${kind} ${key} (sha256 ${outcome.sha256}); no Accounted request was made`;
+    return failure
+      ? { ok: false, message: `${message}; but ${failure}; further writes stay gated` }
+      : { ok: true, message };
   });
 }
 
