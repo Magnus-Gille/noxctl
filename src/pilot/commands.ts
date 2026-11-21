@@ -46,6 +46,7 @@ const DRAINABLE_OPERATIONS = new Set([
   'baselineCustomer',
   'baselineArticle',
   'createInvoice',
+  'creditInvoice',
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const ID = /^[A-Za-z0-9_:-][A-Za-z0-9._:-]{0,199}$/;

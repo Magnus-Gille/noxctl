@@ -71,6 +71,7 @@ export function preflightStagedCall(
     }
     if (operation === 'createInvoicePayment') return preflightInvoicePayment(deps, payload);
     if (operation === 'bookkeepInvoicePayment') return preflightBookkeep(deps, payload);
+    if (operation === 'creditInvoice') return preflightCredit(deps, payload);
   } catch (error) {
     return `Preflight failed (${error instanceof Error ? error.name : 'Error'})`;
   }
@@ -286,4 +287,55 @@ function preflightBookkeep(
   if (!invoiceNumber || typeof amount !== 'number')
     return `Payment ${number} create receipt has no usable invoice number or amount`;
   return payableInvoice(deps, invoiceNumber, amount, create.id);
+}
+
+const CREDIT_INPUT_KEYS = new Set(['documentNumber']);
+/**
+ * Full credit of a mirrored original (NOX-212), mirrored later onto Accounted `/credit`. Only an
+ * applied strict invoice that the pilot has issued (applied `markInvoicePrinted`), with no
+ * payment record and no other credit record, may be credited, once.
+ */
+function preflightCredit(
+  deps: PreflightDeps,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const unsupported = Object.keys(payload).filter((key) => !CREDIT_INPUT_KEYS.has(key));
+  if (unsupported.length)
+    return `Unsupported credit input fields: ${unsupported.sort().join(', ')}`;
+  const number = payload.documentNumber;
+  if (typeof number !== 'string' || !CANONICAL_NUMBER.test(number))
+    return 'documentNumber must be a canonical positive integer string';
+  if (!deps.getRecord || !deps.records) return 'No invoice credit mapping is available';
+  const invoice = deps.resolveIdentity('invoice', number);
+  if (invoice.state !== 'ready')
+    return `Invoice ${number} is not mirrored (identity is ${invoice.state})`;
+  const creator = deps.getRecord(invoice.intentId);
+  if (!creator || creator.operation !== 'createInvoice' || creator.state !== 'applied')
+    return `Invoice ${number} has no applied strict invoice record`;
+  const records = deps.records();
+  for (const record of records) {
+    if (record.state === 'source_cancelled') continue;
+    const args = Array.isArray(record.args) ? record.args : [];
+    if (record.operation === 'creditInvoice' && canonicalNumber(args[0]) === number)
+      return `CREDIT_DUPLICATE: Invoice ${number} already has credit record ${record.id}`;
+    if (PAYMENT_OPERATIONS.has(record.operation)) {
+      const named = [record.sourceResult, ...args].map((value) =>
+        value !== null && typeof value === 'object' && 'InvoiceNumber' in value
+          ? canonicalNumber((value as Record<string, unknown>).InvoiceNumber)
+          : undefined,
+      );
+      if (named.includes(number))
+        return `Invoice ${number} has payment record ${record.id}; credits of paid invoices are settled manually`;
+    }
+  }
+  const issued = records.some(
+    (record) =>
+      record.operation === 'markInvoicePrinted' &&
+      record.state === 'applied' &&
+      Array.isArray(record.args) &&
+      record.args[0] === number,
+  );
+  if (!issued)
+    return `CREDIT_ORIGINAL_NOT_ISSUED: Invoice ${number} has no applied issue (markInvoicePrinted) record; the pilot cannot mirror invoice issuing yet`;
+  return undefined;
 }

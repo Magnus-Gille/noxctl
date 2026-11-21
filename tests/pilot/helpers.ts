@@ -230,6 +230,7 @@ export interface HarnessOptions {
   configOverrides?: Record<string, unknown>;
   fsync?: (fd: number) => void;
   enableInvoicePayments?: boolean;
+  enableInvoiceCredits?: boolean;
   paymentAdapter?: ShadowPaymentAdapter;
 }
 export async function makeHost(options: HarnessOptions = {}) {
@@ -257,6 +258,7 @@ export async function makeHost(options: HarnessOptions = {}) {
     headDir,
     ...(options.fsync ? { fsync: options.fsync } : {}),
     ...(options.enableInvoicePayments ? { enableInvoicePayments: true } : {}),
+    ...(options.enableInvoiceCredits ? { enableInvoiceCredits: true } : {}),
     ...(options.paymentAdapter ? { paymentAdapter: options.paymentAdapter } : {}),
   });
   hosts.push(host);
@@ -283,7 +285,8 @@ export async function stagedCreate(
     | 'fortnox_create_customer'
     | 'fortnox_create_invoice'
     | 'fortnox_create_invoice_payment'
-    | 'fortnox_bookkeep_invoice_payment',
+    | 'fortnox_bookkeep_invoice_payment'
+    | 'fortnox_credit_invoice',
   args: Record<string, unknown>,
 ): Promise<CallToolResult> {
   const prepared = (await client.callTool({

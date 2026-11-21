@@ -291,6 +291,40 @@ export function createSyntheticFortnox(
       });
       return { InvoicePayment: structuredClone(payment) } as T;
     }
+    const credit = endpoint.match(/^invoices(?:-v2)?\/([^/]+)\/credit$/);
+    if (method === 'PUT' && credit) {
+      // Real shape (export 2026-10-27): the response is the updated ORIGINAL; the new credit note
+      // has negated rows and totals, a text row, Credit "true", CreditInvoiceReference "0".
+      const original = state.invoices.get(decodeURIComponent(credit[1]!));
+      if (!original || original.Credit !== 'false' || original.CreditInvoiceReference)
+        throw new Error('Synthetic Fortnox: invoice cannot be credited');
+      const number = String(nextInvoice++);
+      const negate = (value: unknown) => -Number(value);
+      const rows = (original.InvoiceRows as Entity[]).map((row) => ({
+        ...row,
+        DeliveredQuantity: String(negate(row.DeliveredQuantity)),
+        Total: negate(row.Total),
+        TotalExcludingVAT: negate(row.TotalExcludingVAT),
+      }));
+      state.invoices.set(number, {
+        ...structuredClone(original),
+        DocumentNumber: number,
+        Credit: 'true',
+        CreditInvoiceReference: '0',
+        InvoiceReference: original.DocumentNumber,
+        Net: negate(original.Net),
+        TotalVAT: negate(original.TotalVAT),
+        Total: negate(original.Total),
+        TotalToPay: negate(original.TotalToPay),
+        Balance: negate(original.Balance),
+        InvoiceRows: [
+          ...rows,
+          { Description: `Kreditering av faktura ${String(original.DocumentNumber)}` },
+        ],
+      });
+      original.CreditInvoiceReference = number;
+      return { Invoice: structuredClone(original) } as T;
+    }
     if (method === 'POST' && (endpoint === 'invoices' || endpoint === 'invoices-v2')) {
       const invoice = buildInvoice(body!.Invoice!);
       state.invoices.set(invoice.DocumentNumber as string, invoice);
