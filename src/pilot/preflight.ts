@@ -70,6 +70,7 @@ export function preflightStagedCall(
       return 'blocked' in result ? result.blocked : undefined;
     }
     if (operation === 'createInvoicePayment') return preflightInvoicePayment(deps, payload);
+    if (operation === 'bookkeepInvoicePayment') return preflightBookkeep(deps, payload);
   } catch (error) {
     return `Preflight failed (${error instanceof Error ? error.name : 'Error'})`;
   }
@@ -143,7 +144,20 @@ function preflightInvoicePayment(
   )
     return 'Source must be a short single-line text';
   if (!deps.getRecord || !deps.records) return 'No invoice payment mapping is available';
-  const sourceInvoiceId = String(number);
+  return payableInvoice(deps, String(number), amount);
+}
+
+/**
+ * The invoice a full payment of `amount` may be mirrored against: an applied strict SEK invoice,
+ * not credited, and with no payment-chain record other than `ownRecordId`.
+ */
+function payableInvoice(
+  deps: PreflightDeps,
+  sourceInvoiceId: string,
+  amount: number,
+  ownRecordId?: string,
+): string | undefined {
+  if (!deps.getRecord || !deps.records) return 'No invoice payment mapping is available';
   const invoice = deps.resolveIdentity('invoice', sourceInvoiceId);
   if (invoice.state !== 'ready')
     return `Invoice ${sourceInvoiceId} is not mirrored (identity is ${invoice.state})`;
@@ -169,7 +183,12 @@ function preflightInvoicePayment(
   // cannot be determined blocks every new payment until it is resolved.
   let earlier: { id: string } | undefined;
   for (const record of deps.records()) {
-    if (!PAYMENT_OPERATIONS.has(record.operation) || record.state === 'source_cancelled') continue;
+    if (
+      !PAYMENT_OPERATIONS.has(record.operation) ||
+      record.state === 'source_cancelled' ||
+      record.id === ownRecordId
+    )
+      continue;
     const candidates: unknown[] = [];
     const receipt = record.sourceResult;
     if (receipt !== null && typeof receipt === 'object' && 'InvoiceNumber' in receipt)
@@ -198,4 +217,73 @@ function preflightInvoicePayment(
   }
   if (earlier) return `Invoice ${sourceInvoiceId} already has payment record ${earlier.id}`;
   return undefined;
+}
+
+const CANONICAL_NUMBER = /^[1-9]\d{0,15}$/;
+const canonicalNumber = (value: unknown): string | undefined =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? String(value)
+    : typeof value === 'string' && CANONICAL_NUMBER.test(value)
+      ? value
+      : undefined;
+
+/**
+ * Every Fortnox payment number a payment-chain record carries: the receipt's `Number` and, for
+ * bookkeep/update/delete, the first argument. `malformed` when any present value is not canonical
+ * or they disagree.
+ */
+function paymentNumberOf(record: ShadowRecord): string | 'malformed' | undefined {
+  const candidates: unknown[] = [];
+  const receipt = record.sourceResult;
+  if (receipt !== null && typeof receipt === 'object' && 'Number' in receipt)
+    candidates.push((receipt as Record<string, unknown>).Number);
+  if (record.operation !== 'createInvoicePayment' && Array.isArray(record.args))
+    candidates.push(record.args[0]);
+  if (candidates.length === 0) return undefined;
+  const canonical = candidates.map(canonicalNumber);
+  if (canonical.some((value) => value === undefined) || new Set(canonical).size > 1)
+    return 'malformed';
+  return canonical[0];
+}
+
+const BOOKKEEP_INPUT_KEYS = new Set(['paymentNumber']);
+/**
+ * Bookkeeping of a payment the pilot created (NOX-211). Only the one pending, unbooked
+ * `createInvoicePayment` record of that payment number may be booked, once, and only while its
+ * invoice still qualifies for the exact full payment.
+ */
+function preflightBookkeep(
+  deps: PreflightDeps,
+  payload: Record<string, unknown>,
+): string | undefined {
+  const unsupported = Object.keys(payload).filter((key) => !BOOKKEEP_INPUT_KEYS.has(key));
+  if (unsupported.length)
+    return `Unsupported bookkeep input fields: ${unsupported.sort().join(', ')}`;
+  const number = payload.paymentNumber;
+  if (typeof number !== 'string' || !CANONICAL_NUMBER.test(number))
+    return 'paymentNumber must be a canonical positive integer string';
+  if (!deps.getRecord || !deps.records) return 'No invoice payment mapping is available';
+  let create: ShadowRecord | undefined;
+  for (const record of deps.records()) {
+    if (!PAYMENT_OPERATIONS.has(record.operation) || record.state === 'source_cancelled') continue;
+    const own = paymentNumberOf(record);
+    if (own === 'malformed')
+      return `Payment record ${record.id} has a malformed payment number; resolve it before bookkeeping`;
+    if (own === undefined && record.operation !== 'createInvoicePayment')
+      return `Payment record ${record.id} names no payment; resolve it before bookkeeping`;
+    if (own !== number) continue;
+    if (record.operation !== 'createInvoicePayment' || create)
+      return `Payment ${number} already has payment record ${record.id}`;
+    create = record;
+  }
+  if (!create) return `Payment ${number} has no pilot create record`;
+  if (create.state !== 'pending')
+    return `Payment ${number} create record ${create.id} is ${create.state}`;
+  const receipt = create.sourceResult as Record<string, unknown> | undefined;
+  if (!receipt || receipt.Booked !== false) return `Payment ${number} is already booked`;
+  const invoiceNumber = canonicalNumber(receipt.InvoiceNumber);
+  const amount = receipt.Amount;
+  if (!invoiceNumber || typeof amount !== 'number')
+    return `Payment ${number} create receipt has no usable invoice number or amount`;
+  return payableInvoice(deps, invoiceNumber, amount, create.id);
 }

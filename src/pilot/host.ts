@@ -129,6 +129,11 @@ export interface PilotHostDeps {
   headDir?: string;
   /** Injectable fsync (tests); defaults to fs.fsyncSync. */
   fsync?: Fsync;
+  /**
+   * Stage invoice payment create and bookkeep (NOX-211). Default off, and the operator CLI never
+   * sets it: payments stay disabled in the pilot until the operator decides otherwise.
+   */
+  enableInvoicePayments?: boolean;
 }
 export type BackupResult = { ok: true; directory: string } | { ok: false; reason: string };
 
@@ -325,6 +330,8 @@ export async function createPilotHost(
   const EXPECTED_OPERATION: Record<string, string> = {
     fortnox_create_customer: 'createCustomer',
     fortnox_create_invoice: 'createInvoice',
+    fortnox_create_invoice_payment: 'createInvoicePayment',
+    fortnox_bookkeep_invoice_payment: 'bookkeepInvoicePayment',
   };
   function stagedTool(record: unknown): string | undefined {
     try {
@@ -476,6 +483,10 @@ export async function createPilotHost(
     revision: config.revision,
     maxPreparationAgeMs: MAX_PREPARATION_MS,
     authorize: (context) => authorize(context),
+    // Every staged prepare/execute holds pilot.lock (authorize) until its response is sent.
+    ...(deps.enableInvoicePayments === true
+      ? { enableInvoicePayments: true, serializedExecution: true }
+      : {}),
     preflight: ({ operation, args }) => {
       const reason = preflightStagedCall(
         {

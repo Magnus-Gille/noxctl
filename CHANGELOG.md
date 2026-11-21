@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Pilot (unpublished): `fortnox_bookkeep_invoice_payment` can be staged next to
+  `fortnox_create_invoice_payment` when the host is created with `enableInvoicePayments` (off by
+  default, never set by the operator CLI). Its preflight books only the one pending, unbooked
+  pilot-created payment of a payable invoice, once (NOX-211).
 - Pilot (unpublished): `capture <id>` pins the Fortnox voucher of a booked invoice payment, or
   the credit note of a credit, as read-only evidence in the shadow queue (insert-only, sha256,
   a differing re-read is refused). The payment and credit adapters read their voucher and credit
