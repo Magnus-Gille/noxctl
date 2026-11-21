@@ -376,3 +376,27 @@ may be any member.
 
 Remaining before payments can be enabled in the pilot: an invoice issue stage (see
 `PAYMENT_INVOICE_NOT_ISSUED`), then Magnus's decision to enable the flag.
+
+## Invoice credits (NOX-212)
+
+Fortnox `creditInvoice` is mirrored onto Accounted `POST /invoices/:id/credit` by
+`AccountedInvoiceCreditAdapter` (full credit of an issued original only). In the pilot:
+
+- `createPilotHost(config, { enableInvoiceCredits: true })` stages `fortnox_credit_invoice`
+  (default off; the operator CLI never sets it; it requires the host preflight and serialized
+  execution, like payments).
+- Preflight `creditInvoice` (`{ documentNumber }`): the original must be an applied strict
+  invoice with an applied `markInvoicePrinted` (issue) record, no payment record
+  (credits of paid invoices are settled manually) and no other credit record (`CREDIT_DUPLICATE`).
+  Until the pilot can mirror invoice issuing, every credit is refused here with
+  `CREDIT_ORIGINAL_NOT_ISSUED`, before Fortnox is contacted.
+- A `creditInvoice` record is drained like any single record (`preview`, `drain-one`), after
+  `capture <id>` has pinned the credit note (`CREDIT_NOTE_NOT_CAPTURED` otherwise). The adapter
+  refuses it while the original is not issued, and `refuse` can close it.
+- Synthetic Fortnox implements `PUT invoices/{n}/credit` with the real shape: it answers with the
+  updated original (`CreditInvoiceReference` = the new credit note), and the credit note carries
+  negated rows and totals, a text row, `Credit: "true"`, `CreditInvoiceReference: "0"` and
+  `InvoiceReference` = the original.
+
+Remaining before credits (and payments) can run in the pilot: an invoice issue stage
+(`markInvoicePrinted` staging and its Accounted issue adapter in the host).

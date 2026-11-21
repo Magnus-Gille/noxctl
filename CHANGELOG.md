@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Pilot (unpublished): invoice credits can be staged behind `enableInvoiceCredits` (off by
+  default, never set by the CLI) and drained through `AccountedInvoiceCreditAdapter` with the
+  captured credit note. The preflight refuses every credit until the pilot can mirror invoice
+  issuing (`CREDIT_ORIGINAL_NOT_ISSUED`) (NOX-212).
 - Pilot (unpublished): `refuse` closes the whole payment chain at the head of the queue when it
   cannot be drained (all members blocked with `OPERATOR_REFUSED:`, journaled one by one), and
   `reconcile` verifies a `target_unknown` payment group read-only. The payment plan skips

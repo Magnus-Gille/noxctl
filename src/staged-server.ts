@@ -48,6 +48,11 @@ export interface CreateStagedServerOptions {
    */
   enableInvoicePayments?: boolean;
   /**
+   * Also stage `fortnox_credit_invoice` (NOX-212). Default false; like payments it requires a
+   * host preflight and serialized execution.
+   */
+  enableInvoiceCredits?: boolean;
+  /**
    * The host asserts that every staged_prepare/staged_execute is serialized with all other
    * pilot mutations (the pilot host's pilot.lock), so an execute-time preflight cannot race.
    * Required, together with `preflight`, when `enableInvoicePayments` is true.
@@ -79,6 +84,10 @@ const baseAllowed: ReadonlyArray<readonly [string, string]> = [
 const paymentAllowed: ReadonlyArray<readonly [string, string]> = [
   ['fortnox_create_invoice_payment', 'createInvoicePayment'],
   ['fortnox_bookkeep_invoice_payment', 'bookkeepInvoicePayment'],
+];
+/** Opt-in (NOX-212): a full credit of a mirrored original; off until the pilot can issue invoices. */
+const creditAllowed: ReadonlyArray<readonly [string, string]> = [
+  ['fortnox_credit_invoice', 'creditInvoice'],
 ];
 const copy = <T>(value: T): T => decode(canonicalEncode(value)) as T;
 function identity(value: string): void {
@@ -141,15 +150,17 @@ export async function createStagedServer(
     maxPreparationAgeMs: options.maxPreparationAgeMs,
   });
   if (
-    options.enableInvoicePayments === true &&
+    (options.enableInvoicePayments === true || options.enableInvoiceCredits === true) &&
     (typeof options.preflight !== 'function' || options.serializedExecution !== true)
   )
     throw new StagedHostError(
-      'Invoice payment staging requires a host preflight and serialized execution',
+      'Invoice payment or credit staging requires a host preflight and serialized execution',
     );
-  const allowed = new Map(
-    options.enableInvoicePayments === true ? [...baseAllowed, ...paymentAllowed] : baseAllowed,
-  );
+  const allowed = new Map([
+    ...baseAllowed,
+    ...(options.enableInvoicePayments === true ? paymentAllowed : []),
+    ...(options.enableInvoiceCredits === true ? creditAllowed : []),
+  ]);
   const authorize = options.authorize;
   const preflight = options.preflight;
   const clock = options.now ?? Date.now;
@@ -318,8 +329,8 @@ export async function createStagedServer(
       {
         description: 'Verkställ det sparade anropets ID med uttrycklig bekräftelse.',
         inputSchema: z.strictObject({ id: z.uuid(), confirm: z.boolean().optional() }),
-        // The staged contract allows only additive create_* tools (see baseAllowed and
-        // paymentAllowed); a destructive tool must flip destructiveHint here.
+        // The staged contract allows only additive tools (see baseAllowed, paymentAllowed and
+        // creditAllowed: a credit adds a credit note); a destructive tool must flip destructiveHint.
         annotations: {
           readOnlyHint: false,
           destructiveHint: false,
