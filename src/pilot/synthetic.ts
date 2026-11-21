@@ -14,6 +14,8 @@ export interface SyntheticFortnox {
     customers: Map<string, Entity>;
     articles: Map<string, Entity>;
     invoices: Map<string, Entity>;
+    /** Invoice payments by payment number. */
+    payments: Map<string, Entity>;
     /** Keyed "financialYear:series:number" (read-only; tests seed them). */
     vouchers: Map<string, Entity>;
     /** "METHOD endpoint" for every request. */
@@ -65,6 +67,7 @@ export function createSyntheticFortnox(
       ['A-1', { ArticleNumber: 'A-1', Description: 'Synthetic' }],
     ]),
     invoices: new Map<string, Entity>(),
+    payments: new Map<string, Entity>(),
     vouchers: new Map<string, Entity>(),
     requests: [],
     orgNr,
@@ -73,7 +76,6 @@ export function createSyntheticFortnox(
   let nextInvoice = 1;
   let nextPayment = 1;
   let nextVoucher = 1;
-  const payments = new Map<string, Entity>();
   /** Financial year id of every synthetic voucher. */
   const YEAR = 1;
 
@@ -149,8 +151,7 @@ export function createSyntheticFortnox(
     state.invoices = new Map(saved.invoices);
     nextCustomer = saved.nextCustomer;
     nextInvoice = saved.nextInvoice;
-    payments.clear();
-    for (const [key, value] of saved.payments ?? []) payments.set(key, value);
+    state.payments = new Map(saved.payments ?? []);
     state.vouchers = new Map(saved.vouchers ?? []);
     nextPayment = saved.nextPayment ?? 1;
     nextVoucher = saved.nextVoucher ?? 1;
@@ -165,7 +166,7 @@ export function createSyntheticFortnox(
         invoices: [...state.invoices],
         nextCustomer,
         nextInvoice,
-        payments: [...payments],
+        payments: [...state.payments],
         vouchers: [...state.vouchers],
         nextPayment,
         nextVoucher,
@@ -199,6 +200,8 @@ export function createSyntheticFortnox(
       return found(state.customers, last(endpoint), 'Customer');
     if (method === 'GET' && /^articles(-v2)?\//.test(endpoint))
       return found(state.articles, last(endpoint), 'Article');
+    if (method === 'GET' && /^invoicepayments\/[^/]+$/.test(endpoint))
+      return found(state.payments, last(endpoint), 'InvoicePayment');
     if (method === 'GET' && /^invoices(-v2)?\//.test(endpoint))
       return found(state.invoices, last(endpoint), 'Invoice');
     const voucher = endpoint.match(/^vouchers\/([^/]+)\/([^/]+)$/);
@@ -244,12 +247,12 @@ export function createSyntheticFortnox(
         VoucherSeries: '',
         VoucherNumber: 0,
       };
-      payments.set(String(payment.Number), payment);
+      state.payments.set(String(payment.Number), payment);
       return { InvoicePayment: structuredClone(payment) } as T;
     }
     const bookkeep = endpoint.match(/^invoicepayments\/([^/]+)\/bookkeep$/);
     if (method === 'PUT' && bookkeep) {
-      const payment = payments.get(decodeURIComponent(bookkeep[1]!));
+      const payment = state.payments.get(decodeURIComponent(bookkeep[1]!));
       if (!payment || payment.Booked) throw new Error('Synthetic Fortnox: payment not bookable');
       const invoice = state.invoices.get(String(payment.InvoiceNumber))!;
       const row = (Account: number, Debit: number, Credit: number) => ({

@@ -10,8 +10,8 @@ export interface WriteGateInput {
   now: () => number;
   maxAgeMs?: number;
   storageOk: boolean;
-  /** The one record a drain-one is about to take; its own pending state is not a refusal. */
-  exceptId?: string;
+  /** The record (or payment group members) a drain-one is about to take; their own state is not a refusal. */
+  exceptId?: string | readonly string[];
   /** States of `exceptId` that do not refuse (default: pending, retry_wait). */
   exceptStates?: readonly string[];
   /**
@@ -45,6 +45,13 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
   if (staged && (staged.executing > 0 || staged.unknown > 0))
     return { ok: false, reason: 'a staged call is executing or has an unknown outcome' };
   const items = input.queue.status().items;
+  const excepted = new Set<string>(
+    input.exceptId === undefined
+      ? []
+      : typeof input.exceptId === 'string'
+        ? [input.exceptId]
+        : input.exceptId,
+  );
   const refused = (item: (typeof items)[number]) =>
     input.operatorRefused?.has(item.id) === true && isOperatorRefused(item);
   for (const item of items) {
@@ -52,7 +59,7 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
     // A deferred record is a payment-group holding state that no pilot command can advance yet, so
     // no caller-supplied exemption may ever let it through.
     if (
-      item.id === input.exceptId &&
+      excepted.has(item.id) &&
       item.state !== 'deferred' &&
       (input.exceptStates ?? ['pending', 'retry_wait']).includes(item.state)
     )
@@ -73,7 +80,7 @@ export function checkWriteGate(input: WriteGateInput): GateResult {
   }
   const oldest = items.find(
     (item) =>
-      item.id !== input.exceptId &&
+      !excepted.has(item.id) &&
       item.state !== 'applied' &&
       item.state !== 'source_cancelled' &&
       !refused(item),

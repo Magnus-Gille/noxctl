@@ -337,7 +337,42 @@ restored backup without the evidence makes the adapters refuse ("not captured") 
 captured again. Capture runs under the pilot lock and backs up like every other local change; it is
 not blocked by `deferred` payment records, since the voucher is needed precisely while they wait.
 
-Remaining before payments can be enabled in the pilot: wiring the captured evidence into the host's
-`AccountedInvoicePaymentAdapter`, a hash-bound payment variant of `preview` and `drain-one`
-over `drainPaymentAware` (with the dispatch journal written before the target request), and
-operator refusal and reconciliation for payment groups.
+### Preview and drain-one of a payment group (step 3)
+
+When the oldest unresolved record is a payment-chain record, `preview <id>` and
+`drain-one <id> <hash>` work on its whole group (create + bookkeep) instead of one record. `<id>`
+may be any member.
+
+- `queue.drainPaymentGroupExpected(adapter, expectation, 'preview' | 'drain')` runs ONE
+  transaction: it defers the unbooked create, prepares the group and claims it only when `<id>`
+  is a member and the digest equals the previewed hash. A preview, a refusal or a mismatch rolls
+  everything back, so no `deferred` or `blocked` payment record is ever left behind. A payment
+  that still awaits bookkeeping is refused ("awaits bookkeeping"): book it before staging
+  anything else, since the pilot drains strictly in queue order.
+- The hash (`paymentPreviewHash`) covers each member's id, operation and request hash, the
+  prepared plan, both companies and the reviewed revision.
+- `drain-one` re-reads the payment in Fortnox (GET only) and refuses if it is no longer booked or
+  its number, invoice, amount, date or voucher changed. The gate exempts the group members.
+- One `target` journal row per member is written after the claim and before any Accounted
+  request; a journal failure is a safe not-dispatched retry (`retry_wait` for the whole group).
+- The host's payment adapter is `AccountedInvoicePaymentAdapter` over the captured voucher, gated
+  by `PAYMENT_INVOICE_NOT_ISSUED`: its `apply` needs the invoice issued in Accounted (an applied
+  `markInvoicePrinted`), which the pilot cannot mirror yet, so the group is refused before the
+  claim instead of ending as `target_unknown`. Until an issue stage exists, a payment cannot be
+  drained in the pilot even with the flag on.
+
+### Refuse and reconcile a payment group (step 4)
+
+- `refuse <id> <reason>` on a payment record at the head of the queue closes its whole chain:
+  the booked group when its mapping refuses it, a payment that still awaits bookkeeping, or a
+  payment the plan blocks. Every member must be without target contact; a mappable group is not
+  refused ("use preview and drain-one"). All members become `blocked` with `OPERATOR_REFUSED:`
+  in one transaction, each gets its own `refused` journal entry, and a backup is taken. No
+  Fortnox or Accounted request. The payment plan skips operator-refused records, so the queue
+  moves on; the invoice cannot be paid through the pilot again (one payment record per invoice).
+- `reconcile <id>` on a member of a `target_unknown` payment group with a durable receipt runs
+  the payment adapter's read-only `verify` over the whole group (`reconcilePaymentGroup`); on a
+  match every member becomes `applied`, otherwise all stay `target_unknown`. Backs up.
+
+Remaining before payments can be enabled in the pilot: an invoice issue stage (see
+`PAYMENT_INVOICE_NOT_ISSUED`), then Magnus's decision to enable the flag.

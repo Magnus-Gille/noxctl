@@ -12,7 +12,7 @@ import { isOperatorRefused } from '../shadow/operator-refusal.js';
 import { PAYMENT_OPERATIONS } from '../shadow/payment-queue-plan.js';
 import type { SourceEvidenceKind } from '../shadow/queue.js';
 import { creditNoteNumber, paymentVoucherRef } from '../shadow/source-evidence.js';
-import type { ShadowRecord, ShadowState } from '../shadow/types.js';
+import type { ShadowPaymentGroup, ShadowRecord, ShadowState } from '../shadow/types.js';
 import type { PilotHost } from './host.js';
 import { PilotLockError } from './lock.js';
 
@@ -148,10 +148,44 @@ export async function statusCommand(host: PilotHost): Promise<CommandResult> {
   return { ok: true, message: lines.join('\n') };
 }
 
-export async function previewCommand(host: PilotHost, id: string): Promise<CommandResult> {
-  const prepared = prepareOldest(host, id);
-  if ('error' in prepared) return refuse(prepared.error);
-  const hash = previewHash(host, prepared.record, prepared.request);
+/** Hash of a payment group preview: members (id, operation, request hash), the plan, binding, revision. */
+export function paymentPreviewHash(
+  host: PilotHost,
+  group: ShadowPaymentGroup,
+  request: unknown,
+): string {
+  return createHash('sha256')
+    .update(
+      canonicalEncode({
+        kind: 'invoice-payment-group',
+        members: group.members.map(({ record }) => [
+          record.id,
+          record.operation,
+          record.requestHash,
+        ]),
+        request,
+        binding: {
+          sourceCompany: host.config.sourceCompany,
+          targetCompany: host.config.targetCompany,
+        },
+        revision: host.config.revision,
+      }),
+    )
+    .digest('hex');
+}
+/** The oldest unresolved record is part of a payment chain: preview/drain-one take its whole group. */
+function paymentAtHead(host: PilotHost, id: string): boolean {
+  const oldest = oldestUnresolved(host);
+  return oldest !== undefined && PAYMENT_OPERATIONS.has(oldest.operation) && ID.test(id);
+}
+async function previewPaymentGroup(host: PilotHost, id: string) {
+  return host.queue.drainPaymentGroupExpected(
+    host.paymentAdapter,
+    { memberId: id, digestOf: (group, request) => paymentPreviewHash(host, group, request) },
+    'preview',
+  );
+}
+function writePreview(host: PilotHost, id: string, hash: string): void {
   const dir = join(host.directory, 'previews');
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const file = join(dir, `${id}.json`);
@@ -159,6 +193,41 @@ export async function previewCommand(host: PilotHost, id: string): Promise<Comma
     mode: 0o600,
   });
   chmodSync(file, 0o600);
+}
+/** The stored preview of `id` must carry `hash`, be fresh and come from this OS user. */
+function storedPreviewProblem(host: PilotHost, id: string, hash: string): string | undefined {
+  let file: { hash?: unknown; createdAt?: unknown; osUser?: unknown };
+  try {
+    file = JSON.parse(readFileSync(join(host.directory, 'previews', `${id}.json`), 'utf8'));
+  } catch {
+    return 'no preview for this record; run preview first';
+  }
+  const age = host.now() - Number(file.createdAt);
+  if (file.hash !== hash) return 'hash does not match the stored preview';
+  if (!Number.isFinite(age) || age < 0 || age >= PREVIEW_MAX_AGE_MS)
+    return 'preview is stale; run preview again';
+  if (file.osUser !== host.osUser()) return 'preview was made by another OS user';
+  return undefined;
+}
+
+export async function previewCommand(host: PilotHost, id: string): Promise<CommandResult> {
+  if (paymentAtHead(host, id)) {
+    const preview = await previewPaymentGroup(host, id);
+    if (!('preview' in preview))
+      return refuse('reason' in preview ? preview.reason : 'payment group is not previewable');
+    writePreview(host, id, preview.digest);
+    const members = preview.group.members.map(({ record }) => record.id).join(', ');
+    return {
+      ok: true,
+      hash: preview.digest,
+      request: preview.request,
+      message: `payment group ${preview.group.id}\nmembers: ${members}\n${JSON.stringify(preview.request, null, 2)}\nhash = ${preview.digest}\nnext: drain-one ${id} ${preview.digest}`,
+    };
+  }
+  const prepared = prepareOldest(host, id);
+  if ('error' in prepared) return refuse(prepared.error);
+  const hash = previewHash(host, prepared.record, prepared.request);
+  writePreview(host, id, hash);
   return {
     ok: true,
     hash,
@@ -212,22 +281,14 @@ export async function drainOneCommand(
 }
 
 async function drainOneLocked(host: PilotHost, id: string, hash: string): Promise<CommandResult> {
+  if (paymentAtHead(host, id)) return drainPaymentGroupLocked(host, id, hash);
   const first = prepareOldest(host, id);
   if ('error' in first) return refuse(first.error);
   const gate = await host.checkGate(id);
   if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
 
-  let file: { hash?: unknown; createdAt?: unknown; osUser?: unknown };
-  try {
-    file = JSON.parse(readFileSync(join(host.directory, 'previews', `${id}.json`), 'utf8'));
-  } catch {
-    return refuse('no preview for this record; run preview first');
-  }
-  const age = host.now() - Number(file.createdAt);
-  if (file.hash !== hash) return refuse('hash does not match the stored preview');
-  if (!Number.isFinite(age) || age < 0 || age >= PREVIEW_MAX_AGE_MS)
-    return refuse('preview is stale; run preview again');
-  if (file.osUser !== host.osUser()) return refuse('preview was made by another OS user');
+  const stale = storedPreviewProblem(host, id, hash);
+  if (stale) return refuse(stale);
   if (previewHash(host, first.record, first.request) !== hash)
     return refuse('the request changed since preview (drift); run preview again');
 
@@ -293,6 +354,101 @@ async function drainOneLocked(host: PilotHost, id: string, hash: string): Promis
     lines.push('Outcome unknown. Do not retry. Reconcile read-only or abandon the pilot company.');
   lines.push(...warnings.map((w) => `warning: ${w}`));
   return { ok: applied, state: after.state, message: lines.join('\n'), warnings };
+}
+
+const PAYMENT_FIELDS = [
+  'Number',
+  'InvoiceNumber',
+  'Amount',
+  'PaymentDate',
+  'VoucherYear',
+  'VoucherSeries',
+  'VoucherNumber',
+];
+/** The booked payment in Fortnox must still be the one in the group's receipt. */
+async function paymentDrift(
+  host: PilotHost,
+  group: ShadowPaymentGroup,
+): Promise<string | undefined> {
+  let current: Record<string, unknown>;
+  try {
+    current = await host.operations.getInvoicePayment(group.sourcePaymentId);
+  } catch {
+    return `Fortnox payment ${group.sourcePaymentId} could not be read before the drain`;
+  }
+  const receipt = group.sourceResult as Record<string, unknown>;
+  const changed = PAYMENT_FIELDS.filter(
+    (key) => !isDeepStrictEqual(receipt?.[key], current?.[key]),
+  );
+  if (current?.Booked !== true) changed.unshift('Booked');
+  return changed.length
+    ? `Fortnox payment ${group.sourcePaymentId} changed since bookkeeping (${changed.join(', ')})`
+    : undefined;
+}
+
+async function drainPaymentGroupLocked(
+  host: PilotHost,
+  id: string,
+  hash: string,
+): Promise<CommandResult> {
+  const first = await previewPaymentGroup(host, id);
+  if (!('preview' in first))
+    return refuse('reason' in first ? first.reason : 'payment group is not drainable');
+  const memberIds = first.group.members.map(({ record }) => record.id);
+  const gate = await host.checkGate(memberIds);
+  if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
+  const stale = storedPreviewProblem(host, id, hash);
+  if (stale) return refuse(stale);
+  if (first.digest !== hash)
+    return refuse('the payment group changed since preview (drift); run preview again');
+  const drift = await paymentDrift(host, first.group);
+  if (drift) return refuse(drift);
+  const warnings: string[] = [];
+  try {
+    host.beginMutation();
+  } catch {
+    return refuse('nothing was dispatched: backup marker could not be made durable');
+  }
+  let refusal: string | undefined;
+  let state: string | undefined;
+  try {
+    const outcome = await host.queue.drainPaymentGroupExpected(
+      host.paymentAdapter,
+      {
+        memberId: id,
+        expectedDigest: hash,
+        digestOf: (group, request) => paymentPreviewHash(host, group, request),
+        // One durable journal row per member before any Accounted request.
+        beforeApply: (group) => {
+          for (const { record } of group.members) host.journalTarget(record);
+        },
+      },
+      'drain',
+    );
+    if ('reason' in outcome) refusal = outcome.reason;
+    else if (outcome.claimed) state = outcome.state;
+  } finally {
+    const backup = await host.afterMutation();
+    if (!backup.ok) warnings.push(`backup failed: ${backup.reason}`);
+    rmSync(join(host.directory, 'previews', `${id}.json`), { force: true });
+  }
+  if (refusal !== undefined)
+    return refuse(`nothing was dispatched: ${refusal}${warnings.map((w) => `; ${w}`).join('')}`);
+  const lines = memberIds.map((memberId) => {
+    const record = host.queue.get(memberId)!;
+    return `${memberId}: ${record.state}${record.reason ? ` - ${record.reason}` : ''}`;
+  });
+  const after = host.queue.get(id)!;
+  if (after.targetId) lines.push(`target id: ${after.targetId}`);
+  if (state === 'unknown')
+    lines.push('Outcome unknown. Do not retry. Reconcile read-only or abandon the pilot company.');
+  lines.push(...warnings.map((w) => `warning: ${w}`));
+  return {
+    ok: state === 'applied' && warnings.length === 0,
+    state: after.state,
+    message: lines.join('\n'),
+    warnings,
+  };
 }
 
 function nextStep(host: PilotHost, id: string): string {
@@ -391,6 +547,7 @@ export async function reconcileCommand(host: PilotHost, id: string): Promise<Com
       return refuse(
         'the unknown outcome has no durable target identity; reconcile by hand against Accounted and Fortnox',
       );
+    if (record.paymentGroup) return reconcilePaymentLocked(host, record);
     const adapter = host.adapterFor(record.operation);
     if (!adapter?.verify) return refuse(`no read-only verifier for ${record.operation}`);
     // Every other gate condition still applies (storage, journal, restore ack, Fortnox company).
@@ -550,6 +707,7 @@ export async function refuseCommand(
   return locked(host, 'refuse', async () => {
     const record = host.queue.get(id);
     if (!record) return refuse('unknown record id');
+    if (PAYMENT_OPERATIONS.has(record.operation)) return refusePaymentLocked(host, id, reason);
     const adapter = host.adapterFor(record.operation);
     if (!adapter) return refuse(`operation ${record.operation} has no adapter`);
     const gate = await host.checkGate(id, ['pending']);
@@ -590,4 +748,89 @@ export async function refuseCommand(
       warnings,
     };
   });
+}
+
+/** `refuse` for the payment chain at the head of the queue: every member, journaled one by one. */
+async function refusePaymentLocked(
+  host: PilotHost,
+  id: string,
+  reason: string,
+): Promise<CommandResult> {
+  const gate = await host.checkGate();
+  if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
+  try {
+    host.beginMutation();
+  } catch {
+    return refuse('nothing was done: backup marker could not be made durable');
+  }
+  const warnings: string[] = [];
+  let outcome: ReturnType<typeof host.queue.refusePaymentChain> | undefined;
+  try {
+    outcome = host.queue.refusePaymentChain(id, reason, host.paymentAdapter);
+    if (outcome.ok)
+      for (const member of outcome.ids) {
+        try {
+          host.journalRefused(member);
+        } catch {
+          warnings.push(
+            `the refusal of ${member} could not be journaled; it stays blocked and the gate keeps refusing`,
+          );
+        }
+      }
+  } finally {
+    const backup = await host.afterMutation();
+    if (!backup.ok) warnings.push(`backup failed: ${backup.reason}`);
+  }
+  if (!outcome.ok)
+    return refuse(
+      `nothing was changed: ${outcome.reason}${warnings.map((w) => `; ${w}`).join('')}`,
+    );
+  return {
+    ok: warnings.length === 0,
+    state: 'blocked',
+    message: [
+      `${outcome.ids.join(', ')}: blocked - refused by the operator (mapping: ${outcome.mappingReason}); no Fortnox or Accounted request was made`,
+      ...warnings.map((w) => `warning: ${w}`),
+    ].join('\n'),
+    warnings,
+  };
+}
+
+/** Read-only reconciliation of a whole `target_unknown` payment group via its verifier. */
+async function reconcilePaymentLocked(
+  host: PilotHost,
+  record: ShadowRecord,
+): Promise<CommandResult> {
+  if (!host.paymentAdapter.verify) return refuse('the payment adapter has no read-only verifier');
+  const members = host.queue
+    .snapshot()
+    .map((entry) => entry.record)
+    .filter((other) => other.paymentGroup?.id === record.paymentGroup!.id)
+    .map((other) => other.id);
+  const gate = await host.checkGate(members, ['target_unknown']);
+  if (!gate.ok) return refuse(`write gate: ${gate.reason}`);
+  try {
+    host.beginMutation();
+  } catch {
+    return refuse('backup marker could not be made durable');
+  }
+  let matched = false;
+  let failure: string | undefined;
+  try {
+    matched = await host.queue.reconcilePaymentGroup(record.id, host.paymentAdapter);
+  } catch (error) {
+    failure = error instanceof Error ? error.name : 'Error';
+  } finally {
+    const backup = await host.afterMutation();
+    if (!backup.ok) failure = `${failure ? `${failure}; ` : ''}backup failed: ${backup.reason}`;
+  }
+  const state = host.queue.get(record.id)!.state;
+  const ids = members.join(', ');
+  if (matched && state === 'applied' && !failure)
+    return { ok: true, state, message: `${ids}: applied (payment read back and matched)` };
+  return {
+    ok: false,
+    state,
+    message: `${ids}: ${state}${failure ? ` (${failure})` : matched ? '' : ' (target does not match)'}; nothing was sent`,
+  };
 }

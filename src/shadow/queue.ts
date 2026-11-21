@@ -8,6 +8,7 @@ import {
   planPaymentQueue,
   PAYMENT_OPERATIONS,
 } from './payment-queue-plan.js';
+import type { PaymentQueuePlan } from './payment-queue-plan.js';
 import {
   READ_ONLY_TARGET_OPERATIONS,
   competingIdentitySources,
@@ -103,6 +104,28 @@ export interface SourceEvidence {
 }
 export type RecordEvidenceResult =
   { ok: true; created: boolean; sha256: string } | { ok: false; reason: string };
+
+/** What an operator previewed for a payment group: one member id and the digest of group + request. */
+export interface PaymentGroupExpectation {
+  memberId: string;
+  /** Required to drain; ignored by a preview. */
+  expectedDigest?: string;
+  digestOf: (group: ShadowPaymentGroup, request: unknown) => string;
+  /** Host refusal that needs the prepared group (inside the claim transaction, before the claim). */
+  precheck?: (group: ShadowPaymentGroup, request: unknown) => string | undefined;
+  /** After the claim, before any target request. Throw TargetNotDispatchedError to abort safely. */
+  beforeApply?: (group: ShadowPaymentGroup, request: unknown) => void | Promise<void>;
+}
+export type PaymentGroupExpectedResult =
+  | { claimed: false; reason: string }
+  | { claimed: false; preview: true; group: ShadowPaymentGroup; request: unknown; digest: string }
+  | { claimed: true; state: PaymentDrainResult['state']; intentIds: string[] };
+
+class PaymentPlanRollback extends Error {
+  constructor(readonly outcome: PaymentGroupExpectedResult) {
+    super('payment plan rollback');
+  }
+}
 
 export class ShadowQueue {
   constructor(
@@ -529,59 +552,9 @@ export class ShadowQueue {
           } as PaymentDrainResult,
         };
       }
-      const group = plan.group;
-      const ids = group.members.map(({ record }) => record.id);
-      const first = group.members[0].record;
-      if (first.nextAttemptAt !== undefined && first.nextAttemptAt > this.now())
-        return { result: { state: 'idle', intentIds: ids } as PaymentDrainResult };
-      let translated: ReturnType<ShadowPaymentAdapter['prepare']>;
-      try {
-        translated = adapter.prepare(copy(group));
-      } catch (error) {
-        translated = { blocked: `Payment mapping failed (${safeErrorName(error)})` };
-      }
-      let request: unknown;
-      if (!('blocked' in translated)) {
-        try {
-          request = copy(translated.request);
-        } catch (error) {
-          translated = { blocked: `Payment request cannot be persisted (${safeErrorName(error)})` };
-        }
-      }
-      if (
-        !('blocked' in translated) &&
-        plan.resumed &&
-        digest(request) !== first.paymentGroup!.requestHash
-      )
-        translated = { blocked: 'Prepared payment request changed after durable group claim' };
-      if ('blocked' in translated) {
-        // Before the first dispatch only the terminal member blocks; its earlier preparations stay deferred.
-        const blocked = plan.resumed ? group.members : [group.members[group.members.length - 1]];
-        for (const member of blocked) {
-          member.record.paymentManaged = managed(
-            member,
-            group.sourcePaymentId,
-            group.sourceInvoiceId,
-          );
-          member.record.state = 'blocked';
-          member.record.reason = translated.blocked.slice(0, 500);
-          this.save(member.record);
-        }
-        return { result: { state: 'blocked', intentIds: ids } as PaymentDrainResult };
-      }
-      const descriptor = plan.resumed ? copy(first.paymentGroup!) : describeGroup(group, request);
-      const attempts = (first.targetAttempts ?? 0) + 1;
-      for (const member of group.members) {
-        const record = member.record;
-        record.paymentManaged = managed(member, group.sourcePaymentId, group.sourceInvoiceId);
-        record.paymentGroup = copy(descriptor);
-        record.targetAttempts = attempts;
-        record.nextAttemptAt = undefined;
-        record.state = 'target_in_flight';
-        record.reason = undefined;
-        this.save(record);
-      }
-      return { group, request };
+      const claimed = this.claimPaymentPlan(plan, adapter);
+      if ('result' in claimed) return { result: claimed.result };
+      return { group: claimed.group, request: claimed.request };
     });
     if ('result' in preparedStep && preparedStep.result) return preparedStep.result;
     if ('ordinary' in preparedStep) {
@@ -590,11 +563,258 @@ export class ShadowQueue {
     }
     if (!('group' in preparedStep) || !preparedStep.group)
       throw new Error('Invalid payment queue claim');
-    const { group, request } = preparedStep;
+    return this.applyClaimedGroup(adapter, preparedStep.group, preparedStep.request);
+  }
+
+  /**
+   * Inside a transaction: prepares a `payment` plan and, unless `inspect` says otherwise, claims the
+   * whole group (target_in_flight). `inspect` sees the prepared request before the claim and may
+   * stop it with a reason, in which case nothing is saved by this method.
+   */
+  private claimPaymentPlan(
+    plan: Extract<PaymentQueuePlan, { kind: 'payment' }>,
+    adapter: ShadowPaymentAdapter,
+    inspect?: (group: ShadowPaymentGroup, request: unknown) => string | undefined,
+    persistBlocked = true,
+  ):
+    | { result: PaymentDrainResult; reason?: string }
+    | { group: ShadowPaymentGroup; request: unknown } {
+    const group = plan.group;
+    const ids = group.members.map(({ record }) => record.id);
+    const first = group.members[0].record;
+    if (first.nextAttemptAt !== undefined && first.nextAttemptAt > this.now())
+      return { result: { state: 'idle', intentIds: ids } as PaymentDrainResult };
+    let translated: ReturnType<ShadowPaymentAdapter['prepare']>;
+    try {
+      translated = adapter.prepare(copy(group));
+    } catch (error) {
+      translated = { blocked: `Payment mapping failed (${safeErrorName(error)})` };
+    }
+    let request: unknown;
+    if (!('blocked' in translated)) {
+      try {
+        request = copy(translated.request);
+      } catch (error) {
+        translated = { blocked: `Payment request cannot be persisted (${safeErrorName(error)})` };
+      }
+    }
+    if (
+      !('blocked' in translated) &&
+      plan.resumed &&
+      digest(request) !== first.paymentGroup!.requestHash
+    )
+      translated = { blocked: 'Prepared payment request changed after durable group claim' };
+    if ('blocked' in translated && !persistBlocked)
+      return {
+        result: { state: 'blocked', intentIds: ids } as PaymentDrainResult,
+        reason: translated.blocked,
+      };
+    if ('blocked' in translated) {
+      // Before the first dispatch only the terminal member blocks; its earlier preparations stay deferred.
+      const blocked = plan.resumed ? group.members : [group.members[group.members.length - 1]];
+      for (const member of blocked) {
+        member.record.paymentManaged = managed(
+          member,
+          group.sourcePaymentId,
+          group.sourceInvoiceId,
+        );
+        member.record.state = 'blocked';
+        member.record.reason = translated.blocked.slice(0, 500);
+        this.save(member.record);
+      }
+      return { result: { state: 'blocked', intentIds: ids } as PaymentDrainResult };
+    }
+    const stop = inspect?.(copy(group), copy(request));
+    if (stop !== undefined)
+      return { result: { state: 'idle', intentIds: ids } as PaymentDrainResult, reason: stop };
+    const descriptor = plan.resumed ? copy(first.paymentGroup!) : describeGroup(group, request);
+    const attempts = (first.targetAttempts ?? 0) + 1;
+    for (const member of group.members) {
+      const record = member.record;
+      record.paymentManaged = managed(member, group.sourcePaymentId, group.sourceInvoiceId);
+      record.paymentGroup = copy(descriptor);
+      record.targetAttempts = attempts;
+      record.nextAttemptAt = undefined;
+      record.state = 'target_in_flight';
+      record.reason = undefined;
+      this.save(record);
+    }
+    return { group, request };
+  }
+
+  /**
+   * Operator-bound payment drain (NOX-211 step 3). In ONE transaction: defers the unbooked
+   * preparations of the next payment chain, prepares its group and, only if `memberId` belongs to
+   * it and (to drain) the digest equals `expectedDigest`, claims it. Anything else rolls the whole
+   * transaction back, so a preview or a refusal never leaves a `deferred` or `blocked` record.
+   */
+  async drainPaymentGroupExpected(
+    adapter: ShadowPaymentAdapter,
+    expect: PaymentGroupExpectation,
+    mode: 'preview' | 'drain',
+  ): Promise<PaymentGroupExpectedResult> {
+    const stop = (outcome: PaymentGroupExpectedResult): never => {
+      throw new PaymentPlanRollback(outcome);
+    };
+    const refuse = (reason: string) => stop({ claimed: false, reason });
+    let claimed: { group: ShadowPaymentGroup; request: unknown };
+    try {
+      claimed = this.transaction(() => {
+        let deferred: string | undefined;
+        for (let step = 0; ; step++) {
+          if (step > 1000) return refuse('payment plan does not converge');
+          const plan = planPaymentQueue(this.snapshot(), this.binding);
+          if (plan.kind === 'defer') {
+            const record = plan.member.record;
+            record.paymentManaged = managed(plan.member, plan.paymentId, plan.invoiceId);
+            record.state = 'deferred';
+            record.reason =
+              'Source payment preparation awaits its terminal source step; target not applied';
+            this.save(record);
+            deferred ??= record.id;
+            continue;
+          }
+          if (plan.kind !== 'payment') {
+            if (deferred) return refuse(`payment record ${deferred} awaits bookkeeping`);
+            if (plan.kind === 'ordinary') return refuse(`${plan.id} is not a payment record`);
+            if (plan.kind === 'blocked') return refuse(`${plan.id}: ${plan.reason}`);
+            if (plan.kind === 'cancel') return refuse('the next payment was deleted unbooked');
+            return refuse('no payment group can be drained now');
+          }
+          if (!plan.group.members.some(({ record }) => record.id === expect.memberId))
+            return refuse(`${expect.memberId} is not a member of the next payment group`);
+          const result = this.claimPaymentPlan(
+            plan,
+            adapter,
+            (group, request) => {
+              const refusal = expect.precheck?.(group, request);
+              if (refusal !== undefined) return refusal;
+              const digest = expect.digestOf(group, request);
+              if (mode === 'preview')
+                return stop({ claimed: false, preview: true, group, request, digest });
+              if (digest !== expect.expectedDigest)
+                return 'the prepared payment group differs from the previewed one';
+              return undefined;
+            },
+            false,
+          );
+          if ('result' in result)
+            return refuse(
+              result.reason ?? `payment group is ${result.result.state}; retry is not due yet`,
+            );
+          return result;
+        }
+      });
+    } catch (error) {
+      if (error instanceof PaymentPlanRollback) return error.outcome;
+      throw error;
+    }
+    const result = await this.applyClaimedGroup(
+      adapter,
+      claimed.group,
+      claimed.request,
+      expect.beforeApply,
+    );
+    return { claimed: true, state: result.state, intentIds: result.intentIds };
+  }
+
+  /**
+   * Operator closure of the payment chain at the head of the queue (NOX-211 step 4), for a chain
+   * that cannot be drained: its group mapping refuses, it awaits bookkeeping, or the plan blocks
+   * it. Every member must be without target contact. All members become `blocked` with an
+   * `OPERATOR_REFUSED:` reason in one transaction; any refusal of the refusal rolls back.
+   */
+  refusePaymentChain(
+    memberId: string,
+    reason: string,
+    adapter: ShadowPaymentAdapter,
+  ): { ok: true; ids: string[]; mappingReason: string } | { ok: false; reason: string } {
+    type Outcome = ReturnType<ShadowQueue['refusePaymentChain']>;
+    class Rollback extends Error {
+      constructor(readonly outcome: Outcome) {
+        super('payment refusal rollback');
+      }
+    }
+    const no = (why: string): never => {
+      throw new Rollback({ ok: false, reason: why });
+    };
+    try {
+      return this.transaction(() => {
+        const deferred: ShadowRecord[] = [];
+        let members: ShadowRecord[] | undefined;
+        let mappingReason = '';
+        for (let step = 0; !members; step++) {
+          if (step > 1000) return no('payment plan does not converge');
+          const plan = planPaymentQueue(this.snapshot(), this.binding);
+          if (plan.kind === 'defer') {
+            const record = plan.member.record;
+            record.paymentManaged = managed(plan.member, plan.paymentId, plan.invoiceId);
+            record.state = 'deferred';
+            this.save(record);
+            deferred.push(record);
+            continue;
+          }
+          if (plan.kind === 'payment') {
+            if (plan.resumed) return no('the payment group has target contact; reconcile it');
+            members = plan.group.members.map(({ record }) => record);
+            let prepared: ReturnType<ShadowPaymentAdapter['prepare']>;
+            try {
+              prepared = adapter.prepare(copy(plan.group));
+            } catch (error) {
+              return no(`the payment mapping failed unexpectedly (${safeErrorName(error)})`);
+            }
+            if (!('blocked' in prepared))
+              return no('the payment group is mappable; use preview and drain-one');
+            mappingReason = prepared.blocked;
+          } else if (
+            plan.kind === 'blocked' &&
+            PAYMENT_OPERATIONS.has(this.get(plan.id)!.operation)
+          ) {
+            members = [...deferred, this.get(plan.id)!];
+            mappingReason = plan.reason;
+          } else if (deferred.length) {
+            members = deferred;
+            mappingReason = 'payment awaits bookkeeping';
+          } else return no('no payment chain can be refused here');
+        }
+        if (!members.some((record) => record.id === memberId))
+          return no(`${memberId} is not a member of the payment chain at the head of the queue`);
+        for (const record of members) {
+          if (
+            (record.targetAttempts ?? 0) !== 0 ||
+            record.targetId !== undefined ||
+            record.targetReceipt !== undefined ||
+            record.paymentGroup !== undefined
+          )
+            return no(`payment record ${record.id} has target contact`);
+          record.state = 'blocked';
+          record.reason = `${OPERATOR_REFUSED_PREFIX} ${reason} (mapping: ${mappingReason})`.slice(
+            0,
+            500,
+          );
+          this.save(record);
+        }
+        return { ok: true as const, ids: members.map((record) => record.id), mappingReason };
+      });
+    } catch (error) {
+      if (error instanceof Rollback) return error.outcome;
+      throw error;
+    }
+  }
+
+  /** After a durable group claim: optional pre-dispatch hook, then one grouped target apply. */
+  private async applyClaimedGroup(
+    adapter: ShadowPaymentAdapter,
+    group: ShadowPaymentGroup,
+    request: unknown,
+    beforeApply?: (group: ShadowPaymentGroup, request: unknown) => void | Promise<void>,
+  ): Promise<PaymentDrainResult> {
     const ids = group.members.map(({ record }) => record.id);
     let returned = false;
     let known: ShadowTargetReceipt | undefined;
     try {
+      // A beforeApply failure is "not returned": only TargetNotDispatchedError makes it a safe retry.
+      await beforeApply?.(copy(group), copy(request));
       const result = await adapter.apply(copy(group), copy(request));
       returned = true;
       identity(result.targetId);
