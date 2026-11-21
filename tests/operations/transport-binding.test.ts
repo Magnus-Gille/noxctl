@@ -58,7 +58,7 @@ describe('client-bound operations', () => {
       method: 'POST',
       body: { Customer: { Name: 'New AB' } },
     });
-    expect(transport.requestPdf).toHaveBeenCalledWith('invoices/42/preview');
+    expect(transport.requestPdf).toHaveBeenCalledWith('invoices-v2/42/preview');
   });
 
   it.each(['email', 'einvoice'] as const)(
@@ -70,7 +70,7 @@ describe('client-bound operations', () => {
 
       await invoices.sendInvoice('42', method);
 
-      expect(transport.request).toHaveBeenCalledWith(`invoices/42/${method}`, {
+      expect(transport.request).toHaveBeenCalledWith(`invoices-v2/42/${method}`, {
         mutation: true,
       });
     },

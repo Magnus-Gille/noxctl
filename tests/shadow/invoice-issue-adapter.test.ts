@@ -672,7 +672,7 @@ describe('synthetic-only native invoice issue adapter', () => {
     const transport: FortnoxTransport = {
       async request<T>(endpoint: string): Promise<T> {
         calls.push(`GET ${endpoint}`);
-        if (endpoint === 'invoices/10') {
+        if (endpoint === 'invoices-v2/10') {
           return { Invoice: invoiceSource({ Sent: true }) } as T;
         }
         throw new Error(`Unexpected synthetic Fortnox call: ${endpoint}`);
@@ -704,7 +704,7 @@ describe('synthetic-only native invoice issue adapter', () => {
       confirmed: true,
       pdf: undefined,
     });
-    expect(calls).toEqual(['PDF_MUTATION invoices/10/print', 'GET invoices/10']);
+    expect(calls).toEqual(['PDF_MUTATION invoices-v2/10/print', 'GET invoices-v2/10']);
 
     const targetRequest = vi.fn(async () => ({
       status: 200,

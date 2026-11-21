@@ -62,7 +62,7 @@ function transport(
         const body = requestOptions?.body as { Customer?: JsonRecord } | undefined;
         return { Customer: { CustomerNumber: 'C-1', ...(body?.Customer ?? {}) } };
       }
-      if (endpoint === 'invoices') {
+      if (endpoint === 'invoices-v2') {
         const body = requestOptions?.body as { Invoice?: JsonRecord } | undefined;
         return { Invoice: { DocumentNumber: 'I-1', ...(body?.Invoice ?? {}) } };
       }
@@ -272,7 +272,7 @@ describe('embedded staged runtime', () => {
     expect(effects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ endpoint: 'customers' }),
-        expect.objectContaining({ endpoint: 'invoices' }),
+        expect.objectContaining({ endpoint: 'invoices-v2' }),
       ]),
     );
     const replay = await call(runtime.client, 'staged_execute', { id: customer.id, confirm: true });

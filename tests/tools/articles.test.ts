@@ -187,7 +187,7 @@ describe('article tools', () => {
       });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('articles/1');
+      expect(fetchCall[0]).toContain('articles-v2/1');
       expect(fetchCall[1].method).toBe('PUT');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Article.SalesPrice).toBe(20000);

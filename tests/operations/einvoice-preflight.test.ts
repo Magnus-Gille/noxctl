@@ -55,7 +55,7 @@ describe('e-invoice preflight', () => {
     expect(result.peppolAddress.status).toBe('unsupported');
     expect(result.effectiveDeliveryMethod.status).toBe('unknown');
     expect(result.observed.customerDeliveryDefault).toBe('EINVOICE');
-    expect(request.mock.calls).toEqual([['invoices/1001'], ['customers/25']]);
+    expect(request.mock.calls).toEqual([['invoices-v2/1001'], ['customers/25']]);
   });
 
   it.each(['Sent', 'Booked', 'Cancelled'])(

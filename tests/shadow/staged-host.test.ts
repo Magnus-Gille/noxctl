@@ -488,7 +488,7 @@ describe('staged shadow host source integration', () => {
   ): FortnoxTransport {
     return {
       async request<T>(endpoint: string, options: { method?: string; body?: unknown } = {}) {
-        if (endpoint !== 'invoices' || options.method !== 'POST')
+        if (endpoint !== 'invoices-v2' || options.method !== 'POST')
           throw new Error(
             `Unexpected simulated invoice call: ${options.method ?? 'GET'} ${endpoint}`,
           );
@@ -703,7 +703,7 @@ describe('staged shadow host source integration', () => {
       });
       expect(firstReceipt.isError).not.toBe(true);
       expect(sourceCalls).toHaveLength(1);
-      expect(sourceCalls[0]).toMatchObject({ endpoint: 'invoices' });
+      expect(sourceCalls[0]).toMatchObject({ endpoint: 'invoices-v2' });
       expect((sourceCalls[0]!.body as { Invoice: Record<string, unknown> }).Invoice).toMatchObject({
         CustomerNumber: '42',
         InvoiceDate: '2026-10-29',

@@ -143,12 +143,12 @@ describe('existing-family operation parity', () => {
     await orders.externalPrintOrder('9');
     await orders.emailOrder('9');
     expect(calls().map(([url]) => url)).toEqual([
-      expect.stringContaining('offers/8/cancel'),
-      expect.stringContaining('offers/8/externalprint'),
-      expect.stringContaining('offers/8/email'),
-      expect.stringContaining('orders/9/cancel'),
-      expect.stringContaining('orders/9/externalprint'),
-      expect.stringContaining('orders/9/email'),
+      expect.stringContaining('offers-v2/8/cancel'),
+      expect.stringContaining('offers-v2/8/externalprint'),
+      expect.stringContaining('offers-v2/8/email'),
+      expect.stringContaining('orders-v2/9/cancel'),
+      expect.stringContaining('orders-v2/9/externalprint'),
+      expect.stringContaining('orders-v2/9/email'),
     ]);
   });
 

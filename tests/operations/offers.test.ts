@@ -99,7 +99,7 @@ describe('offer operations', () => {
       await updateOffer('1', { DueDate: '2026-04-30' });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('offers/1');
+      expect(fetchCall[0]).toContain('offers-v2/1');
       expect(fetchCall[1].method).toBe('PUT');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Offer.DueDate).toBe('2026-04-30');
@@ -114,7 +114,7 @@ describe('offer operations', () => {
       const result = await createInvoiceFromOffer('1');
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('offers/1/createinvoice');
+      expect(fetchCall[0]).toContain('offers-v2/1/createinvoice');
       expect(fetchCall[1].method).toBe('PUT');
       expect(result.DocumentNumber).toBe('1001');
     });
@@ -128,7 +128,7 @@ describe('offer operations', () => {
       const result = await createOrderFromOffer('1');
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('offers/1/createorder');
+      expect(fetchCall[0]).toContain('offers-v2/1/createorder');
       expect(fetchCall[1].method).toBe('PUT');
       expect(result.DocumentNumber).toBe('501');
     });

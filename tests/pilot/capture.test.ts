@@ -142,7 +142,7 @@ describe('capture of read-only source evidence (NOX-211)', () => {
     const result = await captureCommand(h.host, 'credit-1');
     expect(result.ok, result.message).toBe(true);
     expect(result.message).toMatch(/captured credit-note 2/);
-    expect(reads(h)).toEqual(['GET invoices/2']);
+    expect(reads(h)).toEqual(['GET invoices-v2/2']);
     expect(evidenceCreditNoteLookup(h.host.queue)('2')).toEqual(creditNote);
     expect(evidenceCreditNoteLookup(h.host.queue)('3')).toBeUndefined();
   });
