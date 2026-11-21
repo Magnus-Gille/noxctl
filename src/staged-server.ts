@@ -43,7 +43,7 @@ export interface CreateStagedServerOptions {
     args: Readonly<Record<string, unknown>>;
   }) => string | undefined | Promise<string | undefined>;
   /**
-   * Also stage `fortnox_create_invoice_payment`. Default false: a payment record cannot be
+   * Also stage `fortnox_create_invoice_payment` and `fortnox_bookkeep_invoice_payment`. Default false: a payment record cannot be
    * refused by the operator, so a host enables this only together with a payment drain.
    */
   enableInvoicePayments?: boolean;
@@ -78,6 +78,7 @@ const baseAllowed: ReadonlyArray<readonly [string, string]> = [
 /** Opt-in (NOX-211): off until the host can also drain, preview and reconcile payments. */
 const paymentAllowed: ReadonlyArray<readonly [string, string]> = [
   ['fortnox_create_invoice_payment', 'createInvoicePayment'],
+  ['fortnox_bookkeep_invoice_payment', 'bookkeepInvoicePayment'],
 ];
 const copy = <T>(value: T): T => decode(canonicalEncode(value)) as T;
 function identity(value: string): void {

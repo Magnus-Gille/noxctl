@@ -228,6 +228,7 @@ export interface HarnessOptions {
   headDir?: string;
   configOverrides?: Record<string, unknown>;
   fsync?: (fd: number) => void;
+  enableInvoicePayments?: boolean;
 }
 export async function makeHost(options: HarnessOptions = {}) {
   const root = options.root ?? tempRoot();
@@ -253,6 +254,7 @@ export async function makeHost(options: HarnessOptions = {}) {
     osUser: () => options.osUser ?? 'pilot-operator',
     headDir,
     ...(options.fsync ? { fsync: options.fsync } : {}),
+    ...(options.enableInvoicePayments ? { enableInvoicePayments: true } : {}),
   });
   hosts.push(host);
   return { host, root, config, synthetic, accounted, clock, stderr, headDir };
@@ -274,7 +276,11 @@ export function textOf(result: CallToolResult): string {
 }
 export async function stagedCreate(
   client: Client,
-  tool: 'fortnox_create_customer' | 'fortnox_create_invoice',
+  tool:
+    | 'fortnox_create_customer'
+    | 'fortnox_create_invoice'
+    | 'fortnox_create_invoice_payment'
+    | 'fortnox_bookkeep_invoice_payment',
   args: Record<string, unknown>,
 ): Promise<CallToolResult> {
   const prepared = (await client.callTool({

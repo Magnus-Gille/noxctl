@@ -290,7 +290,16 @@ Customer invoice payments are **not yet part of the pilot**. What exists:
   a payment record that names no invoice (for example an unreceipted bookkeep), or one whose invoice
   numbers are malformed (not a canonical positive integer) or disagree, blocks every new payment
   until it is resolved. A host must pass `getRecord` and `records`, otherwise it refuses.
-- `createStagedServer({ enableInvoicePayments: true })` allows the tool. The default is off and
+- `preflightStagedCall(deps, 'bookkeepInvoicePayment', { paymentNumber })` (step 2) allows
+  booking only the one `pending` `createInvoicePayment` record whose receipt carries that payment
+  number with `Booked: false`, once, and only while its invoice still passes the payment checks
+  above (mirrored strict invoice, exact full amount, not credited, no other payment record). A
+  payment-chain record with a malformed or missing payment number blocks every bookkeeping.
+- `createPilotHost(config, { enableInvoicePayments: true })` stages both
+  `fortnox_create_invoice_payment` and `fortnox_bookkeep_invoice_payment`, with the host
+  preflight and `serializedExecution`, and the dispatch journal accepts completed staged writes
+  of both tools. The operator CLI never sets it: payments stay disabled in the pilot.
+- `createStagedServer({ enableInvoicePayments: true })` allows the tools. The default is off and
   `createPilotHost` does not set it, so `staged_prepare` answers "Tool outside staged contract".
   Reason: a payment record in the queue can currently be neither previewed, drained nor refused
   (`refuse` rejects payment operations by design), so staging one would leave the pilot gate
@@ -328,8 +337,7 @@ restored backup without the evidence makes the adapters refuse ("not captured") 
 captured again. Capture runs under the pilot lock and backs up like every other local change; it is
 not blocked by `deferred` payment records, since the voucher is needed precisely while they wait.
 
-Remaining before payments can be enabled in the pilot: bookkeep staging (a created payment is
-unbooked until `bookkeepInvoicePayment`), wiring the captured evidence into the host's
+Remaining before payments can be enabled in the pilot: wiring the captured evidence into the host's
 `AccountedInvoicePaymentAdapter`, a hash-bound payment variant of `preview` and `drain-one`
 over `drainPaymentAware` (with the dispatch journal written before the target request), and
 operator refusal and reconciliation for payment groups.
