@@ -144,6 +144,12 @@ export interface PilotHost {
   adapterFor(operation: string): ShadowAdapter | undefined;
   /** Queue/storage/restore gate plus the Fortnox company identity read. */
   checkGate(exceptId?: string, exceptStates?: readonly string[]): Promise<GateResult>;
+  /**
+   * Every gate condition except the queue's own record states: storage, staged calls, journal,
+   * newest backup, restore acknowledgement and the Fortnox company. For steps that change only
+   * local evidence (capture), which must work while payment records are deferred.
+   */
+  checkIntegrity(): Promise<GateResult>;
   isStorageOk(): boolean;
   /** Written (under the pilot lock) before any mutation; removed only by a successful backup. */
   beginMutation(): void;
@@ -426,11 +432,12 @@ export async function createPilotHost(
     stagedExclude?: string,
     ownMarker = false,
     exceptStates?: readonly string[],
+    queueStates = true,
   ): Promise<GateResult> {
     const failures: string[] = [];
     let oldest: Extract<GateResult, { ok: false }>['oldest'];
     const queueGate = checkWriteGate({
-      queue: host.queue,
+      queue: queueStates ? host.queue : { status: () => ({ ...host.queue.status(), items: [] }) },
       stagedStatus: await stagedCounts(stagedExclude),
       now,
       // Re-read from disk on every check: another process may have begun a mutation.
@@ -590,6 +597,7 @@ export async function createPilotHost(
       return undefined;
     },
     checkGate: (exceptId, exceptStates) => gateWith(exceptId, undefined, false, exceptStates),
+    checkIntegrity: () => gateWith(undefined, undefined, false, undefined, false),
     isStorageOk: () => !existsSync(markerPath) && backupProblem() === undefined,
     withLock,
     journalTarget(record) {

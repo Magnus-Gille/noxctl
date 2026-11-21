@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Pilot (unpublished): `capture <id>` pins the Fortnox voucher of a booked invoice payment, or
+  the credit note of a credit, as read-only evidence in the shadow queue (insert-only, sha256,
+  a differing re-read is refused). The payment and credit adapters read their voucher and credit
+  note from there (NOX-211).
 - **Default BCC per profile for invoice emails, and a complete send preview.**
   `noxctl profile invoice-bcc <email>` stores a default copy address locally for
   the resolved profile (`--clear` removes it; nothing is hard-coded). It is used

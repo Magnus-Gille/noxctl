@@ -89,6 +89,21 @@ export interface DrainExpectation {
 export type DrainExpectedResult =
   { claimed: true; applied: boolean } | { claimed: false; reason: string };
 
+/** Read-only Fortnox objects the source result only refers to, captured once and then pinned. */
+export type SourceEvidenceKind = 'payment-voucher' | 'credit-note';
+const EVIDENCE_KINDS: ReadonlySet<string> = new Set<SourceEvidenceKind>([
+  'payment-voucher',
+  'credit-note',
+]);
+const MAX_EVIDENCE_BYTES = 1_048_576;
+export interface SourceEvidence {
+  data: Record<string, unknown>;
+  sha256: string;
+  capturedAt: number;
+}
+export type RecordEvidenceResult =
+  { ok: true; created: boolean; sha256: string } | { ok: false; reason: string };
+
 export class ShadowQueue {
   constructor(
     private readonly db: DatabaseSync,
@@ -106,6 +121,58 @@ export class ShadowQueue {
       this.db.exec('ROLLBACK');
       throw error;
     }
+  }
+  /**
+   * Insert-only: a second capture must be byte-identical (canonically), otherwise the stored copy
+   * wins and the caller is told, because an adapter may already have mirrored the first copy.
+   */
+  recordEvidence(
+    kind: SourceEvidenceKind,
+    key: string,
+    data: Record<string, unknown>,
+  ): RecordEvidenceResult {
+    if (!EVIDENCE_KINDS.has(kind)) throw new Error('Unknown source evidence kind');
+    identity(key);
+    if (
+      data === null ||
+      typeof data !== 'object' ||
+      Array.isArray(data) ||
+      Object.getPrototypeOf(data) !== Object.prototype
+    )
+      throw new Error('Source evidence must be a plain object');
+    const body = canonicalEncode(data);
+    if (Buffer.byteLength(body) > MAX_EVIDENCE_BYTES)
+      throw new Error('Source evidence is too large');
+    const sha256 = createHash('sha256').update(body).digest('hex');
+    return this.transaction(() => {
+      const row = this.db
+        .prepare('SELECT sha256 FROM evidence WHERE kind=? AND key=?')
+        .get(kind, key) as { sha256: string } | undefined;
+      if (row) {
+        if (row.sha256 === sha256) return { ok: true as const, created: false, sha256 };
+        return {
+          ok: false as const,
+          reason: `The ${kind} ${key} read from Fortnox differs from the captured evidence (${row.sha256.slice(0, 12)}); the captured copy is kept.`,
+        };
+      }
+      this.db
+        .prepare('INSERT INTO evidence(kind,key,sha256,body,captured_at) VALUES(?,?,?,?,?)')
+        .run(kind, key, sha256, body, this.now());
+      return { ok: true as const, created: true, sha256 };
+    });
+  }
+  getEvidence(kind: SourceEvidenceKind, key: string): SourceEvidence | undefined {
+    const row = this.db
+      .prepare('SELECT sha256, body, captured_at FROM evidence WHERE kind=? AND key=?')
+      .get(kind, key) as { sha256: string; body: string; captured_at: number } | undefined;
+    if (!row) return undefined;
+    if (createHash('sha256').update(row.body).digest('hex') !== row.sha256)
+      throw new Error(`Captured ${kind} ${key} is corrupt`);
+    return {
+      data: decode(row.body) as Record<string, unknown>,
+      sha256: row.sha256,
+      capturedAt: Number(row.captured_at),
+    };
   }
   private save(record: ShadowRecord): void {
     record.updatedAt = this.now();
@@ -850,7 +917,7 @@ export async function openShadowQueue(
   try {
     db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;');
     db.exec(
-      'CREATE TABLE IF NOT EXISTS binding (singleton INTEGER PRIMARY KEY CHECK(singleton=1), value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS intents (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, state TEXT NOT NULL, record TEXT NOT NULL);',
+      'CREATE TABLE IF NOT EXISTS binding (singleton INTEGER PRIMARY KEY CHECK(singleton=1), value TEXT NOT NULL); CREATE TABLE IF NOT EXISTS intents (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, state TEXT NOT NULL, record TEXT NOT NULL); CREATE TABLE IF NOT EXISTS evidence (kind TEXT NOT NULL, key TEXT NOT NULL, sha256 TEXT NOT NULL, body TEXT NOT NULL, captured_at INTEGER NOT NULL, PRIMARY KEY(kind,key));',
     );
     const expected = canonicalEncode({ version: 1, ...binding });
     db.prepare('INSERT OR IGNORE INTO binding(singleton,value) VALUES(1,?)').run(expected);
