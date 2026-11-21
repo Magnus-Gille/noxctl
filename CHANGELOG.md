@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Fortnox v2 document endpoints are now the default (NOX-219, NOX-220, NOX-221,
+  NOX-222).** Invoice, offer, order and article calls go to `/3/invoices-v2`,
+  `/3/offers-v2`, `/3/orders-v2` and `/3/articles-v2`, so bundle articles are no
+  longer dissolved. Set `NOXCTL_FORTNOX_DOCUMENT_API=classic` to use the classic
+  endpoints. Invoice and article list/get were checked against a live company
+  (same item keys, `MetaInformation` and totals as classic; bundle fields present).
+  Offers and orders were not verified live. The API coverage map now lists the v2
+  operations as implemented; the bundle price calculation stays missing.
+
 ### Added
 
 - **Default BCC per profile for invoice emails, and a complete send preview.**

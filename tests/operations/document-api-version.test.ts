@@ -72,9 +72,9 @@ describe('document API version (NOX-219..222)', () => {
   });
 
   describe('parseDocumentApiEnv', () => {
-    it('defaults to classic when unset or empty', () => {
-      expect(parseDocumentApiEnv(undefined)).toBe('classic');
-      expect(parseDocumentApiEnv('')).toBe('classic');
+    it('defaults to v2 when unset or empty', () => {
+      expect(parseDocumentApiEnv(undefined)).toBe('v2');
+      expect(parseDocumentApiEnv('')).toBe('v2');
     });
 
     it('accepts classic and v2 in any case', () => {
@@ -88,16 +88,18 @@ describe('document API version (NOX-219..222)', () => {
     });
   });
 
-  it('maps the four families to -v2 only when opted in', () => {
+  it('maps the four families to -v2 by default and to classic only when opted out', () => {
+    vi.stubEnv(DOCUMENT_API_ENV, 'classic');
     expect(documentResource('invoices')).toBe('invoices');
-    vi.stubEnv(DOCUMENT_API_ENV, 'v2');
+    vi.stubEnv(DOCUMENT_API_ENV, '');
     expect(documentResource('invoices')).toBe('invoices-v2');
     expect(documentResource('offers')).toBe('offers-v2');
     expect(documentResource('orders')).toBe('orders-v2');
     expect(documentResource('articles')).toBe('articles-v2');
   });
 
-  it('keeps the classic endpoints by default', async () => {
+  it('keeps the classic endpoints when opted out', async () => {
+    vi.stubEnv(DOCUMENT_API_ENV, 'classic');
     const { transport, endpoints } = recordingTransport();
     await exerciseAll(transport);
     expect(endpoints).toEqual([
@@ -116,8 +118,8 @@ describe('document API version (NOX-219..222)', () => {
     ]);
   });
 
-  it('routes every call of the four families to -v2 when opted in', async () => {
-    vi.stubEnv(DOCUMENT_API_ENV, 'v2');
+  it('routes every call of the four families to -v2 by default', async () => {
+    vi.stubEnv(DOCUMENT_API_ENV, undefined);
     const { transport, endpoints } = recordingTransport();
     await exerciseAll(transport);
     expect(endpoints).toEqual([

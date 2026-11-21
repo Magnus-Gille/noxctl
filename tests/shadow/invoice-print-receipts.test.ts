@@ -36,7 +36,7 @@ function makeTransport() {
           Invoice: { DocumentNumber: documentNumber, Sent: true, Source: 'externalprint' },
         } as T;
       }
-      if (method === 'GET' && /^invoices\/\d+$/.test(endpoint)) {
+      if (method === 'GET' && /^invoices-v2\/\d+$/.test(endpoint)) {
         const documentNumber = endpoint.split('/')[1]!;
         if (documentNumber === '102') throw new Error('synthetic readback failure');
         if (documentNumber === '106') {
@@ -55,13 +55,13 @@ function makeTransport() {
     },
     async requestPdf(endpoint: string): Promise<Buffer> {
       calls.push({ endpoint, method: 'PDF' });
-      if (!/^invoices\/\d+\/preview$/.test(endpoint))
+      if (!/^invoices-v2\/\d+\/preview$/.test(endpoint))
         throw new Error(`Unexpected synthetic PDF request: ${endpoint}`);
       return pdf;
     },
     async requestPdfFromMutation(endpoint: string): Promise<Buffer | undefined> {
       calls.push({ endpoint, method: 'PDF_MUTATION' });
-      if (!/^invoices\/\d+\/print$/.test(endpoint))
+      if (!/^invoices-v2\/\d+\/print$/.test(endpoint))
         throw new Error(`Unexpected synthetic PDF mutation: ${endpoint}`);
       return pdf;
     },
@@ -116,8 +116,8 @@ describe('invoice print source receipts', () => {
     });
     expect(Buffer.isBuffer(first.pdf)).toBe(true);
     expect(calls).toEqual([
-      { endpoint: 'invoices/101/print', method: 'PDF_MUTATION' },
-      { endpoint: 'invoices/101', method: 'GET' },
+      { endpoint: 'invoices-v2/101/print', method: 'PDF_MUTATION' },
+      { endpoint: 'invoices-v2/101', method: 'GET' },
     ]);
 
     closeTrackedQueue(queue);
@@ -153,8 +153,8 @@ describe('invoice print source receipts', () => {
     expect(queue.get('invoice-print:markInvoicePrinted:102')?.sourceResult).toEqual(result);
     expect(queue.get('invoice-print:markInvoicePrinted:102')?.state).toBe('pending');
     expect(calls).toEqual([
-      { endpoint: 'invoices/102/print', method: 'PDF_MUTATION' },
-      { endpoint: 'invoices/102', method: 'GET' },
+      { endpoint: 'invoices-v2/102/print', method: 'PDF_MUTATION' },
+      { endpoint: 'invoices-v2/102', method: 'GET' },
     ]);
 
     closeTrackedQueue(queue);
@@ -181,8 +181,8 @@ describe('invoice print source receipts', () => {
     expect(queue.get('invoice-print:markInvoicePrinted:106')?.sourceResult).toEqual(result);
     expect(queue.get('invoice-print:markInvoicePrinted:106')?.state).toBe('pending');
     expect(calls).toEqual([
-      { endpoint: 'invoices/106/print', method: 'PDF_MUTATION' },
-      { endpoint: 'invoices/106', method: 'GET' },
+      { endpoint: 'invoices-v2/106/print', method: 'PDF_MUTATION' },
+      { endpoint: 'invoices-v2/106', method: 'GET' },
     ]);
 
     closeTrackedQueue(queue);
@@ -208,9 +208,9 @@ describe('invoice print source receipts', () => {
     expect(external).toEqual({ DocumentNumber: '104', Sent: true, Source: 'externalprint' });
     expect(queue.get('invoice-print:externalPrintInvoice:104')?.sourceResult).toEqual(external);
     expect(calls).toEqual([
-      { endpoint: 'invoices/103/print', method: 'PDF_MUTATION' },
-      { endpoint: 'invoices/103', method: 'GET' },
-      { endpoint: 'invoices/104/externalprint', method: 'PUT' },
+      { endpoint: 'invoices-v2/103/print', method: 'PDF_MUTATION' },
+      { endpoint: 'invoices-v2/103', method: 'GET' },
+      { endpoint: 'invoices-v2/104/externalprint', method: 'PUT' },
     ]);
     expect(queue.status().items.map(({ operation }) => operation)).toEqual([
       'sendInvoice',
@@ -222,7 +222,7 @@ describe('invoice print source receipts', () => {
   it('keeps preview PDF retrieval read-only and outside the write-intent queue', async () => {
     const { calls, operations, queue } = await setup();
     await expect(operations.getInvoicePdf('105')).resolves.toEqual(pdf);
-    expect(calls).toEqual([{ endpoint: 'invoices/105/preview', method: 'PDF' }]);
+    expect(calls).toEqual([{ endpoint: 'invoices-v2/105/preview', method: 'PDF' }]);
     expect(queue.status().items).toEqual([]);
     closeTrackedQueue(queue);
   });

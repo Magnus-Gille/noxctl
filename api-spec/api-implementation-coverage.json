@@ -99,11 +99,11 @@
       "id": "fortnox-articlesv2",
       "classification": "partial",
       "publicOperationCount": 6,
-      "implementedCount": 0,
-      "missingCount": 6,
+      "implementedCount": 5,
+      "missingCount": 1,
       "excludedCount": 0,
-      "stateHash": "116c0fc3880e216cfd81968f0da6c4f7c6e19f518db4b31af6ba2062ddaa8e67",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-222, so operations stay missing."
+      "stateHash": "f25276afbd01e8b03edd10c1bd85cfc00f95a68595e3e0baba76cbece25596b6",
+      "rationale": "Default document API since NOX-222 (live list/get verified 2026-11-21). Bundle price calculation is not exposed yet; no bundle use case."
     },
     {
       "id": "fortnox-articleurlconnection",
@@ -335,13 +335,13 @@
     },
     {
       "id": "fortnox-invoicesv2",
-      "classification": "partial",
+      "classification": "complete",
       "publicOperationCount": 15,
-      "implementedCount": 0,
-      "missingCount": 15,
-      "excludedCount": 0,
-      "stateHash": "49fafbb4238e725f3ee9f31df099d604e44eb147c10fca62901fd2ccabc7251a",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-219, so operations stay missing."
+      "implementedCount": 14,
+      "missingCount": 0,
+      "excludedCount": 1,
+      "stateHash": "2700ecdf06fc03b16059b0b016c8a429ae5482d1672c043e2f228bb480e776a4",
+      "rationale": "Default document API since NOX-219 (live list/get verified 2026-11-21). Warehouse lifecycle transitions are outside the core accounting boundary."
     },
     {
       "id": "fortnox-labels",
@@ -393,13 +393,13 @@
     },
     {
       "id": "fortnox-offersv2",
-      "classification": "partial",
+      "classification": "complete",
       "publicOperationCount": 11,
-      "implementedCount": 0,
-      "missingCount": 11,
+      "implementedCount": 11,
+      "missingCount": 0,
       "excludedCount": 0,
-      "stateHash": "20268aa9b7336d9f591af1fb5a9ca859ffd7ac6a047911dcf99bc902ec42df3a",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-220, so operations stay missing."
+      "stateHash": "ce930030099aefa19020b90d1ade4ea75dec30b0626ab48f719ed42f96a0af4d",
+      "rationale": "Default document API since NOX-220/NOX-221; shares the classic operations. Not verified live: the test token lacks the offer/order scope."
     },
     {
       "id": "fortnox-orders",
@@ -412,13 +412,13 @@
     },
     {
       "id": "fortnox-ordersv2",
-      "classification": "partial",
+      "classification": "complete",
       "publicOperationCount": 10,
-      "implementedCount": 0,
-      "missingCount": 10,
+      "implementedCount": 10,
+      "missingCount": 0,
       "excludedCount": 0,
-      "stateHash": "f42898363d483625f96641e2aeec89b330720394d710a2b747039509246ebd0f",
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-221, so operations stay missing."
+      "stateHash": "bf9de983cc1947e7ff539d1637d062729698f41f48e169c5301cee589ccd0bf1",
+      "rationale": "Default document API since NOX-220/NOX-221; shares the classic operations. Not verified live: the test token lacks the offer/order scope."
     },
     {
       "id": "fortnox-predefinedaccounts",

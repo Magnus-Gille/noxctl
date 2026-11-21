@@ -175,9 +175,9 @@ export function createSyntheticFortnox(
       } as T;
     if (method === 'GET' && endpoint.startsWith('customers/'))
       return found(state.customers, last(endpoint), 'Customer');
-    if (method === 'GET' && endpoint.startsWith('articles/'))
+    if (method === 'GET' && /^articles(-v2)?\//.test(endpoint))
       return found(state.articles, last(endpoint), 'Article');
-    if (method === 'GET' && endpoint.startsWith('invoices/'))
+    if (method === 'GET' && /^invoices(-v2)?\//.test(endpoint))
       return found(state.invoices, last(endpoint), 'Invoice');
     if (method === 'POST' && endpoint === 'customers') {
       const input = body!.Customer!;
@@ -191,7 +191,7 @@ export function createSyntheticFortnox(
       state.customers.set(customer.CustomerNumber as string, customer);
       return { Customer: structuredClone(customer) } as T;
     }
-    if (method === 'POST' && endpoint === 'invoices') {
+    if (method === 'POST' && (endpoint === 'invoices' || endpoint === 'invoices-v2')) {
       const invoice = buildInvoice(body!.Invoice!);
       state.invoices.set(invoice.DocumentNumber as string, invoice);
       return { Invoice: structuredClone(invoice) } as T;

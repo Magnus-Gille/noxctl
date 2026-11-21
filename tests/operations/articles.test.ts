@@ -71,7 +71,7 @@ describe('article operations', () => {
       await getArticle('A/B');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('articles/A%2FB');
+      expect(calledUrl).toContain('articles-v2/A%2FB');
     });
   });
 
@@ -106,7 +106,7 @@ describe('article operations', () => {
       await updateArticle('1', { ArticleNumber: '1', Description: 'Updated' });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('articles/1');
+      expect(fetchCall[0]).toContain('articles-v2/1');
       expect(fetchCall[1].method).toBe('PUT');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Article.Description).toBe('Updated');
@@ -122,7 +122,7 @@ describe('article operations', () => {
       await deleteArticle('A/B');
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('articles/A%2FB');
+      expect(fetchCall[0]).toContain('articles-v2/A%2FB');
       expect(fetchCall[1].method).toBe('DELETE');
     });
   });

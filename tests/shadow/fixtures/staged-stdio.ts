@@ -42,7 +42,8 @@ function unsupported(): never {
 }
 const transport: FortnoxTransport = {
   async request<T>(endpoint: string, options: { method?: string; body?: unknown } = {}) {
-    if (!['customers', 'invoices'].includes(endpoint) || options.method !== 'POST') unsupported();
+    if (!['customers', 'invoices-v2'].includes(endpoint) || options.method !== 'POST')
+      unsupported();
     const envelope = endpoint === 'customers' ? 'Customer' : 'Invoice';
     const body = options.body as Record<string, Record<string, unknown>> | undefined;
     if (!body?.[envelope]) unsupported();

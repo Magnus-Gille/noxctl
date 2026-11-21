@@ -99,7 +99,7 @@ describe('order operations', () => {
       await updateOrder('1', { DeliveryDate: '2026-04-30' });
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('orders/1');
+      expect(fetchCall[0]).toContain('orders-v2/1');
       expect(fetchCall[1].method).toBe('PUT');
       const body = JSON.parse(fetchCall[1].body);
       expect(body.Order.DeliveryDate).toBe('2026-04-30');
@@ -114,7 +114,7 @@ describe('order operations', () => {
       const result = await createInvoiceFromOrder('1');
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('orders/1/createinvoice');
+      expect(fetchCall[0]).toContain('orders-v2/1/createinvoice');
       expect(fetchCall[1].method).toBe('PUT');
       expect(result.DocumentNumber).toBe('1001');
     });

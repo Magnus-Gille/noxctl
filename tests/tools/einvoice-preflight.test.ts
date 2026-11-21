@@ -56,7 +56,7 @@ describe('e-invoice preflight MCP tool', () => {
         result.structuredContent,
       );
       expect(fetch.mock.calls.map(([url, options]) => [url, options.method])).toEqual([
-        ['https://api.fortnox.se/3/invoices/1001', 'GET'],
+        ['https://api.fortnox.se/3/invoices-v2/1001', 'GET'],
         ['https://api.fortnox.se/3/customers/25', 'GET'],
       ]);
     } finally {

@@ -80,19 +80,19 @@ const OPERATIONS: IdOperation[] = [
     op: 'getArticle',
     ids: 1,
     call: (o, id) => o.getArticle(id(0)),
-    endpoint: (a) => `articles/${a}`,
+    endpoint: (a) => `articles-v2/${a}`,
   },
   {
     op: 'updateArticle',
     ids: 1,
     call: (o, id) => o.updateArticle(id(0), {}),
-    endpoint: (a) => `articles/${a}`,
+    endpoint: (a) => `articles-v2/${a}`,
   },
   {
     op: 'deleteArticle',
     ids: 1,
     call: (o, id) => o.deleteArticle(id(0)),
-    endpoint: (a) => `articles/${a}`,
+    endpoint: (a) => `articles-v2/${a}`,
   },
   // cost centers
   {

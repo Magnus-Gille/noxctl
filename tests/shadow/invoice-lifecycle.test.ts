@@ -114,7 +114,7 @@ class FakeFortnoxTransport implements FortnoxTransport {
   ): Promise<T> {
     const method = options.method ?? 'GET';
     this.calls.push({ endpoint, method });
-    if (endpoint === 'invoices' && method === 'POST') {
+    if (endpoint === 'invoices-v2' && method === 'POST') {
       const input = clone((options.body as { Invoice: Record<string, unknown> }).Invoice);
       const { total, vat } = totalFromInput(input);
       const result: InvoiceState = {
@@ -128,7 +128,7 @@ class FakeFortnoxTransport implements FortnoxTransport {
       this.invoices.set(invoiceNumber, result);
       return { Invoice: this.invoicePayload(result) } as T;
     }
-    const invoiceMatch = /^invoices\/([^/]+)(?:\/([^/]+))?$/.exec(endpoint);
+    const invoiceMatch = /^invoices-v2\/([^/]+)(?:\/([^/]+))?$/.exec(endpoint);
     if (invoiceMatch) {
       const number = invoiceMatch[1]!;
       const action = invoiceMatch[2];
@@ -197,7 +197,7 @@ class FakeFortnoxTransport implements FortnoxTransport {
     throw new Error('Unknown synthetic Fortnox operation: requestPdf');
   }
   async requestPdfFromMutation(endpoint: string): Promise<Buffer | undefined> {
-    if (endpoint !== `invoices/${invoiceNumber}/print`) {
+    if (endpoint !== `invoices-v2/${invoiceNumber}/print`) {
       throw new Error(`Unknown synthetic Fortnox PDF operation: ${endpoint}`);
     }
     this.requireInvoice(invoiceNumber).sent = true;

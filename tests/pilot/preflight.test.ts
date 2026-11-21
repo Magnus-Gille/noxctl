@@ -100,7 +100,7 @@ describe('mapping preflight before every Fortnox write (NOX-215)', () => {
     const client = await connect(h.host);
     const result = await stagedCreate(client, 'fortnox_create_invoice', invoiceArgs());
     expect(result.isError, textOf(result)).not.toBe(true);
-    expect(posts(h.synthetic.state.requests)).toEqual(['POST invoices']);
+    expect(posts(h.synthetic.state.requests)).toEqual(['POST invoices-v2']);
     expect(h.host.queue.snapshot().at(-1)!.record.state).toBe('pending');
     await client.close();
   });
