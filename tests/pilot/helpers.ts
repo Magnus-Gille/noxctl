@@ -118,6 +118,22 @@ export function fakeAccounted(options: FakeAccountedOptions = {}) {
       if (state.postFailsAfterStore) throw new TypeError('fetch failed');
       return json(201, { data: { id } });
     }
+    const markSent = path.match(new RegExp(`^${base}/invoices/([0-9a-f-]{36})/mark-sent$`));
+    if (method === 'POST' && markSent) {
+      const stored = invoices.get(markSent[1]!);
+      if (!stored || stored.status !== 'draft') return json(422, { error: 'not a draft' });
+      stored.status = 'sent';
+      stored.invoice_number = `A-${String(invoices.size)}`;
+      return json(200, {
+        data: {
+          id: stored.id,
+          status: 'sent',
+          invoice_number: stored.invoice_number,
+          total: stored.total,
+          journal_entry_id: null,
+        },
+      });
+    }
     const customer = path.match(new RegExp(`^${base}/customers/([0-9a-f-]{36})$`));
     if (method === 'GET' && state.getFails && /\/(customers|invoices)\/[0-9a-f-]{36}/.test(path))
       return json(500, { error: 'readback' });
@@ -231,6 +247,7 @@ export interface HarnessOptions {
   fsync?: (fd: number) => void;
   enableInvoicePayments?: boolean;
   enableInvoiceCredits?: boolean;
+  enableInvoiceIssue?: boolean;
   paymentAdapter?: ShadowPaymentAdapter;
 }
 export async function makeHost(options: HarnessOptions = {}) {
@@ -251,6 +268,11 @@ export async function makeHost(options: HarnessOptions = {}) {
       apiKey: async () => API_KEY,
       fetchImpl: accounted.fetchImpl,
       timeoutMs: 500,
+      stages: {
+        issue: options.enableInvoiceIssue === true,
+        payments: options.enableInvoicePayments === true,
+        credits: options.enableInvoiceCredits === true,
+      },
     }),
     now: () => clock.now,
     stderr: (line) => stderr.push(line),
@@ -259,6 +281,7 @@ export async function makeHost(options: HarnessOptions = {}) {
     ...(options.fsync ? { fsync: options.fsync } : {}),
     ...(options.enableInvoicePayments ? { enableInvoicePayments: true } : {}),
     ...(options.enableInvoiceCredits ? { enableInvoiceCredits: true } : {}),
+    ...(options.enableInvoiceIssue ? { enableInvoiceIssue: true } : {}),
     ...(options.paymentAdapter ? { paymentAdapter: options.paymentAdapter } : {}),
   });
   hosts.push(host);
@@ -286,7 +309,8 @@ export async function stagedCreate(
     | 'fortnox_create_invoice'
     | 'fortnox_create_invoice_payment'
     | 'fortnox_bookkeep_invoice_payment'
-    | 'fortnox_credit_invoice',
+    | 'fortnox_credit_invoice'
+    | 'fortnox_invoice_pdf',
   args: Record<string, unknown>,
 ): Promise<CallToolResult> {
   const prepared = (await client.callTool({

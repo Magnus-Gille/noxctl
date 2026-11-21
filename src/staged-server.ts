@@ -53,6 +53,11 @@ export interface CreateStagedServerOptions {
    */
   enableInvoiceCredits?: boolean;
   /**
+   * Also stage `fortnox_invoice_pdf` with `markSent` (Fortnox /print, mirrored as the Accounted
+   * issue stage). Default false; requires a host preflight and serialized execution.
+   */
+  enableInvoiceIssue?: boolean;
+  /**
    * The host asserts that every staged_prepare/staged_execute is serialized with all other
    * pilot mutations (the pilot host's pilot.lock), so an execute-time preflight cannot race.
    * Required, together with `preflight`, when `enableInvoicePayments` is true.
@@ -88,6 +93,10 @@ const paymentAllowed: ReadonlyArray<readonly [string, string]> = [
 /** Opt-in (NOX-212): a full credit of a mirrored original; off until the pilot can issue invoices. */
 const creditAllowed: ReadonlyArray<readonly [string, string]> = [
   ['fortnox_credit_invoice', 'creditInvoice'],
+];
+/** Opt-in: marking an invoice as sent (/print), mirrored onto Accounted mark-sent. */
+const issueAllowed: ReadonlyArray<readonly [string, string]> = [
+  ['fortnox_invoice_pdf', 'markInvoicePrinted'],
 ];
 const copy = <T>(value: T): T => decode(canonicalEncode(value)) as T;
 function identity(value: string): void {
@@ -150,16 +159,19 @@ export async function createStagedServer(
     maxPreparationAgeMs: options.maxPreparationAgeMs,
   });
   if (
-    (options.enableInvoicePayments === true || options.enableInvoiceCredits === true) &&
+    (options.enableInvoicePayments === true ||
+      options.enableInvoiceCredits === true ||
+      options.enableInvoiceIssue === true) &&
     (typeof options.preflight !== 'function' || options.serializedExecution !== true)
   )
     throw new StagedHostError(
-      'Invoice payment or credit staging requires a host preflight and serialized execution',
+      'Invoice payment, credit or issue staging requires a host preflight and serialized execution',
     );
   const allowed = new Map([
     ...baseAllowed,
     ...(options.enableInvoicePayments === true ? paymentAllowed : []),
     ...(options.enableInvoiceCredits === true ? creditAllowed : []),
+    ...(options.enableInvoiceIssue === true ? issueAllowed : []),
   ]);
   const authorize = options.authorize;
   const preflight = options.preflight;

@@ -398,5 +398,28 @@ Fortnox `creditInvoice` is mirrored onto Accounted `POST /invoices/:id/credit` b
   negated rows and totals, a text row, `Credit: "true"`, `CreditInvoiceReference: "0"` and
   `InvoiceReference` = the original.
 
-Remaining before credits (and payments) can run in the pilot: an invoice issue stage
-(`markInvoicePrinted` staging and its Accounted issue adapter in the host).
+## Invoice issue stage
+
+Marking a Fortnox invoice as sent (`/print`) is mirrored onto Accounted
+`POST /invoices/{id}/mark-sent` by `AccountedInvoiceIssueAdapter`. Payments and credits both
+need it, because Accounted mark-paid and credit require an issued invoice.
+
+- `createPilotHost(config, { enableInvoiceIssue: true })` stages `fortnox_invoice_pdf` with
+  `markSent: true` (observed as `markInvoicePrinted`). The default is off, and the operator CLI
+  never sets it. Like the other opt-in stages, it requires the host preflight and serialized
+  execution.
+- Preflight `markInvoicePrinted` (`{ documentNumber, markSent: true }`): accepts only an applied
+  strict invoice that has no issue record yet. `outputPath` and `overwrite` are refused; the
+  `/preview` copy goes to a fresh private temporary directory on the host.
+- The issue record drains like any single record (`preview`, `drain-one`). The adapter reads
+  the draft back, posts mark-sent and reads the invoice back as `sent`.
+- The Accounted client allows the extra request shapes only when the host passes `stages`
+  (`issue`: mark-sent; `credits`: credit; `payments`: mark-paid, its dry run and the payment
+  readbacks). The operator bootstrap passes none, so the production client stays narrow.
+- Synthetic Fortnox serves `/preview` and `/print` (which sets `Sent: true`).
+
+With the issue stage, a booked payment previews end to end with the real adapter, and a credit
+passes its preflight (synthetic tests). Remaining before any of this runs for real: Magnus
+decides whether to enable the flags, and the operator bootstrap and the Accounted client
+`stages` are wired to that decision. The mark-paid and credit target routes are only tested
+against fakes.
