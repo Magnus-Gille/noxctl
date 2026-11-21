@@ -9,10 +9,9 @@
  * will be deprecated at an unannounced date. The v2 families otherwise keep the
  * same envelopes, field names, actions and filters.
  *
- * The default stays `classic` until v2 has been verified against a live Fortnox
- * company (scopes, pagination metadata and write behaviour). Set
- * `NOXCTL_FORTNOX_DOCUMENT_API=v2` to opt in. The value is read on every call
- * so that one process can be switched without rebuilding operations.
+ * v2 is the default. Set `NOXCTL_FORTNOX_DOCUMENT_API=classic` to fall back to
+ * the classic endpoints while Fortnox still serves them. The value is read on
+ * every call so that one process can be switched without rebuilding operations.
  */
 export const DOCUMENT_API_ENV = 'NOXCTL_FORTNOX_DOCUMENT_API';
 
@@ -24,19 +23,19 @@ export type DocumentFamily = 'invoices' | 'offers' | 'orders' | 'articles';
 export class InvalidDocumentApiEnvError extends Error {
   constructor() {
     super(
-      `${DOCUMENT_API_ENV} has an invalid value. Use v2 for the Fortnox v2 document endpoints, or leave it unset or use classic for the classic endpoints.`,
+      `${DOCUMENT_API_ENV} has an invalid value. Leave it unset or use v2 for the Fortnox v2 document endpoints, or use classic for the classic endpoints.`,
     );
     this.name = 'InvalidDocumentApiEnvError';
   }
 }
 
 /**
- * Parse NOXCTL_FORTNOX_DOCUMENT_API. Unset or empty means classic. Any value
+ * Parse NOXCTL_FORTNOX_DOCUMENT_API. Unset or empty means v2. Any value
  * other than classic or v2 (any case) throws, so a typo can never silently send
  * writes to an endpoint the user did not choose. The rejected value is not echoed.
  */
 export function parseDocumentApiEnv(value: string | undefined): DocumentApiVersion {
-  if (value === undefined || value === '') return 'classic';
+  if (value === undefined || value === '') return 'v2';
   const normalized = value.toLowerCase();
   if (normalized === 'classic') return 'classic';
   if (normalized === 'v2') return 'v2';

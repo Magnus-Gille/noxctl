@@ -160,7 +160,7 @@ describe('invoice operations', () => {
       await sendInvoice('1001');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/email');
+      expect(calledUrl).toContain('invoices-v2/1001/email');
     });
 
     it('routes to print endpoint', async () => {
@@ -170,7 +170,7 @@ describe('invoice operations', () => {
       await sendInvoice('1001', 'print');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/print');
+      expect(calledUrl).toContain('invoices-v2/1001/print');
     });
 
     // Regression: /print answers with application/pdf, not JSON. Parsing the PDF
@@ -205,7 +205,7 @@ describe('invoice operations', () => {
       await sendInvoice('1001', 'einvoice');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/einvoice');
+      expect(calledUrl).toContain('invoices-v2/1001/einvoice');
     });
 
     function jsonOk(body: unknown) {
@@ -244,7 +244,7 @@ describe('invoice operations', () => {
       expect(JSON.parse(c[1].body as string)).toEqual({
         Invoice: { EmailInformation: { EmailAddressBCC: 'me@seller.example' } },
       });
-      expect(c[2].url).toContain('invoices/1001/email');
+      expect(c[2].url).toContain('invoices-v2/1001/email');
     });
 
     it('does not overwrite a BCC already on the invoice with the profile default', async () => {
@@ -261,7 +261,7 @@ describe('invoice operations', () => {
       await sendInvoice('1001', 'email', { defaultBcc: 'me@seller.example' });
 
       expect(calls().map((x) => x.method)).toEqual(['GET', 'GET']);
-      expect(calls()[1].url).toContain('invoices/1001/email');
+      expect(calls()[1].url).toContain('invoices-v2/1001/email');
     });
 
     it('clears the BCC on the invoice when noBcc is given', async () => {
@@ -377,7 +377,7 @@ describe('invoice operations', () => {
       const bytes = await getInvoicePdf('1001');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/preview');
+      expect(calledUrl).toContain('invoices-v2/1001/preview');
       expect(calledUrl).not.toContain('/print');
       expect(bytes.equals(PDF_BYTES)).toBe(true);
     });
@@ -411,7 +411,7 @@ describe('invoice operations', () => {
       const result = await markInvoicePrinted('1001');
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/print');
+      expect(calledUrl).toContain('invoices-v2/1001/print');
       expect(result.invoice.Sent).toBe(true);
     });
 
@@ -524,7 +524,7 @@ describe('invoice operations', () => {
       const result = await bookkeepInvoice('1001');
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('invoices/1001/bookkeep');
+      expect(fetchCall[0]).toContain('invoices-v2/1001/bookkeep');
       expect(fetchCall[1].method).toBe('PUT');
       expect(result.Booked).toBe(true);
     });
@@ -538,7 +538,7 @@ describe('invoice operations', () => {
       const result = await creditInvoice('1001');
 
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(fetchCall[0]).toContain('invoices/1001/credit');
+      expect(fetchCall[0]).toContain('invoices-v2/1001/credit');
       expect(fetchCall[1].method).toBe('PUT');
       expect(result.CreditInvoiceReference).toBe('1001');
     });

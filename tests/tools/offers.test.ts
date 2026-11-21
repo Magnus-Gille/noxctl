@@ -219,7 +219,7 @@ describe('offer tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('offers/1/createinvoice');
+      expect(calledUrl).toContain('offers-v2/1/createinvoice');
       const text = (result.content as { type: string; text: string }[])[0].text;
       expect(text).toContain('1001');
     });
@@ -236,7 +236,7 @@ describe('offer tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('offers/1/createorder');
+      expect(calledUrl).toContain('offers-v2/1/createorder');
       const text = (result.content as { type: string; text: string }[])[0].text;
       expect(text).toContain('501');
     });

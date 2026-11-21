@@ -312,9 +312,9 @@ Or in Claude Desktop's `claude_desktop_config.json`:
 
 Read-only mode omits every tool that can change Fortnox data or save a local file, including `fortnox_invoice_pdf` and the file download tools (`fortnox_get_voucher_file`, `fortnox_get_supplier_invoice_file`, `fortnox_get_inbox_file`, `fortnox_get_archive_entry`). To download a file in read-only sessions, use the CLI, for example `noxctl invoices pdf <docNumber>`, which previews the invoice. Only `--mark-sent` writes to Fortnox.
 
-### Fortnox v2 document endpoints (experimental)
+### Fortnox v2 document endpoints
 
-Fortnox has added `-v2` versions of the invoice, offer, order and article endpoints to support bundle articles ("paketartiklar"). The classic endpoints dissolve a bundle into its contained articles and will be deprecated at a date Fortnox has not announced. Set `NOXCTL_FORTNOX_DOCUMENT_API=v2` to send every invoice, offer, order and article call (CLI and MCP) to the v2 endpoints; unset or `classic` keeps the classic endpoints. Any other value is rejected before a request is made. v2 has not yet been verified against a live Fortnox company, so try it on a test company first.
+Fortnox has added `-v2` versions of the invoice, offer, order and article endpoints to support bundle articles ("paketartiklar"). The classic endpoints dissolve a bundle into its contained articles and will be deprecated at a date Fortnox has not announced. noxctl uses the v2 endpoints by default for every invoice, offer, order and article call (CLI and MCP). Set `NOXCTL_FORTNOX_DOCUMENT_API=classic` to fall back to the classic endpoints; `v2` or an unset variable selects v2, and any other value is rejected before a request is made. Invoice and article reads were verified against a live company on 2026-11-21; offers and orders use the same operations but were not verified live.
 
 ### Embedded and hosted runtimes
 

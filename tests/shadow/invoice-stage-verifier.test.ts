@@ -704,7 +704,7 @@ describe('read-only invoice stage verifier', () => {
     const transport: FortnoxTransport = {
       async request<T>(endpoint: string): Promise<T> {
         calls.push(`GET ${endpoint}`);
-        if (endpoint === 'invoices/10') return { Invoice: invoiceSource(true) } as T;
+        if (endpoint === 'invoices-v2/10') return { Invoice: invoiceSource(true) } as T;
         throw new Error(`Unexpected synthetic source call: ${endpoint}`);
       },
       async requestWithMetadata<T>(): Promise<T> {
@@ -729,7 +729,7 @@ describe('read-only invoice stage verifier', () => {
     };
     const source = await createFortnoxOperations(transport).markInvoicePrinted('10');
     expect(source).toEqual({ invoice: invoiceSource(true), confirmed: true, pdf: undefined });
-    expect(calls).toEqual(['PDF invoices/10/print', 'GET invoices/10']);
+    expect(calls).toEqual(['PDF invoices-v2/10/print', 'GET invoices-v2/10']);
     const runtime = await seedRuntime();
     try {
       await runtime.queue.execute(

@@ -442,7 +442,7 @@ describe('invoice tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/email');
+      expect(calledUrl).toContain('invoices-v2/1001/email');
       expect((result.content as { type: string; text: string }[])[0].text).toContain('email');
     });
 
@@ -456,7 +456,7 @@ describe('invoice tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/print');
+      expect(calledUrl).toContain('invoices-v2/1001/print');
       // The PDF body must not surface as an error to the caller.
       expect(result.isError).toBeFalsy();
     });
@@ -471,7 +471,7 @@ describe('invoice tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/einvoice');
+      expect(calledUrl).toContain('invoices-v2/1001/einvoice');
     });
   });
 
@@ -505,7 +505,7 @@ describe('invoice tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/preview');
+      expect(calledUrl).toContain('invoices-v2/1001/preview');
       expect(result.isError).toBeFalsy();
       rmSync(target, { force: true });
     });
@@ -655,7 +655,7 @@ describe('invoice tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/bookkeep');
+      expect(calledUrl).toContain('invoices-v2/1001/bookkeep');
       expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].method).toBe('PUT');
       expect((result.content as { type: string; text: string }[])[0].text).toContain('bokförd');
     });
@@ -672,7 +672,7 @@ describe('invoice tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('invoices/1001/credit');
+      expect(calledUrl).toContain('invoices-v2/1001/credit');
       expect((result.content as { type: string; text: string }[])[0].text).toContain(
         'Kreditfaktura',
       );

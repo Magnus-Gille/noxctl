@@ -256,18 +256,33 @@
       "tagHash": "c06e9bdc1a1984017b59612bec6c53007f97f74cfadc1ec3e333c63e515dc8fc",
       "classification": "partial",
       "operations": {
-        "implemented": [],
-        "missing": [
+        "implemented": [
           "50b4bbd6923befea0ed9c378cac6efe049d9da4b77c4cc3de668fdb0a07029df",
           "5a9ecfb7dc72d45662b49dded698ae18e92bd2e04a2acb0b908b51db208791db",
-          "9bb3738654e78fcf270a48afc3907eeb4228c38be56dc345d7ac1b450fd90713",
           "af195053fbfea6dec555c2155fce00c08cb362d8bfbd1c3b49bf0a2112ba8448",
           "cd6c54f92c3c344b02cc0c1d2975d1814224c4b9f56b7cc1b67a19897766038d",
           "f5e9aa0a90c6de0f1698cb5de96716fefe1b8d0b0acf96601627107e0b4b051d"
         ],
+        "missing": [
+          "9bb3738654e78fcf270a48afc3907eeb4228c38be56dc345d7ac1b450fd90713"
+        ],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-222, so operations stay missing."
+      "rationale": "Default document API since NOX-222 (live list/get verified 2026-11-21). Bundle price calculation is not exposed yet; no bundle use case.",
+      "evidence": {
+        "operationExports": [
+          "listArticles"
+        ],
+        "mcpTools": [
+          "fortnox_list_articles"
+        ],
+        "cliCommands": [
+          [
+            "articles",
+            "list"
+          ]
+        ]
+      }
     },
     {
       "id": "fortnox-articleurlconnection",
@@ -914,14 +929,12 @@
     {
       "id": "fortnox-invoicesv2",
       "tagHash": "89c8b321dbd7cb78fc48c1ec3963fbfbe41aa905d60918533b1df98c26438e65",
-      "classification": "partial",
+      "classification": "complete",
       "operations": {
-        "implemented": [],
-        "missing": [
+        "implemented": [
           "07ad58d0373b09541fd05e67f2f7a9cfb7bdf5503f734d9da9048079f5098ee8",
           "090465e494f08a049d9f38226beb6b49369339cbbb1e23fccf95e4be27cd9f23",
           "243d2631c5a50492295f4ec902e753cfa352ea3ddbe64e74eab4fe0782820150",
-          "280b658088ebd4d126925babff96361e4119416d200abccd9011ef465890c3ac",
           "3368ab838cb18dd03b90a7a1908ebd985b5bee383d4888a51bd0f05633bea409",
           "342707b36335b713b8b2630bda97f7919890e8864f6a5dcc53ff2a64540bf996",
           "699bc8a63d84a6b00e4197a067f8ecddccba676c2766040d0c3a5c5fe654c567",
@@ -934,9 +947,26 @@
           "ddd22c118c6eda363789b7700695a01ac94bec0c3f21cf594a71f0f967fae614",
           "f9ce36ab6671b2a340f943fd7dd24b148c7027d6592262bfcbb0b509e240de8e"
         ],
-        "excluded": []
+        "missing": [],
+        "excluded": [
+          "280b658088ebd4d126925babff96361e4119416d200abccd9011ef465890c3ac"
+        ]
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-219, so operations stay missing."
+      "rationale": "Default document API since NOX-219 (live list/get verified 2026-11-21). Warehouse lifecycle transitions are outside the core accounting boundary.",
+      "evidence": {
+        "operationExports": [
+          "listInvoices"
+        ],
+        "mcpTools": [
+          "fortnox_list_invoices"
+        ],
+        "cliCommands": [
+          [
+            "invoices",
+            "list"
+          ]
+        ]
+      }
     },
     {
       "id": "fortnox-labels",
@@ -1063,10 +1093,9 @@
     {
       "id": "fortnox-offersv2",
       "tagHash": "a4884ee4d4d48840419e8cf6d52d76c3176be63c6403ba00fe7d5dbc323d5f4d",
-      "classification": "partial",
+      "classification": "complete",
       "operations": {
-        "implemented": [],
-        "missing": [
+        "implemented": [
           "041f0e1f4efb45a5163cab69ab948f0bd2f0fe6b2545d8c3dae8c346f5b4a18a",
           "21cf938de5b4f7ffd6778f44fa524489d4d90e2bde8c3d0ba847849283a67630",
           "4cb58a0dbe8bd0167cc21760fa8071e966788abf5e4be8aacb56545edd280de2",
@@ -1079,9 +1108,24 @@
           "d679b74be1595275982d14c5545d9bd3a24a24b2efc9743cca646d70d0b1ba25",
           "ee59d47492af76c0fb247f24106818afb4b66f799c3f4c03dd8e984252241323"
         ],
+        "missing": [],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-220, so operations stay missing."
+      "rationale": "Default document API since NOX-220/NOX-221; shares the classic operations. Not verified live: the test token lacks the offer/order scope.",
+      "evidence": {
+        "operationExports": [
+          "listOffers"
+        ],
+        "mcpTools": [
+          "fortnox_list_offers"
+        ],
+        "cliCommands": [
+          [
+            "offers",
+            "list"
+          ]
+        ]
+      }
     },
     {
       "id": "fortnox-orders",
@@ -1121,10 +1165,9 @@
     {
       "id": "fortnox-ordersv2",
       "tagHash": "cd0572805fd72f738cc6adaf519b21cfef7d09ca9cab253e1a7d52da36cdda3e",
-      "classification": "partial",
+      "classification": "complete",
       "operations": {
-        "implemented": [],
-        "missing": [
+        "implemented": [
           "0685e3e6ab0815f5a9d4a4204086c16536d1bd70458cf7ce8486be590bcdfd2c",
           "1baa895d88dac1470d0c0a60cfbe6e34e6922388a93179fe08b68f5a511185ed",
           "4410c9a75752d1a074276d431311d3aa48b48c6d0935a82309b729c483a7fb17",
@@ -1136,9 +1179,24 @@
           "e1f01983944d92fa08e4cd6c47e7c09bde9acb6487abaf2d71434862f7845a95",
           "ecba6dac4fba3d83de265d251d0521acafd822e93dd3cc9b02f69f33c52786f5"
         ],
+        "missing": [],
         "excluded": []
       },
-      "rationale": "Tracked gap from the 2026-10 spec refresh (NOX-203); implementation tracked in NOX-221, so operations stay missing."
+      "rationale": "Default document API since NOX-220/NOX-221; shares the classic operations. Not verified live: the test token lacks the offer/order scope.",
+      "evidence": {
+        "operationExports": [
+          "listOrders"
+        ],
+        "mcpTools": [
+          "fortnox_list_orders"
+        ],
+        "cliCommands": [
+          [
+            "orders",
+            "list"
+          ]
+        ]
+      }
     },
     {
       "id": "fortnox-predefinedaccounts",

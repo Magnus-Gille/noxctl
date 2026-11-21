@@ -218,7 +218,7 @@ describe('order tools', () => {
       });
 
       const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
-      expect(calledUrl).toContain('orders/1/createinvoice');
+      expect(calledUrl).toContain('orders-v2/1/createinvoice');
       const text = (result.content as { type: string; text: string }[])[0].text;
       expect(text).toContain('1001');
     });
