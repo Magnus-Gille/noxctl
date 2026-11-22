@@ -1,7 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { defaultFortnoxOperations, type FortnoxOperations } from '../operations/index.js';
-import { articleListColumns, articleDetailColumns } from '../views.js';
+import {
+  articleListColumns,
+  articleDetailColumns,
+  bundlePriceColumns,
+  bundlePriceLines,
+} from '../views.js';
 import {
   detailResponse,
   dryRunResponse,
@@ -10,11 +15,92 @@ import {
   textResponse,
 } from '../tool-output.js';
 
+const accountNumber = (label: string) =>
+  z.number().int().min(1000).max(99999).optional().describe(label);
+
+const BundleSubItemSchema = z.strictObject({
+  ArticleNumber: z.string().max(50).describe('Artikelnummer för den ingående artikeln'),
+  Quantity: z.number().optional().describe('Antal av artikeln i ett paket'),
+  FixedPrice: z
+    .boolean()
+    .optional()
+    .describe('Fast pris: artikelns pris räknas inte om när paketpriset fördelas'),
+});
+
+const BundlePriceAdjustmentRowSchema = z.strictObject({
+  Description: z.string().max(255).optional().describe('Beskrivning på prisjusteringsraden'),
+  SalesAccount: accountNumber('Försäljningskonto för prisjusteringsraden'),
+  VAT: z.number().optional().describe('Momssats i procent för prisjusteringsraden'),
+  EUAccount: accountNumber('Konto för försäljning inom EU'),
+  EUVATAccount: accountNumber('Konto för momspliktig försäljning inom EU'),
+  ExportAccount: accountNumber('Konto för export'),
+  ConstructionAccount: accountNumber('Konto för omvänd byggmoms'),
+});
+
+const BundleSchema = z
+  .strictObject({
+    Comment: z.string().optional().describe('Kommentar till paketet'),
+    SubItems: z
+      .array(BundleSubItemSchema)
+      .optional()
+      .describe('Ingående artiklar (ersätter hela listan vid uppdatering)'),
+    PriceAdjustmentRow: BundlePriceAdjustmentRowSchema.optional().describe(
+      'Inställningar för paketets prisjusteringsrad',
+    ),
+  })
+  .describe('Paketartikelns innehåll (kräver Fortnox v2-artiklar)');
+
+const bundleArticleFields = {
+  BundleArticle: z.boolean().optional().describe('Om artikeln är en paketartikel'),
+  Bundle: BundleSchema.optional(),
+};
+
+const BundlePriceSubRowSchema = z.strictObject({
+  Quantity: z
+    .number()
+    .optional()
+    .describe('Antal av den ingående artikeln på dokumentet (krävs för prisjusteringsrad)'),
+  Price: z.number().optional().describe('Eget pris; används bara när UserPrice är true'),
+  UserPrice: z
+    .boolean()
+    .optional()
+    .describe('Använd angivet Price i stället för att räkna fram priset'),
+  BundleSubItem: z.strictObject({
+    AmountInBundle: z.number().describe('Antal av artikeln i ett paket (0 för prisjustering)'),
+    SalesPriceInBundle: z
+      .number()
+      .describe('Artikelns grundpris i prislistan (0 för prisjustering)'),
+    PriceAdjustment: z
+      .boolean()
+      .optional()
+      .describe('true på den extra raden som ska få prisjusteringen beräknad'),
+  }),
+});
+
+const BundlePriceRowSchema = z.strictObject({
+  Price: z.number().describe('Paketets pris, som fördelas över de ingående artiklarna'),
+  Quantity: z
+    .number()
+    .optional()
+    .describe('Antal sålda paket (krävs för att beräkna prisjusteringsraden)'),
+  Discount: z.number().optional().describe('Rabatt på paketraden'),
+  Bundle: z.strictObject({
+    SubRows: z.array(BundlePriceSubRowSchema).describe('Paketets ingående rader'),
+  }),
+});
+
 export function registerArticleTools(
   server: McpServer,
   operations: FortnoxOperations = defaultFortnoxOperations,
 ): void {
-  const { listArticles, getArticle, createArticle, updateArticle, deleteArticle } = operations;
+  const {
+    listArticles,
+    getArticle,
+    createArticle,
+    updateArticle,
+    deleteArticle,
+    calculateBundlePrices,
+  } = operations;
   server.tool(
     'fortnox_list_articles',
     'Lista/sök artiklar i Fortnox. Returnerar: ArticleNumber, Description, SalesPrice, Unit, Active.',
@@ -65,6 +151,7 @@ export function registerArticleTools(
       SalesAccount: z.number().optional().describe('Försäljningskonto'),
       VAT: z.number().optional().describe('Momssats i procent (t.ex. 25)'),
       Active: z.boolean().optional().describe('Om artikeln är aktiv'),
+      ...bundleArticleFields,
       confirm: z.boolean().optional().describe('Bekräfta att artikeln ska skapas'),
       dryRun: z
         .boolean()
@@ -95,6 +182,7 @@ export function registerArticleTools(
       SalesAccount: z.number().optional().describe('Försäljningskonto'),
       VAT: z.number().optional().describe('Momssats i procent (t.ex. 25)'),
       Active: z.boolean().optional().describe('Om artikeln är aktiv'),
+      ...bundleArticleFields,
       confirm: z.boolean().optional().describe('Bekräfta att artikeln ska uppdateras'),
       dryRun: z
         .boolean()
@@ -130,6 +218,19 @@ export function registerArticleTools(
 
       await deleteArticle(articleNumber);
       return textResponse(`Article ${articleNumber} deleted.`);
+    },
+  );
+
+  server.tool(
+    'fortnox_calculate_bundle_prices',
+    'Beräkna priserna för de ingående artiklarna i en eller flera paketartiklar, så att summan blir paketets pris. Ren beräkning: Fortnox sparar ingenting. Ange per paketrad Price och SubRows med BundleSubItem.AmountInBundle och SalesPriceInBundle (grundpriset i prislistan). Lägg till en rad med PriceAdjustment: true och Quantity på alla rader för att även få prisjusteringsraden beräknad. Returnerar: Row, Kind, Quantity, AmountInBundle, SalesPriceInBundle, Price.',
+    {
+      Rows: z.array(BundlePriceRowSchema).min(1).describe('Paketrader att beräkna'),
+      includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
+    },
+    async ({ Rows, includeRaw }) => {
+      const data = await calculateBundlePrices(Rows);
+      return listResponse(bundlePriceLines(data), bundlePriceColumns, data, undefined, includeRaw);
     },
   );
 }

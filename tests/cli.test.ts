@@ -418,6 +418,18 @@ describe('CLI smoke tests', () => {
     expect(output).toContain('get');
     expect(output).toContain('create');
     expect(output).toContain('update');
+    expect(output).toContain('bundle-prices');
+  });
+
+  it('noxctl articles bundle-prices --help takes JSON input and needs no confirmation', () => {
+    const output = execFileSync(
+      'node',
+      [CLI_PATH, 'articles', 'bundle-prices', '--help'],
+      execOpts,
+    ) as string;
+    expect(output).toContain('--input');
+    expect(output).not.toContain('--yes');
+    expect(output).toMatch(/does not save/i);
   });
 
   it('noxctl suppliers --help shows subcommands', () => {

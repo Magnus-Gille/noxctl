@@ -154,7 +154,51 @@ export const articleDetailColumns: Column[] = [
   { key: 'SalesAccount', header: 'Sales Account', width: 10 },
   { key: 'VAT', header: 'VAT %', width: 10 },
   { key: 'Active', header: 'Active', width: 5 },
+  { key: 'BundleArticle', header: 'Bundle', width: 5 },
 ];
+
+// One line per bundle row and per sub row of a bundle price calculation.
+// 4 + 2 + 10 + 2 + 8 + 2 + 10 + 2 + 12 + 2 + 12 = 66
+export const bundlePriceColumns: Column[] = [
+  { key: 'Row', header: 'Row', width: 4, align: 'right' },
+  { key: 'Kind', header: 'Kind', width: 10 },
+  { key: 'Quantity', header: 'Qty', width: 8, align: 'right' },
+  { key: 'AmountInBundle', header: 'In bundle', width: 10, align: 'right' },
+  { key: 'SalesPriceInBundle', header: 'List price', width: 12, align: 'right', format: currency },
+  { key: 'Price', header: 'Price', width: 12, align: 'right', format: currency },
+];
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+/** Flatten a bundle price calculation into table lines (bundle row, then its sub rows). */
+export function bundlePriceLines(calculation: unknown): Record<string, unknown>[] {
+  const lines: Record<string, unknown>[] = [];
+  asArray(asRecord(calculation).Rows).forEach((rawRow, index) => {
+    const row = asRecord(rawRow);
+    lines.push({ Row: index + 1, Kind: 'bundle', Quantity: row.Quantity, Price: row.Price });
+    for (const rawSub of asArray(asRecord(row.Bundle).SubRows)) {
+      const sub = asRecord(rawSub);
+      const item = asRecord(sub.BundleSubItem);
+      lines.push({
+        Row: index + 1,
+        Kind: item.PriceAdjustment === true ? 'adjustment' : 'item',
+        Quantity: sub.Quantity,
+        AmountInBundle: item.AmountInBundle,
+        SalesPriceInBundle: item.SalesPriceInBundle,
+        Price: sub.Price,
+      });
+    }
+  });
+  return lines;
+}
 
 // --- Supplier views (target ≤80 cols) ---
 

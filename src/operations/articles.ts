@@ -18,6 +18,29 @@ export interface ListArticlesParams {
   all?: boolean;
 }
 
+/**
+ * One row of a bundle price calculation: a bundle's target price and its sub
+ * rows. Fortnox's OpenAPI request schema for this endpoint is wrong (it reuses
+ * the article envelope), so the row is passed through as documented in the
+ * endpoint description instead of being typed from the spec.
+ */
+export type BundlePriceCalculationRow = Record<string, unknown>;
+
+export interface BundlePriceCalculation {
+  Rows: Record<string, unknown>[];
+  [key: string]: unknown;
+}
+
+interface BundlePriceCalculationResponse {
+  BundlePriceCalculation: BundlePriceCalculation;
+}
+
+/**
+ * Bundle price calculation exists only in the v2 article family, so it ignores
+ * NOXCTL_FORTNOX_DOCUMENT_API=classic: there is no classic endpoint to fall back to.
+ */
+const BUNDLE_PRICE_CALCULATION_PATH = 'articles-v2/calculatebundleprices';
+
 export function createArticleOperations(transport: FortnoxTransport) {
   async function listArticles(params: ListArticlesParams = {}): Promise<ArticlesResponse> {
     const queryParams: Record<string, string | number | undefined> = {
@@ -80,8 +103,42 @@ export function createArticleOperations(transport: FortnoxTransport) {
     );
   }
 
-  return { listArticles, getArticle, createArticle, updateArticle, deleteArticle };
+  /**
+   * Ask Fortnox to split each bundle row's price over its sub rows (and,
+   * optionally, a price adjustment row). Fortnox documents this as a pure
+   * calculation: it returns the prices and saves nothing, even though it is a POST.
+   */
+  async function calculateBundlePrices(
+    rows: BundlePriceCalculationRow[],
+  ): Promise<BundlePriceCalculation> {
+    if (!Array.isArray(rows) || rows.length === 0) {
+      throw new Error('Bundle price calculation needs at least one row.');
+    }
+    const data = await transport.request<BundlePriceCalculationResponse>(
+      BUNDLE_PRICE_CALCULATION_PATH,
+      {
+        method: 'POST',
+        body: { BundlePriceCalculation: { Rows: rows } },
+      },
+    );
+    return data.BundlePriceCalculation;
+  }
+
+  return {
+    listArticles,
+    getArticle,
+    createArticle,
+    updateArticle,
+    deleteArticle,
+    calculateBundlePrices,
+  };
 }
 
-export const { listArticles, getArticle, createArticle, updateArticle, deleteArticle } =
-  createArticleOperations(defaultFortnoxTransport);
+export const {
+  listArticles,
+  getArticle,
+  createArticle,
+  updateArticle,
+  deleteArticle,
+  calculateBundlePrices,
+} = createArticleOperations(defaultFortnoxTransport);

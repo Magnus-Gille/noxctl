@@ -48,6 +48,8 @@ import {
   companyDetailColumns,
   articleListColumns,
   articleDetailColumns,
+  bundlePriceColumns,
+  bundlePriceLines,
   supplierListColumns,
   supplierDetailColumns,
   supplierInvoiceListColumns,
@@ -2333,6 +2335,28 @@ customers
     );
   });
 
+/** Accept bundle price rows as a bare array or wrapped in Rows / BundlePriceCalculation. */
+function bundlePriceRowsFromInput(input: unknown): Record<string, unknown>[] {
+  let candidate: unknown = input;
+  if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+    const record = candidate as Record<string, unknown>;
+    const wrapped = record.BundlePriceCalculation;
+    candidate =
+      wrapped && typeof wrapped === 'object'
+        ? (wrapped as Record<string, unknown>).Rows
+        : record.Rows;
+  }
+  if (
+    !Array.isArray(candidate) ||
+    candidate.some((row) => !row || typeof row !== 'object' || Array.isArray(row))
+  ) {
+    throw new Error(
+      'Bundle price input must be an array of row objects, {"Rows": [...]} or {"BundlePriceCalculation": {"Rows": [...]}}.',
+    );
+  }
+  return candidate as Record<string, unknown>[];
+}
+
 // --- articles ---
 const articles = program.command('articles').description('Article operations');
 
@@ -2424,6 +2448,38 @@ Examples:
       outputDetail(data as Record<string, unknown>, articleDetailColumns, json(), 'Article');
     },
   );
+
+articles
+  .command('bundle-prices')
+  .description(
+    'Calculate the prices of the articles in one or more bundles (pure calculation; Fortnox does not save anything)',
+  )
+  .requiredOption(
+    '--input <file>',
+    'Rows as JSON: an array, {"Rows": [...]} or {"BundlePriceCalculation": {"Rows": [...]}} (or - for stdin)',
+  )
+  .addHelpText(
+    'after',
+    `
+Each row needs the bundle's Price and Bundle.SubRows, where every sub row has
+BundleSubItem.AmountInBundle (amount per bundle) and BundleSubItem.SalesPriceInBundle
+(the article's base price in the price list). Set UserPrice and Price on a sub row to
+keep its price fixed. To also get the price adjustment row, add a sub row with
+BundleSubItem.PriceAdjustment true and set Quantity on every row.
+
+This calls Fortnox's articles-v2 calculation endpoint, which does not save anything,
+so it needs no confirmation. It always uses v2, even with NOXCTL_FORTNOX_DOCUMENT_API=classic.
+
+Examples:
+  echo '[{"Price":1100,"Bundle":{"SubRows":[{"BundleSubItem":{"AmountInBundle":2,"SalesPriceInBundle":200}},{"BundleSubItem":{"AmountInBundle":3,"SalesPriceInBundle":300}}]}}]' | noxctl articles bundle-prices --input -`,
+  )
+  .action(async (opts: { input: string }) => {
+    const { calculateBundlePrices } = defaultFortnoxOperations;
+    const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+    const rows = bundlePriceRowsFromInput(JSON.parse(raw) as unknown);
+    const data = await calculateBundlePrices(rows);
+    outputList(bundlePriceLines(data), bundlePriceColumns, json(), data);
+  });
 
 articles
   .command('delete <articleNumber>')

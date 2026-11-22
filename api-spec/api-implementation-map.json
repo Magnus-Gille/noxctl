@@ -254,32 +254,37 @@
     {
       "id": "fortnox-articlesv2",
       "tagHash": "c06e9bdc1a1984017b59612bec6c53007f97f74cfadc1ec3e333c63e515dc8fc",
-      "classification": "partial",
+      "classification": "complete",
       "operations": {
         "implemented": [
           "50b4bbd6923befea0ed9c378cac6efe049d9da4b77c4cc3de668fdb0a07029df",
           "5a9ecfb7dc72d45662b49dded698ae18e92bd2e04a2acb0b908b51db208791db",
           "af195053fbfea6dec555c2155fce00c08cb362d8bfbd1c3b49bf0a2112ba8448",
+          "9bb3738654e78fcf270a48afc3907eeb4228c38be56dc345d7ac1b450fd90713",
           "cd6c54f92c3c344b02cc0c1d2975d1814224c4b9f56b7cc1b67a19897766038d",
           "f5e9aa0a90c6de0f1698cb5de96716fefe1b8d0b0acf96601627107e0b4b051d"
         ],
-        "missing": [
-          "9bb3738654e78fcf270a48afc3907eeb4228c38be56dc345d7ac1b450fd90713"
-        ],
+        "missing": [],
         "excluded": []
       },
-      "rationale": "Default document API since NOX-222 (live list/get verified 2026-11-21). Bundle price calculation is not exposed yet; no bundle use case.",
+      "rationale": "Default document API since NOX-222 (live list/get verified 2026-11-21). Bundle price calculation is exposed as a read tool: Fortnox documents it as a calculation that saves nothing.",
       "evidence": {
         "operationExports": [
-          "listArticles"
+          "listArticles",
+          "calculateBundlePrices"
         ],
         "mcpTools": [
-          "fortnox_list_articles"
+          "fortnox_list_articles",
+          "fortnox_calculate_bundle_prices"
         ],
         "cliCommands": [
           [
             "articles",
             "list"
+          ],
+          [
+            "articles",
+            "bundle-prices"
           ]
         ]
       }

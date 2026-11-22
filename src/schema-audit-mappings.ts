@@ -25,8 +25,8 @@ export const SCHEMA_AUDIT_MAPPINGS: readonly SchemaAuditMapping[] = [
   ),
   root('account-create', 'fortnox_create_account', 'fortnox_Bf_AccountSinglePayloadItem'),
   root('account-update', 'fortnox_update_account', 'fortnox_Bf_AccountSinglePayloadItem'),
-  root('article-create', 'fortnox_create_article', 'fortnox_ArticleSinglePayloadItem'),
-  root('article-update', 'fortnox_update_article', 'fortnox_ArticleSinglePayloadItem'),
+  root('article-create', 'fortnox_create_article', 'fortnox_ArticleV2SinglePayloadItem'),
+  root('article-update', 'fortnox_update_article', 'fortnox_ArticleV2SinglePayloadItem'),
   root(
     'attendance-create',
     'fortnox_create_attendancetransaction',

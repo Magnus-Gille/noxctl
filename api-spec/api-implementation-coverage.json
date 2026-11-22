@@ -97,13 +97,13 @@
     },
     {
       "id": "fortnox-articlesv2",
-      "classification": "partial",
+      "classification": "complete",
       "publicOperationCount": 6,
-      "implementedCount": 5,
-      "missingCount": 1,
+      "implementedCount": 6,
+      "missingCount": 0,
       "excludedCount": 0,
-      "stateHash": "f25276afbd01e8b03edd10c1bd85cfc00f95a68595e3e0baba76cbece25596b6",
-      "rationale": "Default document API since NOX-222 (live list/get verified 2026-11-21). Bundle price calculation is not exposed yet; no bundle use case."
+      "stateHash": "e8fe15bb74a0fdc3bbe87638fa043095952f52a40d9ae8d06e3b09a7144fac17",
+      "rationale": "Default document API since NOX-222 (live list/get verified 2026-11-21). Bundle price calculation is exposed as a read tool: Fortnox documents it as a calculation that saves nothing."
     },
     {
       "id": "fortnox-articleurlconnection",
