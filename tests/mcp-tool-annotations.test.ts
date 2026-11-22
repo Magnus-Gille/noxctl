@@ -38,6 +38,7 @@ const LOCAL_ONLY_TOOLS = ['fortnox_shadow_status'];
 // get_*/list_* must be listed here on purpose, so a new write tool that forgot
 // its confirmation controls cannot silently appear in a read-only server.
 const EXPECTED_NON_GET_LIST_READ_TOOLS = [
+  'fortnox_calculate_bundle_prices', // POST, but Fortnox documents it as a calculation that saves nothing
   'fortnox_balance_sheet',
   'fortnox_company_info',
   'fortnox_general_ledger',

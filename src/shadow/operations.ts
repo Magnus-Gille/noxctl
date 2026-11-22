@@ -8,6 +8,7 @@ export const OPERATION_CATALOGUE: Readonly<Record<string, 'read' | 'write' | 'mo
     ...Object.fromEntries(
       (
         [
+          'calculateBundlePrices',
           'extensionForMime',
           'generateTaxReport',
           'getAbsenceTransaction',

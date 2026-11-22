@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { DOCUMENT_API_ENV } from '../../src/document-api-version.js';
 
 vi.mock('../../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
@@ -124,6 +125,61 @@ describe('article operations', () => {
       const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
       expect(fetchCall[0]).toContain('articles-v2/A%2FB');
       expect(fetchCall[1].method).toBe('DELETE');
+    });
+  });
+
+  describe('calculateBundlePrices', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    const rows = [
+      {
+        Price: 1100,
+        Quantity: 2,
+        Bundle: {
+          SubRows: [
+            { Quantity: 4, BundleSubItem: { AmountInBundle: 2, SalesPriceInBundle: 200 } },
+            {
+              Quantity: 1,
+              BundleSubItem: { AmountInBundle: 0, SalesPriceInBundle: 0, PriceAdjustment: true },
+            },
+          ],
+        },
+      },
+    ];
+
+    it('POSTs the rows in a BundlePriceCalculation envelope and unwraps the result', async () => {
+      const calculated = { Rows: [{ ...rows[0], Bundle: { SubRows: [{ Price: 169.23 }] } }] };
+      mockFetch({ BundlePriceCalculation: calculated });
+      const { calculateBundlePrices } = await import('../../src/operations/articles.js');
+
+      const result = await calculateBundlePrices(rows);
+
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[0]).toContain('/3/articles-v2/calculatebundleprices');
+      expect(fetchCall[1].method).toBe('POST');
+      expect(JSON.parse(fetchCall[1].body)).toEqual({ BundlePriceCalculation: { Rows: rows } });
+      expect(result).toEqual(calculated);
+    });
+
+    it('always uses the v2 endpoint, which has no classic counterpart', async () => {
+      vi.stubEnv(DOCUMENT_API_ENV, 'classic');
+      mockFetch({ BundlePriceCalculation: { Rows: [] } });
+      const { calculateBundlePrices } = await import('../../src/operations/articles.js');
+
+      await calculateBundlePrices(rows);
+
+      const calledUrl = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/3/articles-v2/calculatebundleprices');
+    });
+
+    it('refuses an empty row list without calling Fortnox', async () => {
+      mockFetch({});
+      const { calculateBundlePrices } = await import('../../src/operations/articles.js');
+
+      await expect(calculateBundlePrices([])).rejects.toThrow(/at least one/i);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
     });
   });
 });

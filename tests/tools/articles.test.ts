@@ -240,4 +240,173 @@ describe('article tools', () => {
       expect(fetchCall[1].method).toBe('DELETE');
     });
   });
+
+  describe('bundle articles', () => {
+    const bundle = {
+      Comment: 'Verktygslåda',
+      SubItems: [
+        { ArticleNumber: 'hammer', Quantity: 2, FixedPrice: false },
+        { ArticleNumber: 'wrench', Quantity: 3, FixedPrice: true },
+      ],
+      PriceAdjustmentRow: { Description: 'Avrundning', SalesAccount: 3001, VAT: 25 },
+    };
+
+    it('creates a bundle article with BundleArticle and Bundle', async () => {
+      mockFetch({ Article: { ArticleNumber: 'toolbox', Description: 'Verktygslåda' } });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_article',
+        arguments: {
+          Description: 'Verktygslåda',
+          ArticleNumber: 'toolbox',
+          BundleArticle: true,
+          Bundle: bundle,
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[0]).toContain('/3/articles-v2');
+      const body = JSON.parse(fetchCall[1].body);
+      expect(body.Article.BundleArticle).toBe(true);
+      expect(body.Article.Bundle).toEqual(bundle);
+    });
+
+    it('updates the bundle contents of an article', async () => {
+      mockFetch({ Article: { ArticleNumber: 'toolbox' } });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_update_article',
+        arguments: { articleNumber: 'toolbox', Bundle: bundle, confirm: true },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const body = JSON.parse((global.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
+      expect(body.Article.Bundle).toEqual(bundle);
+    });
+
+    it('rejects unknown fields inside a bundle sub item', async () => {
+      mockFetch({ Article: {} });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_create_article',
+        arguments: {
+          Description: 'Verktygslåda',
+          Bundle: { SubItems: [{ ArticleNumber: 'hammer', Quantity: 1, Price: 5 }] },
+          confirm: true,
+        },
+      });
+
+      expect(result.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+
+    it('shows whether an article is a bundle', async () => {
+      mockFetch({
+        Article: { ArticleNumber: 'toolbox', Description: 'Verktygslåda', BundleArticle: true },
+      });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_get_article',
+        arguments: { articleNumber: 'toolbox' },
+      });
+
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toMatch(/Bundle\s+Yes/);
+    });
+  });
+
+  describe('fortnox_calculate_bundle_prices', () => {
+    const rows = [
+      {
+        Price: 1100,
+        Quantity: 2,
+        Discount: 0,
+        Bundle: {
+          SubRows: [
+            { Quantity: 4, BundleSubItem: { AmountInBundle: 2, SalesPriceInBundle: 200 } },
+            {
+              Quantity: 6,
+              UserPrice: true,
+              Price: 250,
+              BundleSubItem: { AmountInBundle: 3, SalesPriceInBundle: 300 },
+            },
+            {
+              Quantity: 1,
+              BundleSubItem: { AmountInBundle: 0, SalesPriceInBundle: 0, PriceAdjustment: true },
+            },
+          ],
+        },
+      },
+    ];
+
+    it('calculates prices without confirmation and returns the calculated rows', async () => {
+      const calculated = {
+        Rows: [
+          {
+            Price: 1100,
+            Quantity: 2,
+            Bundle: {
+              SubRows: [
+                {
+                  Price: 169.23,
+                  Quantity: 4,
+                  BundleSubItem: { AmountInBundle: 2, SalesPriceInBundle: 200 },
+                },
+              ],
+            },
+          },
+        ],
+      };
+      mockFetch({ BundlePriceCalculation: calculated });
+      const { client } = await setupClientServer();
+
+      const result = await client.callTool({
+        name: 'fortnox_calculate_bundle_prices',
+        arguments: { Rows: rows },
+      });
+
+      expect(result.isError).toBeFalsy();
+      const fetchCall = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(fetchCall[0]).toContain('/3/articles-v2/calculatebundleprices');
+      expect(fetchCall[1].method).toBe('POST');
+      expect(JSON.parse(fetchCall[1].body)).toEqual({ BundlePriceCalculation: { Rows: rows } });
+      const text = (result.content as { type: string; text: string }[])[0].text;
+      expect(text).toContain('169.23');
+    });
+
+    it('is a read-only tool that the read-only server keeps', async () => {
+      const server = createServer({ readOnly: true });
+      const client = new Client({ name: 'test-client', version: '1.0.0' });
+      const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+      await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+      const { tools } = await client.listTools();
+      const tool = tools.find((candidate) => candidate.name === 'fortnox_calculate_bundle_prices');
+      expect(tool?.annotations?.readOnlyHint).toBe(true);
+    });
+
+    it('rejects an empty row list and unknown row fields before calling Fortnox', async () => {
+      mockFetch({});
+      const { client } = await setupClientServer();
+
+      const empty = await client.callTool({
+        name: 'fortnox_calculate_bundle_prices',
+        arguments: { Rows: [] },
+      });
+      const unknown = await client.callTool({
+        name: 'fortnox_calculate_bundle_prices',
+        arguments: { Rows: [{ Price: 100, Bundle: { SubRows: [] }, Save: true }] },
+      });
+
+      expect(empty.isError).toBe(true);
+      expect(unknown.isError).toBe(true);
+      expect((global.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(0);
+    });
+  });
 });

@@ -19,6 +19,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Bundle articles (NOX-222).** `fortnox_create_article` and `fortnox_update_article`
+  accept `BundleArticle` and a strictly validated `Bundle` (`Comment`, `SubItems`,
+  `PriceAdjustmentRow`), and article details show whether an article is a bundle.
+  New `noxctl articles bundle-prices --input <file>` / `fortnox_calculate_bundle_prices`
+  calls `POST /3/articles-v2/calculatebundleprices` to split a bundle's price over its
+  articles (and optionally a price adjustment row). Fortnox documents it as a calculation
+  that saves nothing, so it is a read tool without confirmation. The articles-v2 family is
+  now fully covered. Not verified against a live company.
+
 - Pilot (unpublished): an invoice issue stage behind `enableInvoiceIssue` (off by default, never
   set by the CLI). It stages `fortnox_invoice_pdf` with `markSent` and drains it through
   `AccountedInvoiceIssueAdapter` (mark-sent). The Accounted client gains opt-in `stages`

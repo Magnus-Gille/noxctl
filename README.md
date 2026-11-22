@@ -428,12 +428,24 @@ Every operation is available both as a CLI command and as an MCP tool. The CLI i
 
 ### Articles
 
-| CLI                                              | MCP tool                 | Description                  |
-| ------------------------------------------------ | ------------------------ | ---------------------------- |
-| `noxctl articles list [--search <term>]`         | `fortnox_list_articles`  | List/search articles         |
-| `noxctl articles get <number>`                   | `fortnox_get_article`    | Get a single article         |
-| `noxctl articles create --description <text>`    | `fortnox_create_article` | Create an article (mutation) |
-| `noxctl articles update <number> --input <file>` | `fortnox_update_article` | Update an article (mutation) |
+| CLI                                              | MCP tool                          | Description                                             |
+| ------------------------------------------------ | --------------------------------- | ------------------------------------------------------- |
+| `noxctl articles list [--search <term>]`         | `fortnox_list_articles`           | List/search articles                                    |
+| `noxctl articles get <number>`                   | `fortnox_get_article`             | Get a single article                                    |
+| `noxctl articles create --description <text>`    | `fortnox_create_article`          | Create an article (mutation)                            |
+| `noxctl articles update <number> --input <file>` | `fortnox_update_article`          | Update an article (mutation)                            |
+| `noxctl articles delete <number>`                | `fortnox_delete_article`          | Delete an article (mutation)                            |
+| `noxctl articles bundle-prices --input <file>`   | `fortnox_calculate_bundle_prices` | Split bundle prices over their articles (saves nothing) |
+
+Bundle articles ("paketartiklar") are created and updated with `BundleArticle: true`
+and a `Bundle` object (`Comment`, `SubItems` with `ArticleNumber`, `Quantity` and
+`FixedPrice`, and `PriceAdjustmentRow`). `bundle-prices` asks Fortnox how a bundle's
+price is split over its contained articles: give each row the bundle `Price` and
+`Bundle.SubRows`, where each sub row has `BundleSubItem.AmountInBundle` and
+`BundleSubItem.SalesPriceInBundle` (the article's base price in the price list). Fortnox
+documents the endpoint as a pure calculation, so it needs no confirmation and is
+available on a read-only MCP server. It always uses `/3/articles-v2`, which has no
+classic counterpart.
 
 ### Invoices
 
