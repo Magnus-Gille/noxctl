@@ -134,6 +134,8 @@ export interface InvoiceSendPlan {
   customer: { number: string; name: string; defaultDeliveryType: string | null };
   status: {
     sent: boolean | null;
+    /** Handled by Fortnox Finans/Fakturaservice; `sent` stays false for those and delivery is unknown. */
+    noxFinans: boolean;
     booked: boolean | null;
     cancelled: boolean | null;
     total: unknown;
@@ -200,6 +202,7 @@ export function buildInvoiceSendPlan(input: InvoiceSendPlanInput): InvoiceSendPl
 
   const status = {
     sent: bool(invoice.Sent),
+    noxFinans: invoice.NoxFinans === true,
     booked: bool(invoice.Booked),
     cancelled: bool(invoice.Cancelled),
     total: invoice.Total,
@@ -210,6 +213,11 @@ export function buildInvoiceSendPlan(input: InvoiceSendPlanInput): InvoiceSendPl
 
   if (status.cancelled) warnings.push('The invoice is cancelled.');
   if (status.sent) warnings.push('The invoice is already marked as sent; this sends it again.');
+  if (status.noxFinans) {
+    warnings.push(
+      'The invoice is handled by Fortnox Finans (NoxFinans). Fortnox keeps Sent false for these even after Fortnox Finans has sent it; check `noxctl noxfinans get` / fortnox_get_noxfinans_invoice before sending it again.',
+    );
+  }
   if (method === 'email' && !email.to) {
     warnings.push('No recipient (To) on the invoice; Fortnox has no address to email it to.');
   }
@@ -278,7 +286,7 @@ export function formatInvoiceSendPlan(plan: InvoiceSendPlan): string {
     .filter(Boolean)
     .join(', ');
   lines.push(
-    `  Status:      sent ${yesNo(plan.status.sent)}, booked ${yesNo(plan.status.booked)}, cancelled ${yesNo(plan.status.cancelled)}${amounts ? ` · ${amounts}` : ''}`,
+    `  Status:      sent ${plan.status.noxFinans && plan.status.sent !== true ? 'unknown (handled by Fortnox Finans; check Finans status)' : yesNo(plan.status.sent)}, booked ${yesNo(plan.status.booked)}, cancelled ${yesNo(plan.status.cancelled)}${amounts ? ` · ${amounts}` : ''}`,
   );
   lines.push(`  Delivery:    ${plan.delivery}`);
   if (plan.customer.defaultDeliveryType) {

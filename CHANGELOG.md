@@ -17,8 +17,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Offers and orders were not verified live. The API coverage map now lists the v2
   operations as implemented; the bundle price calculation stays missing.
 
+### Fixed
+
+- **Fortnox Finans invoices no longer show "Sent: No" (#261).** Fortnox keeps
+  `Sent: false` on invoices handled by Fortnox Finans/Fakturaservice
+  (`NoxFinans: true`), even after Finans has sent them. Invoice details (`invoices get`, `fortnox_get_invoice` and the
+  confirmation views) now show the sent status as unknown, handled by Fortnox Finans,
+  and point to `noxctl noxfinans get` / `fortnox_get_noxfinans_invoice`, since Finans
+  may hold an invoice without distributing it; the raw JSON is unchanged.
+  The get/list tool descriptions document the caveat, and the send preview warns
+  before an invoice handled by Fortnox Finans is sent again.
+
 ### Added
 
+- **Terms of payment on invoices (#253).** `fortnox_create_invoice` and
+  `fortnox_update_invoice` accept `TermsOfPayment` (a code such as `5` or `30`), and
+  `noxctl invoices create|update` take `--terms-of-payment <code>`, which overrides the
+  field in `--input`. `invoices update` can now run with only `--terms-of-payment`.
+  When `DueDate` is given too, both are sent and Fortnox validates the combination.
+  Invoice details show the terms of payment. Not verified against a live company.
 - **Bundle articles (NOX-222).** `fortnox_create_article` and `fortnox_update_article`
   accept `BundleArticle` and a strictly validated `Bundle` (`Comment`, `SubItems`,
   `PriceAdjustmentRow`), and article details show whether an article is a bundle.
@@ -104,7 +121,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   resolves to the financial year starting in 2026 when no financial-year id 2026
   exists (ids still win). The reports' `financialYear` field reports the resolved id.
 - **Shadow mirroring: a credit no longer collides with the original invoice's identity
-  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated *original*
+  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated _original_
   (its `DocumentNumber` is `n`); the new credit note is only named by that response's
   `CreditInvoiceReference`. The real export (2026-10-27) agrees: the credited original
   references the credit note, and the credit note carries `"0"`. A `creditInvoice` record

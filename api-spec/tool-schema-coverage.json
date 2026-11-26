@@ -459,22 +459,22 @@
     },
     {
       "id": "invoice-create",
-      "declaredPropertyCount": 11,
+      "declaredPropertyCount": 12,
       "specificationPropertyCount": 52,
-      "missingPropertyCount": 45,
-      "checkedNodeCount": 28,
+      "missingPropertyCount": 44,
+      "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 45,
+        "field": 44,
         "nesting": 0,
         "requiredness": 4,
         "type": 1,
         "enum": 0,
         "nullability": 0,
-        "constraint": 20,
+        "constraint": 21,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "752f60cf11f9c8eff96006792ee45d7c9d8666796095815da9b34e9fc0db9087"
+      "stateHash": "7266ba475a55defae4026dd305de3d0b0b91a3d752621b01666d25eb20a738de"
     },
     {
       "id": "invoice-payment-create",
@@ -535,22 +535,22 @@
     },
     {
       "id": "invoice-update",
-      "declaredPropertyCount": 12,
+      "declaredPropertyCount": 13,
       "specificationPropertyCount": 52,
-      "missingPropertyCount": 45,
-      "checkedNodeCount": 28,
+      "missingPropertyCount": 44,
+      "checkedNodeCount": 29,
       "issuesByDimension": {
-        "field": 45,
+        "field": 44,
         "nesting": 0,
         "requiredness": 1,
         "type": 1,
         "enum": 0,
         "nullability": 0,
-        "constraint": 20,
+        "constraint": 21,
         "strictness": 0
       },
       "resultClass": "tracked-gap",
-      "stateHash": "ceb1f9fb7c81901aa835d00cb946859f7644b58bc11274806bb079f12c59ae80"
+      "stateHash": "3a07ce568370403633d29829a8fe46b7776f04175eb732ab187f266ab616d45c"
     },
     {
       "id": "noxfinans-invoice-report-payment",

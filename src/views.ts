@@ -2,6 +2,25 @@ import type { Column } from './formatter.js';
 
 const currency = (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : String(v ?? ''));
 
+/**
+ * Fortnox keeps `Sent: false` on invoices handled by Fortnox Finans
+ * (Fakturaservice, `NoxFinans: true`): the flag only tracks the regular
+ * email/print endpoints. Rendering that as "No" has misled agents into
+ * re-sending invoices, so for a Finans invoice the cell points at the Finans
+ * status instead. It does not claim delivery either: Finans may hold an
+ * invoice without distributing it (sendMethod NONE) or still be processing
+ * it. The raw JSON is left untouched.
+ */
+export const FINANS_SENT_LABEL =
+  'Unknown: handled by Fortnox Finans, which does not use the Sent flag (check `noxctl noxfinans get` / fortnox_get_noxfinans_invoice)';
+
+export function invoiceSentStatus(value: unknown, row: Record<string, unknown>): string {
+  if (value === true) return 'Yes';
+  if (row.NoxFinans === true) return FINANS_SENT_LABEL;
+  if (value === false) return 'No';
+  return String(value ?? '');
+}
+
 export const referenceDataColumns: Column[] = [
   { key: 'Code', header: 'Code', width: 16 },
   { key: 'Name', header: 'Name', width: 24 },
@@ -37,11 +56,12 @@ export const invoiceDetailColumns: Column[] = [
   { key: 'CustomerName', header: 'Customer', width: 40 },
   { key: 'InvoiceDate', header: 'Invoice Date', width: 10 },
   { key: 'DueDate', header: 'Due Date', width: 10 },
+  { key: 'TermsOfPayment', header: 'Terms of Payment', width: 10 },
   { key: 'Total', header: 'Total', width: 20, format: currency },
   { key: 'Balance', header: 'Balance', width: 20, format: currency },
   { key: 'Currency', header: 'Currency', width: 5 },
   { key: 'Booked', header: 'Booked', width: 5 },
-  { key: 'Sent', header: 'Sent', width: 5 },
+  { key: 'Sent', header: 'Sent', width: 5, format: invoiceSentStatus },
   { key: 'NoxFinans', header: 'Fortnox Finans', width: 5 },
   { key: 'OurReference', header: 'Our Reference', width: 30 },
   { key: 'CreditInvoiceReference', header: 'Credit Ref', width: 20 },
@@ -52,7 +72,7 @@ export const invoiceConfirmColumns: Column[] = [
   { key: 'CustomerNumber', header: 'Customer #', width: 20 },
   { key: 'Total', header: 'Total', width: 20, format: currency },
   { key: 'Booked', header: 'Booked', width: 5 },
-  { key: 'Sent', header: 'Sent', width: 5 },
+  { key: 'Sent', header: 'Sent', width: 5, format: invoiceSentStatus },
   { key: 'CreditInvoiceReference', header: 'Credit Ref', width: 20 },
 ];
 
