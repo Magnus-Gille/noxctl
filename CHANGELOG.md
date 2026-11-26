@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-26
+
 ### Changed
 
 - **Fortnox v2 document endpoints are now the default (NOX-219, NOX-220, NOX-221,
@@ -701,6 +703,7 @@ supplier-invoices file <fileId>` and `fortnox_get_supplier_invoice_file`
 - Table and JSON output modes (auto-detected by TTY, override with `-o`).
 - `noxctl doctor` / `fortnox_status` for setup validation.
 
+[0.16.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Magnus-Gille/noxctl/compare/v0.12.0...v0.13.0
