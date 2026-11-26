@@ -22,8 +22,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - **Fortnox Finans invoices no longer show "Sent: No" (#261).** Fortnox keeps
   `Sent: false` on invoices delivered through Fortnox Finans/Fakturaservice
   (`NoxFinans: true`). Invoice details (`invoices get`, `fortnox_get_invoice` and the
-  confirmation views) now show "Via Fortnox Finans" and point to
-  `noxctl noxfinans get` / `fortnox_get_noxfinans_invoice`; the raw JSON is unchanged.
+  confirmation views) now show the sent status as unknown, handled by Fortnox Finans,
+  and point to `noxctl noxfinans get` / `fortnox_get_noxfinans_invoice`, since Finans
+  may hold an invoice without distributing it; the raw JSON is unchanged.
   The get/list tool descriptions document the caveat, and the send preview warns
   before an invoice handled by Fortnox Finans is sent again.
 

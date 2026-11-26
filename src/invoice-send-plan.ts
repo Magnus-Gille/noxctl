@@ -286,7 +286,7 @@ export function formatInvoiceSendPlan(plan: InvoiceSendPlan): string {
     .filter(Boolean)
     .join(', ');
   lines.push(
-    `  Status:      sent ${plan.status.noxFinans && plan.status.sent !== true ? 'via Fortnox Finans (see Finans status)' : yesNo(plan.status.sent)}, booked ${yesNo(plan.status.booked)}, cancelled ${yesNo(plan.status.cancelled)}${amounts ? ` · ${amounts}` : ''}`,
+    `  Status:      sent ${plan.status.noxFinans && plan.status.sent !== true ? 'unknown (handled by Fortnox Finans; check Finans status)' : yesNo(plan.status.sent)}, booked ${yesNo(plan.status.booked)}, cancelled ${yesNo(plan.status.cancelled)}${amounts ? ` · ${amounts}` : ''}`,
   );
   lines.push(`  Delivery:    ${plan.delivery}`);
   if (plan.customer.defaultDeliveryType) {

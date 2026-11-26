@@ -8,7 +8,7 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServer } from '../src/index.js';
 import { formatDetail } from '../src/formatter.js';
 import { invoiceDetailColumns, invoiceConfirmColumns } from '../src/views.js';
-import { buildInvoiceSendPlan } from '../src/invoice-send-plan.js';
+import { buildInvoiceSendPlan, formatInvoiceSendPlan } from '../src/invoice-send-plan.js';
 
 vi.mock('../src/auth.js', () => ({
   getValidToken: vi.fn().mockResolvedValue('mock-token'),
@@ -100,6 +100,11 @@ describe('Fortnox Finans invoices and the Sent flag', () => {
       expect(sentLine).toBeDefined();
       expect(sentLine).not.toMatch(/\bNo\b/);
       expect(sentLine).toMatch(/Fortnox Finans/);
+      // Finans may hold an invoice without distributing it (sendMethod NONE), or
+      // still be processing it: the label must not claim delivery.
+      const value = sentLine!.replace(/^\s*Sent\s+/, '');
+      expect(value).not.toMatch(/\bvia\b|\bsent (via|by|through)\b/i);
+      expect(value).toMatch(/^Unknown/);
     }
   });
 
@@ -139,6 +144,13 @@ describe('Fortnox Finans invoices and the Sent flag', () => {
     });
     expect(plan.status.noxFinans).toBe(true);
     expect(plan.warnings.join('\n')).toMatch(/Fortnox Finans/);
+    const statusLine = formatInvoiceSendPlan(plan)
+      .split('\n')
+      .find((l) => l.trim().startsWith('Status:'));
+    expect(statusLine).toBeDefined();
+    expect(statusLine).not.toMatch(/sent via/i);
+    expect(statusLine).toMatch(/sent unknown/i);
+    expect(statusLine).toMatch(/Fortnox Finans/);
   });
 });
 

@@ -7,10 +7,12 @@ const currency = (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : String(
  * (Fakturaservice, `NoxFinans: true`): the flag only tracks the regular
  * email/print endpoints. Rendering that as "No" has misled agents into
  * re-sending invoices, so for a Finans invoice the cell points at the Finans
- * status instead. The raw JSON is left untouched.
+ * status instead. It does not claim delivery either: Finans may hold an
+ * invoice without distributing it (sendMethod NONE) or still be processing
+ * it. The raw JSON is left untouched.
  */
 export const FINANS_SENT_LABEL =
-  'Via Fortnox Finans (Sent flag not used; see `noxctl noxfinans get` / fortnox_get_noxfinans_invoice)';
+  'Unknown: handled by Fortnox Finans, which does not use the Sent flag (check `noxctl noxfinans get` / fortnox_get_noxfinans_invoice)';
 
 export function invoiceSentStatus(value: unknown, row: Record<string, unknown>): string {
   if (value === true) return 'Yes';
