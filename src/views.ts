@@ -3,7 +3,7 @@ import type { Column } from './formatter.js';
 const currency = (v: unknown) => (typeof v === 'number' ? v.toFixed(2) : String(v ?? ''));
 
 /**
- * Fortnox keeps `Sent: false` on invoices delivered through Fortnox Finans
+ * Fortnox keeps `Sent: false` on invoices handled by Fortnox Finans
  * (Fakturaservice, `NoxFinans: true`): the flag only tracks the regular
  * email/print endpoints. Rendering that as "No" has misled agents into
  * re-sending invoices, so for a Finans invoice the cell points at the Finans

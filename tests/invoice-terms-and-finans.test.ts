@@ -89,7 +89,7 @@ describe('invoice TermsOfPayment (MCP)', () => {
   });
 });
 
-// GitHub #261: Sent stays false for invoices delivered through Fortnox Finans.
+// GitHub #261: Sent stays false for invoices handled by Fortnox Finans.
 describe('Fortnox Finans invoices and the Sent flag', () => {
   const finans = { DocumentNumber: '77', NoxFinans: true, Sent: false, OutboundDate: '2026-11-20' };
 
@@ -131,6 +131,9 @@ describe('Fortnox Finans invoices and the Sent flag', () => {
     for (const name of ['fortnox_get_invoice', 'fortnox_list_invoices']) {
       const description = tools.find((t) => t.name === name)?.description ?? '';
       expect(description, name).toMatch(/Fortnox Finans/);
+      // NoxFinans: true does not mean the invoice was distributed (sendMethod NONE, pending).
+      expect(description, name).not.toMatch(/skickats via Fortnox Finans/);
+      expect(description, name).toMatch(/leveransstatus är okänd/);
     }
   });
 

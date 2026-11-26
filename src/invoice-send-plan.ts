@@ -134,7 +134,7 @@ export interface InvoiceSendPlan {
   customer: { number: string; name: string; defaultDeliveryType: string | null };
   status: {
     sent: boolean | null;
-    /** Delivered through Fortnox Finans/Fakturaservice; `sent` stays false for those. */
+    /** Handled by Fortnox Finans/Fakturaservice; `sent` stays false for those and delivery is unknown. */
     noxFinans: boolean;
     booked: boolean | null;
     cancelled: boolean | null;

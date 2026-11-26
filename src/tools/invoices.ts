@@ -128,7 +128,7 @@ export function registerInvoiceTools(
   } = operations;
   server.tool(
     'fortnox_list_invoices',
-    'Lista/filtrera fakturor i Fortnox. Returnerar: DocumentNumber, CustomerName, InvoiceDate, DueDate, Total, Balance. Obs: för fakturor som skickats via Fortnox Finans/Fakturaservice (NoxFinans: true) förblir Fortnox-fältet Sent false även när fakturan är skickad; kontrollera Finans-status med fortnox_get_noxfinans_invoice innan du drar slutsatsen att fakturan inte är skickad.',
+    'Lista/filtrera fakturor i Fortnox. Returnerar: DocumentNumber, CustomerName, InvoiceDate, DueDate, Total, Balance. Obs: för fakturor som hanteras av Fortnox Finans/Fakturaservice (NoxFinans: true) används inte Fortnox-fältet Sent; det förblir false även när Finans har skickat fakturan, och leveransstatus är okänd tills den kontrollerats med fortnox_get_noxfinans_invoice (Finans kan också hålla en faktura utan att distribuera den). Dra inte slutsatsen att fakturan är skickad eller oskickad utifrån Sent.',
     {
       filter: z
         .enum(['cancelled', 'fullypaid', 'unpaid', 'unpaidoverdue', 'unbooked'])
@@ -156,7 +156,7 @@ export function registerInvoiceTools(
 
   server.tool(
     'fortnox_get_invoice',
-    'Hämta en enskild faktura från Fortnox. Returnerar: DocumentNumber, CustomerNumber, CustomerName, InvoiceDate, DueDate, TermsOfPayment, Total, Balance, Currency, Booked, Sent, NoxFinans, OurReference, InvoiceRows. Obs: för fakturor som skickats via Fortnox Finans/Fakturaservice (NoxFinans: true) förblir Fortnox-fältet Sent false även när fakturan är skickad; kontrollera Finans-status med fortnox_get_noxfinans_invoice innan du drar slutsatsen att fakturan inte är skickad.',
+    'Hämta en enskild faktura från Fortnox. Returnerar: DocumentNumber, CustomerNumber, CustomerName, InvoiceDate, DueDate, TermsOfPayment, Total, Balance, Currency, Booked, Sent, NoxFinans, OurReference, InvoiceRows. Obs: för fakturor som hanteras av Fortnox Finans/Fakturaservice (NoxFinans: true) används inte Fortnox-fältet Sent; det förblir false även när Finans har skickat fakturan, och leveransstatus är okänd tills den kontrollerats med fortnox_get_noxfinans_invoice (Finans kan också hålla en faktura utan att distribuera den). Dra inte slutsatsen att fakturan är skickad eller oskickad utifrån Sent.',
     {
       documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),

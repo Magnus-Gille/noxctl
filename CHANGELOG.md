@@ -20,8 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - **Fortnox Finans invoices no longer show "Sent: No" (#261).** Fortnox keeps
-  `Sent: false` on invoices delivered through Fortnox Finans/Fakturaservice
-  (`NoxFinans: true`). Invoice details (`invoices get`, `fortnox_get_invoice` and the
+  `Sent: false` on invoices handled by Fortnox Finans/Fakturaservice
+  (`NoxFinans: true`), even after Finans has sent them. Invoice details (`invoices get`, `fortnox_get_invoice` and the
   confirmation views) now show the sent status as unknown, handled by Fortnox Finans,
   and point to `noxctl noxfinans get` / `fortnox_get_noxfinans_invoice`, since Finans
   may hold an invoice without distributing it; the raw JSON is unchanged.
@@ -121,7 +121,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   resolves to the financial year starting in 2026 when no financial-year id 2026
   exists (ids still win). The reports' `financialYear` field reports the resolved id.
 - **Shadow mirroring: a credit no longer collides with the original invoice's identity
-  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated *original*
+  (NOX-212).** Fortnox `PUT /invoices/{n}/credit` answers with the updated _original_
   (its `DocumentNumber` is `n`); the new credit note is only named by that response's
   `CreditInvoiceReference`. The real export (2026-10-27) agrees: the credited original
   references the credit note, and the credit note carries `"0"`. A `creditInvoice` record
