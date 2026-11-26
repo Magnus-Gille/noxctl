@@ -1505,6 +1505,14 @@ serve exit with an error instead of starting.`,
   });
 
 // --- invoices ---
+/** `--terms-of-payment <code>` as an invoice field; an empty code is refused. */
+function termsOfPaymentField(code: string | undefined): { TermsOfPayment?: string } {
+  if (code === undefined) return {};
+  const trimmed = code.trim();
+  if (!trimmed) throw new Error('--terms-of-payment needs a code, e.g. 5 or 30.');
+  return { TermsOfPayment: trimmed };
+}
+
 const invoices = program.command('invoices').description('Invoice operations');
 
 invoices
@@ -1591,13 +1599,21 @@ invoices
   .description('Create an invoice')
   .requiredOption('--customer <number>', 'Customer number')
   .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option(
+    '--terms-of-payment <code>',
+    'Terms of payment code (e.g. 5, 30; see `noxctl terms-of-payments list`); overrides TermsOfPayment in --input',
+  )
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .addHelpText(
     'after',
     `
+If both TermsOfPayment and DueDate are given, both are sent and Fortnox
+validates the combination.
+
 Examples:
   echo '{"InvoiceRows":[{"ArticleNumber":"1","DeliveredQuantity":10,"Price":1500}]}' | noxctl invoices create --customer 25 --input - --dry-run
+  echo '{"InvoiceRows":[{"ArticleNumber":"1","DeliveredQuantity":1,"Price":1500}],"DueDate":"2026-11-25"}' | noxctl invoices create --customer 25 --input - --terms-of-payment 5 --dry-run
 
   # Minimal JSON (Description instead of ArticleNumber):
   echo '{"InvoiceRows":[{"Description":"Consulting","DeliveredQuantity":8,"Price":1200,"AccountNumber":3001,"VAT":25}]}' | noxctl invoices create --customer 25 --input - --yes`,
@@ -1606,7 +1622,11 @@ Examples:
     const { createInvoice } = defaultFortnoxOperations;
     const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
     const input = JSON.parse(raw) as Record<string, unknown>;
-    const params = { CustomerNumber: opts.customer, ...input };
+    const params = {
+      CustomerNumber: opts.customer,
+      ...input,
+      ...termsOfPaymentField(opts.termsOfPayment),
+    };
     if (
       !(await confirmMutation(`Create invoice for customer ${opts.customer}`, opts, {
         Invoice: params,
@@ -1621,21 +1641,40 @@ Examples:
 invoices
   .command('update <documentNumber>')
   .description('Update an invoice (not yet bookkeept)')
-  .requiredOption('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option('--input <file>', 'Invoice data as JSON file (or - for stdin)')
+  .option(
+    '--terms-of-payment <code>',
+    'Terms of payment code (e.g. 5, 30; see `noxctl terms-of-payments list`); overrides TermsOfPayment in --input',
+  )
   .option('-y, --yes', 'Skip confirmation prompt')
   .option('--dry-run', 'Preview the request without sending it')
   .addHelpText(
     'after',
     `
+Give --input, --terms-of-payment, or both. If both TermsOfPayment and DueDate
+are given, both are sent and Fortnox validates the combination.
+
 Examples:
   echo '{"DueDate":"2026-04-30","OurReference":"Casey Example"}' | noxctl invoices update 28 --input - --dry-run
-  echo '{"InvoiceRows":[{"ArticleNumber":"1","DeliveredQuantity":5,"Price":2000}]}' | noxctl invoices update 28 --input - --yes`,
+  echo '{"InvoiceRows":[{"ArticleNumber":"1","DeliveredQuantity":5,"Price":2000}]}' | noxctl invoices update 28 --input - --yes
+  noxctl invoices update 28 --terms-of-payment 5 --dry-run`,
   )
   .action(
-    async (documentNumber: string, opts: { input: string; yes?: boolean; dryRun?: boolean }) => {
+    async (
+      documentNumber: string,
+      opts: { input?: string; termsOfPayment?: string; yes?: boolean; dryRun?: boolean },
+    ) => {
       const { updateInvoice } = defaultFortnoxOperations;
-      const raw = opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
-      const fields = JSON.parse(raw) as Record<string, unknown>;
+      if (opts.input === undefined && opts.termsOfPayment === undefined) {
+        throw new Error('Give --input <file> and/or --terms-of-payment <code>.');
+      }
+      let fields: Record<string, unknown> = {};
+      if (opts.input !== undefined) {
+        const raw =
+          opts.input === '-' ? readFileSync(0, 'utf-8') : readFileSync(opts.input, 'utf-8');
+        fields = JSON.parse(raw) as Record<string, unknown>;
+      }
+      fields = { ...fields, ...termsOfPaymentField(opts.termsOfPayment) };
       if (!(await confirmMutation(`Update invoice ${documentNumber}`, opts, { Invoice: fields }))) {
         return;
       }

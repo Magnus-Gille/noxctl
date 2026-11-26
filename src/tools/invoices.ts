@@ -128,7 +128,7 @@ export function registerInvoiceTools(
   } = operations;
   server.tool(
     'fortnox_list_invoices',
-    'Lista/filtrera fakturor i Fortnox. Returnerar: DocumentNumber, CustomerName, InvoiceDate, DueDate, Total, Balance.',
+    'Lista/filtrera fakturor i Fortnox. Returnerar: DocumentNumber, CustomerName, InvoiceDate, DueDate, Total, Balance. Obs: för fakturor som skickats via Fortnox Finans/Fakturaservice (NoxFinans: true) förblir Fortnox-fältet Sent false även när fakturan är skickad; kontrollera Finans-status med fortnox_get_noxfinans_invoice innan du drar slutsatsen att fakturan inte är skickad.',
     {
       filter: z
         .enum(['cancelled', 'fullypaid', 'unpaid', 'unpaidoverdue', 'unbooked'])
@@ -156,7 +156,7 @@ export function registerInvoiceTools(
 
   server.tool(
     'fortnox_get_invoice',
-    'Hämta en enskild faktura från Fortnox. Returnerar: DocumentNumber, CustomerNumber, CustomerName, InvoiceDate, DueDate, Total, Balance, Currency, Booked, Sent, OurReference, InvoiceRows.',
+    'Hämta en enskild faktura från Fortnox. Returnerar: DocumentNumber, CustomerNumber, CustomerName, InvoiceDate, DueDate, TermsOfPayment, Total, Balance, Currency, Booked, Sent, NoxFinans, OurReference, InvoiceRows. Obs: för fakturor som skickats via Fortnox Finans/Fakturaservice (NoxFinans: true) förblir Fortnox-fältet Sent false även när fakturan är skickad; kontrollera Finans-status med fortnox_get_noxfinans_invoice innan du drar slutsatsen att fakturan inte är skickad.',
     {
       documentNumber: DocumentNumberSchema.describe('Fakturanummer'),
       includeRaw: z.boolean().optional().describe('Inkludera rå JSON från Fortnox'),
@@ -184,6 +184,13 @@ export function registerInvoiceTools(
       CustomerNumber: z.string().describe('Kundnummer'),
       InvoiceRows: z.array(InvoiceRowSchema).describe('Fakturarader'),
       DueDate: z.string().optional().describe('Förfallodatum (YYYY-MM-DD)'),
+      TermsOfPayment: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Betalningsvillkor (kod, t.ex. "5" eller "30"; se fortnox_list_terms_of_payments). Anges även DueDate skickas båda och Fortnox validerar kombinationen.',
+        ),
       InvoiceDate: z.string().optional().describe('Fakturadatum (YYYY-MM-DD)'),
       OurReference: z.string().optional().describe('Vår referens'),
       YourReference: z.string().optional().describe('Er referens'),
@@ -220,6 +227,13 @@ export function registerInvoiceTools(
         .optional()
         .describe('Fakturarader (ersätter alla befintliga rader)'),
       DueDate: z.string().optional().describe('Förfallodatum (YYYY-MM-DD)'),
+      TermsOfPayment: z
+        .string()
+        .min(1)
+        .optional()
+        .describe(
+          'Betalningsvillkor (kod, t.ex. "5" eller "30"; se fortnox_list_terms_of_payments). Anges även DueDate skickas båda och Fortnox validerar kombinationen.',
+        ),
       InvoiceDate: z.string().optional().describe('Fakturadatum (YYYY-MM-DD)'),
       OurReference: z.string().optional().describe('Vår referens'),
       YourReference: z.string().optional().describe('Er referens'),

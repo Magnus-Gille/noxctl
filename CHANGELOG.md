@@ -17,8 +17,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Offers and orders were not verified live. The API coverage map now lists the v2
   operations as implemented; the bundle price calculation stays missing.
 
+### Fixed
+
+- **Fortnox Finans invoices no longer show "Sent: No" (#261).** Fortnox keeps
+  `Sent: false` on invoices delivered through Fortnox Finans/Fakturaservice
+  (`NoxFinans: true`). Invoice details (`invoices get`, `fortnox_get_invoice` and the
+  confirmation views) now show "Via Fortnox Finans" and point to
+  `noxctl noxfinans get` / `fortnox_get_noxfinans_invoice`; the raw JSON is unchanged.
+  The get/list tool descriptions document the caveat, and the send preview warns
+  before an invoice handled by Fortnox Finans is sent again.
+
 ### Added
 
+- **Terms of payment on invoices (#253).** `fortnox_create_invoice` and
+  `fortnox_update_invoice` accept `TermsOfPayment` (a code such as `5` or `30`), and
+  `noxctl invoices create|update` take `--terms-of-payment <code>`, which overrides the
+  field in `--input`. `invoices update` can now run with only `--terms-of-payment`.
+  When `DueDate` is given too, both are sent and Fortnox validates the combination.
+  Invoice details show the terms of payment. Not verified against a live company.
 - **Bundle articles (NOX-222).** `fortnox_create_article` and `fortnox_update_article`
   accept `BundleArticle` and a strictly validated `Bundle` (`Comment`, `SubItems`,
   `PriceAdjustmentRow`), and article details show whether an article is a bundle.
