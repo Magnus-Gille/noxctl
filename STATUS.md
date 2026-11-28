@@ -1,5 +1,15 @@
 # Project Status
 
+## Status — 2026-11-28 (after release 0.16.0)
+
+- **Released:** `noxctl@0.16.0` (release PR #264, `80f21d0`). npm publish verified and GitHub release created.
+- **Fixed in #263** (`da82ee8`): TermsOfPayment on invoice create/update (#253) and Fortnox Finans invoices reported as sent (#261). Both GitHub issues closed with a comment to the reporters; NOX-232 and NOX-233 closed.
+- **Open, not urgent:** Dependabot PR #265 (dev dependencies).
+- **Backlog:** NOX-211 and NOX-212 (shadow mirroring, feature flags off), NOX-175 (waiting on Fortnox), NOX-176 and NOX-13 (blocked).
+- No new incoming GitHub issues.
+
+The sections below are earlier handoffs, kept for history.
+
 ## Night sprint — 2026-11-13/14 (Plane cycle "Nattsprint 13–14 nov: MCP-ergonomi och API-drift")
 
 Endpoint chosen by the owner: one branch and PR per ticket, independent cross-model
